@@ -686,18 +686,38 @@ def _flatten_object(obj: dict, row: dict, prefix: str = '') -> None:
             row[field_name] = str(value) if value is not None else ''
 
 
+_version_cache: dict[str, Version] = {}
+
+
+def clear_version_cache():
+    """Clear the cached OpenSearch version(s).
+
+    Useful for testing or when cluster version changes.
+    """
+    _version_cache.clear()
+
+
 async def get_opensearch_version(args: baseToolArgs) -> Version:
     """Get the version of OpenSearch cluster.
+
+    Returns the cached version if available, otherwise fetches it from the
+    cluster and caches the result. Failed lookups (None) are not cached.
 
     Returns:
         Version: The version of OpenSearch cluster (SemVer style)
     """
     from .client import get_opensearch_client
 
+    cache_key = args.opensearch_cluster_name or ''
+    if cache_key in _version_cache:
+        return _version_cache[cache_key]
+
     try:
         async with get_opensearch_client(args) as client:
             response = await client.info()
-            return Version.parse(response['version']['number'])
+            version = Version.parse(response['version']['number'])
+            _version_cache[cache_key] = version
+            return version
     except Exception as e:
         logger.error(f'Error getting OpenSearch version: {e}')
         return None

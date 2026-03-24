@@ -315,7 +315,105 @@ class TestOpenSearchHelper:
         # Execute and assert
         result = await get_opensearch_version(args)
         assert result is None
-        
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_get_opensearch_version_caches_result(self, mock_get_client):
+        from opensearch.helper import get_opensearch_version
+
+        mock_response = {'version': {'number': '2.11.1'}}
+        mock_client = AsyncMock()
+        mock_client.info = AsyncMock(return_value=mock_response)
+        mock_client.close = AsyncMock()
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        args = baseToolArgs(opensearch_cluster_name='')
+        result1 = await get_opensearch_version(args)
+        result2 = await get_opensearch_version(args)
+
+        assert str(result1) == '2.11.1'
+        assert str(result2) == '2.11.1'
+        mock_client.info.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_get_opensearch_version_cache_separate_clusters(self, mock_get_client):
+        from opensearch.helper import get_opensearch_version
+
+        mock_client = AsyncMock()
+        mock_client.info = AsyncMock(
+            side_effect=[
+                {'version': {'number': '2.11.1'}},
+                {'version': {'number': '2.18.0'}},
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        args_a = baseToolArgs(opensearch_cluster_name='cluster-a')
+        args_b = baseToolArgs(opensearch_cluster_name='cluster-b')
+
+        result_a = await get_opensearch_version(args_a)
+        result_b = await get_opensearch_version(args_b)
+
+        assert str(result_a) == '2.11.1'
+        assert str(result_b) == '2.18.0'
+        assert mock_client.info.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_get_opensearch_version_does_not_cache_failure(self, mock_get_client):
+        from opensearch.helper import get_opensearch_version
+
+        mock_client = AsyncMock()
+        mock_client.info = AsyncMock(
+            side_effect=[
+                Exception('Connection refused'),
+                {'version': {'number': '2.11.1'}},
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        args = baseToolArgs(opensearch_cluster_name='')
+        result1 = await get_opensearch_version(args)
+        assert result1 is None
+        result2 = await get_opensearch_version(args)
+        assert str(result2) == '2.11.1'
+        assert mock_client.info.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_clear_version_cache(self, mock_get_client):
+        from opensearch.helper import clear_version_cache, get_opensearch_version
+
+        mock_client = AsyncMock()
+        mock_client.info = AsyncMock(
+            side_effect=[
+                {'version': {'number': '2.11.1'}},
+                {'version': {'number': '2.18.0'}},
+            ]
+        )
+        mock_client.close = AsyncMock()
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        args = baseToolArgs(opensearch_cluster_name='')
+        result1 = await get_opensearch_version(args)
+        assert str(result1) == '2.11.1'
+
+        clear_version_cache()
+        result2 = await get_opensearch_version(args)
+        assert str(result2) == '2.18.0'
+        assert mock_client.info.call_count == 2
+
     def test_convert_search_results_to_csv_hits_only(self):
         """Test convert_search_results_to_csv with hits only."""
         import importlib.util
