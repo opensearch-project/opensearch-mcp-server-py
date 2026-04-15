@@ -101,8 +101,14 @@ def _resolve_allow_write_setting(config_file_path: str = None) -> bool:
 
 
 def apply_write_filter(registry):
-    """Apply allow_write filters to the registry."""
+    """Apply allow_write filters to the registry.
+
+    Removes tools that only have write HTTP methods, unless the tool
+    has ``bypass_write_filter`` set to True (e.g. memory tools).
+    """
     for tool_name in list(registry.keys()):
+        if registry[tool_name].get('bypass_write_filter'):
+            continue
         http_methods = registry[tool_name].get('http_methods', [])
         if 'GET' not in http_methods:
             registry.pop(tool_name, None)
@@ -182,6 +188,23 @@ def process_tool_filter(
 
         # Add core_tools as a built-in category using display name
         category_to_tools['core_tools'] = core_tools_display_name
+
+        # Initialize memory tool names (opt-in via MEMORY_TOOLS_ENABLED)
+        memory_tools = [
+            'SaveMemoryTool',
+            'SearchMemoryTool',
+            'DeleteMemoryTool',
+        ]
+        memory_tools_display_names = []
+        for tool_name in memory_tools:
+            if tool_name in tool_registry:
+                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
+                memory_tools_display_names.append(tool_display_name)
+        category_to_tools['memory'] = memory_tools_display_names
+
+        # Auto-enable memory category when memory tools are registered
+        if memory_tools_display_names:
+            enabled_category_list.append('memory')
 
         # Initialize search_relevance tool names
         search_relevance_tools = [

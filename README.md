@@ -4,6 +4,7 @@
 - [Installing opensearch-mcp-server-py](https://github.com/opensearch-project/opensearch-mcp-server-py#installing-opensearch-mcp-server-py)
 - [Available tools](https://github.com/opensearch-project/opensearch-mcp-server-py#available-tools)
 - [User Guide](https://github.com/opensearch-project/opensearch-mcp-server-py#user-guide)
+- [Agent Memory](https://github.com/opensearch-project/opensearch-mcp-server-py#agent-memory)
 - [Contributing](https://github.com/opensearch-project/opensearch-mcp-server-py#contributing)
 - [Code of Conduct](https://github.com/opensearch-project/opensearch-mcp-server-py#code-of-conduct)
 - [License](https://github.com/opensearch-project/opensearch-mcp-server-py#license)
@@ -123,6 +124,14 @@ Skills tools are grouped under the `skills` category and can be enabled at once 
 
 - [DataDistributionTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/data-distribution-tool/): Analyzes data distribution patterns and field value frequencies within OpenSearch indices. Supports both single dataset analysis and comparative analysis between two time periods to identify distribution changes.
 - [LogPatternAnalysisTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/log-pattern-analysis-tool/): Detects anomalous log patterns and sequences through comparative analysis between baseline and selection time ranges. Supports log sequence analysis with trace correlation, log pattern difference analysis, and log insights analysis for error detection.
+
+### Memory Tools (Opt-in)
+
+Memory tools give agents persistent, cross-session memory backed by OpenSearch. Enable with `MEMORY_TOOLS_ENABLED=true`. See the [Agent Memory Guide](MEMORY.md) for full setup instructions.
+
+- **SaveMemoryTool**: Saves facts, decisions, and preferences to persistent storage with automatic semantic enrichment.
+- **SearchMemoryTool**: Searches memories using natural language with recency-aware ranking.
+- **DeleteMemoryTool**: Removes outdated or incorrect memories by document ID.
 
 ### Tool Parameters
 
@@ -332,6 +341,14 @@ In addition to the common connection parameters above, each tool accepts its own
 ## User Guide
 
 For detailed usage instructions, configuration options, and examples, please see the [User Guide](USER_GUIDE.md).
+
+## Agent Memory
+
+The OpenSearch MCP server includes optional memory tools that give AI agents persistent, cross-session memory. Agents can save and recall facts, decisions, and preferences using natural language search powered by OpenSearch automatic semantic enrichment.
+
+Because memory is stored in OpenSearch, it can be shared across multiple agents (Kiro, Claude Code, Cursor) and across customer-managed agents — any MCP-compatible client connected to the same cluster shares the same memory store.
+
+For full setup instructions, tool reference, and architecture details, see the [Agent Memory Guide](MEMORY.md).
 
 ## Contributing
 

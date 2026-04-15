@@ -602,6 +602,108 @@ class TestProcessToolFilter:
         assert 'SearchJudgmentsTool' in registry
         assert 'SearchExperimentsTool' in registry
 
+    def test_memory_category_auto_enabled_when_tools_present(self):
+        """Memory tools are auto-enabled when present in the registry."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SaveMemoryTool': {
+                'display_name': 'SaveMemoryTool',
+                'http_methods': 'GET, POST, PUT',
+                'bypass_write_filter': True,
+            },
+            'SearchMemoryTool': {
+                'display_name': 'SearchMemoryTool',
+                'http_methods': 'GET',
+            },
+            'DeleteMemoryTool': {
+                'display_name': 'DeleteMemoryTool',
+                'http_methods': 'GET, DELETE',
+                'bypass_write_filter': True,
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=True)
+
+        # Core tools enabled by default
+        assert 'ListIndexTool' in registry
+        # Memory tools auto-enabled
+        assert 'SaveMemoryTool' in registry
+        assert 'SearchMemoryTool' in registry
+        assert 'DeleteMemoryTool' in registry
+
+    def test_memory_category_not_present_when_tools_absent(self):
+        """Memory tools are not added when not in the registry."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+        }
+        process_tool_filter(tool_registry=registry, allow_write=True)
+
+        assert 'ListIndexTool' in registry
+        assert 'SaveMemoryTool' not in registry
+        assert 'SearchMemoryTool' not in registry
+        assert 'DeleteMemoryTool' not in registry
+
+    def test_memory_category_can_be_disabled(self):
+        """Memory tools can be disabled via disabled_categories."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SaveMemoryTool': {
+                'display_name': 'SaveMemoryTool',
+                'http_methods': 'GET, POST, PUT',
+                'bypass_write_filter': True,
+            },
+            'SearchMemoryTool': {
+                'display_name': 'SearchMemoryTool',
+                'http_methods': 'GET',
+            },
+            'DeleteMemoryTool': {
+                'display_name': 'DeleteMemoryTool',
+                'http_methods': 'GET, DELETE',
+                'bypass_write_filter': True,
+            },
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            disabled_categories='memory',
+            allow_write=True,
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'SaveMemoryTool' not in registry
+        assert 'SearchMemoryTool' not in registry
+        assert 'DeleteMemoryTool' not in registry
+
+    def test_memory_tools_survive_write_filter(self):
+        """Memory tools with bypass_write_filter survive when allow_write is False."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SaveMemoryTool': {
+                'display_name': 'SaveMemoryTool',
+                'http_methods': 'GET, POST, PUT',
+                'bypass_write_filter': True,
+            },
+            'SearchMemoryTool': {
+                'display_name': 'SearchMemoryTool',
+                'http_methods': 'GET',
+            },
+            'DeleteMemoryTool': {
+                'display_name': 'DeleteMemoryTool',
+                'http_methods': 'GET, DELETE',
+                'bypass_write_filter': True,
+            },
+            'IndicesCreateTool': {
+                'display_name': 'IndicesCreateTool',
+                'http_methods': 'PUT',
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=False)
+
+        # Memory tools survive despite having write methods
+        assert 'SaveMemoryTool' in registry
+        assert 'SearchMemoryTool' in registry
+        assert 'DeleteMemoryTool' in registry
+        # Regular write-only tool gets removed
+        assert 'IndicesCreateTool' not in registry
+
 
 class TestAllowWriteSettings:
     """Test cases for the allow_write setting functionality."""
