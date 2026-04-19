@@ -4,14 +4,15 @@
 import pytest
 import pytest_asyncio
 from mcp.types import TextContent
-from unittest.mock import AsyncMock, Mock, patch, MagicMock, ANY
+from starlette.testclient import TestClient
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 
 @pytest.fixture(autouse=True)
 def patch_opensearch_version():
     """Mock OpenSearch client and version check."""
-    from unittest.mock import AsyncMock
     from semver import Version
+    from unittest.mock import AsyncMock
 
     mock_client = Mock()
     mock_client.info = AsyncMock(return_value={'version': {'number': '3.0.0'}})
@@ -89,10 +90,10 @@ class TestMCPServer:
         mock_load_clusters.return_value = None
 
         # Create server
-        from mcp_server_opensearch.streaming_server import create_mcp_server
         from mcp.types import Tool
+        from mcp_server_opensearch.streaming_server import create_mcp_server
 
-        server = await create_mcp_server()
+        await create_mcp_server()
 
         # Get the tools by calling the decorated function
         tools = []
@@ -175,6 +176,43 @@ class TestMCPStarletteApp:
         assert app.routes[1].path == '/health'
         assert app.routes[2].path == '/messages'
         assert app.routes[3].path == '/mcp'
+
+    def test_create_app_with_oauth(self, app_handler):
+        """Test OAuth metadata and route protection for streaming transport."""
+        from mcp_server_opensearch.oauth import OAuthConfig
+        from mcp_server_opensearch.streaming_server import MCPStarletteApp
+
+        oauth_handler = MCPStarletteApp(
+            app_handler.mcp_server,
+            oauth_config=OAuthConfig(
+                enabled=True,
+                issuer_url='http://localhost:8080/realms/opensearch',
+                resource_url='http://127.0.0.1:9900/mcp/',
+                jwks_url='http://localhost:8080/realms/opensearch/protocol/openid-connect/certs',
+                required_scopes=['openid'],
+            ),
+        )
+
+        app = oauth_handler.create_app()
+        paths = [route.path for route in app.routes]
+
+        assert '/.well-known/oauth-protected-resource/mcp/' in paths
+        assert len(app.user_middleware) == 2
+
+        with TestClient(app) as client:
+            health_response = client.get('/health')
+            assert health_response.status_code == 200
+
+            mcp_response = client.post('/mcp/')
+            assert mcp_response.status_code == 401
+            assert 'www-authenticate' in mcp_response.headers
+            assert 'resource_metadata=' in mcp_response.headers['www-authenticate']
+
+            metadata_response = client.get('/.well-known/oauth-protected-resource/mcp/')
+            assert metadata_response.status_code == 200
+            assert metadata_response.json()['authorization_servers'] == [
+                'http://localhost:8080/realms/opensearch'
+            ]
 
     @pytest.mark.asyncio
     async def test_handle_sse(self, app_handler):
