@@ -6,6 +6,9 @@ import contextlib
 import logging
 import uvicorn
 from mcp.server import Server
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
+from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
+from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.shared.exceptions import MCPError
@@ -14,7 +17,11 @@ from mcp_server_opensearch.client_context import ClientNameMiddleware
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
 from mcp_server_opensearch.server_instructions import get_server_instructions
+from mcp_server_opensearch.oauth import JwtTokenVerifier, OAuthConfig, load_oauth_config
+from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Mount, Route
@@ -122,9 +129,15 @@ class _ASGIApp:
 class MCPStarletteApp:
     """Starlette application wrapper for the MCP server."""
 
-    def __init__(self, mcp_server: Server, stateless: bool = True):
+    def __init__(
+        self,
+        mcp_server: Server,
+        stateless: bool = True,
+        oauth_config: OAuthConfig | None = None,
+    ):
         """Initialize the MCP Starlette application."""
         self.mcp_server = mcp_server
+        self.oauth_config = oauth_config
         self.sse = SseServerTransport('/messages/')
         self.session_manager = StreamableHTTPSessionManager(
             app=self.mcp_server,
@@ -152,6 +165,11 @@ class MCPStarletteApp:
     async def handle_health(self, request: Request) -> Response:
         """Handle health check requests."""
         return Response('OK', status_code=200)
+
+    async def handle_sse_asgi(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Adapt the SSE request handler for authentication middleware."""
+        response = await self.handle_sse(Request(scope, receive, send))
+        await response(scope, receive, send)
 
     @contextlib.asynccontextmanager
     async def lifespan(self, app: Starlette) -> AsyncIterator[None]:
@@ -182,14 +200,79 @@ class MCPStarletteApp:
         """Create the Starlette application with routes."""
         # Serve bare '/mcp' via Route (a Mount alone 307-redirects '/mcp' to '/mcp/'); Mount handles sub-paths.
         streamable_http_app = _ASGIApp(self.handle_streamable_http)
+        middleware: list[Middleware] = []
+        routes: list[Route | Mount] = []
+
+        if self.oauth_config and self.oauth_config.enabled:
+            token_verifier = JwtTokenVerifier(self.oauth_config)
+            middleware = [
+                Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(token_verifier)),
+                Middleware(AuthContextMiddleware),
+            ]
+            resource_url = AnyHttpUrl(self.oauth_config.resource_url)
+            resource_metadata_url = build_resource_metadata_url(resource_url)
+            required_scopes = self.oauth_config.required_scopes
+
+            routes.extend(
+                [
+                    Route(
+                        '/sse',
+                        endpoint=RequireAuthMiddleware(
+                            _ASGIApp(self.handle_sse_asgi),
+                            required_scopes,
+                            resource_metadata_url,
+                        ),
+                        methods=['GET'],
+                    ),
+                    Route('/health', endpoint=self.handle_health, methods=['GET']),
+                    Mount(
+                        '/messages/',
+                        app=RequireAuthMiddleware(
+                            self.sse.handle_post_message,
+                            required_scopes,
+                            resource_metadata_url,
+                        ),
+                    ),
+                    Route(
+                        '/mcp',
+                        endpoint=RequireAuthMiddleware(
+                            streamable_http_app,
+                            required_scopes,
+                            resource_metadata_url,
+                        ),
+                    ),
+                    Mount(
+                        '/mcp',
+                        app=RequireAuthMiddleware(
+                            streamable_http_app,
+                            required_scopes,
+                            resource_metadata_url,
+                        ),
+                    ),
+                ]
+            )
+            routes.extend(
+                create_protected_resource_routes(
+                    resource_url=resource_url,
+                    authorization_servers=[AnyHttpUrl(self.oauth_config.issuer_url)],
+                    scopes_supported=required_scopes,
+                    resource_name='OpenSearch MCP Server',
+                )
+            )
+        else:
+            routes.extend(
+                [
+                    Route('/sse', endpoint=self.handle_sse, methods=['GET']),
+                    Route('/health', endpoint=self.handle_health, methods=['GET']),
+                    Mount('/messages/', app=self.sse.handle_post_message),
+                    Route('/mcp', endpoint=streamable_http_app),
+                    Mount('/mcp', app=streamable_http_app),
+                ]
+            )
+
         app = Starlette(
-            routes=[
-                Route('/sse', endpoint=self.handle_sse, methods=['GET']),
-                Route('/health', endpoint=self.handle_health, methods=['GET']),
-                Mount('/messages/', app=self.sse.handle_post_message),
-                Route('/mcp', endpoint=streamable_http_app),
-                Mount('/mcp', app=streamable_http_app),
-            ],
+            routes=routes,
+            middleware=middleware,
             lifespan=self.lifespan,
         )
         app.add_middleware(ClientNameMiddleware)
@@ -207,7 +290,8 @@ async def serve(
 ) -> None:
     """Start the MCP server in streaming HTTP mode."""
     mcp_server = await create_mcp_server(mode, profile, config_file_path, cli_tool_overrides)
-    app_handler = MCPStarletteApp(mcp_server, stateless=stateless)
+    oauth_config = load_oauth_config(host, port)
+    app_handler = MCPStarletteApp(mcp_server, stateless=stateless, oauth_config=oauth_config)
     app = app_handler.create_app()
 
     config = uvicorn.Config(
