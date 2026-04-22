@@ -1,20 +1,17 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+from mcp_server_opensearch.global_state import get_mode
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Literal, Optional, Type, TypeVar
-from mcp_server_opensearch.global_state import get_mode
+
 
 
 T = TypeVar('T', bound=BaseModel)
 
 
-def validate_args_for_mode(
-    args_dict: Dict[str, Any],
-    args_model_class: Type[T],
-) -> T:
-    """
-    Validation middleware that handles mode-specific validation.
+def validate_args_for_mode(args_dict: Dict[str, Any], args_model_class: Type[T]) -> T:
+    """Validation middleware that handles mode-specific validation.
 
     Args:
         args_dict: Dictionary of arguments provided by the user
@@ -65,6 +62,50 @@ class baseToolArgs(BaseModel):
     """Base class for all tool arguments that contains common OpenSearch connection parameters."""
 
     opensearch_cluster_name: str = Field(description='The name of the OpenSearch cluster')
+
+    # Optional connection override parameters.
+    # When provided, these take precedence over environment variables / server config,
+    # allowing agents to dynamically target different clusters per tool call.
+    opensearch_url: Optional[str] = Field(
+        default=None,
+        description='OpenSearch endpoint URL.',
+    )
+    opensearch_username: Optional[str] = Field(
+        default=None,
+        description='Username for basic authentication.',
+    )
+    opensearch_password: Optional[str] = Field(
+        default=None,
+        description='Password for basic authentication.',
+    )
+    opensearch_no_auth: Optional[bool] = Field(
+        default=None,
+        description='If true, connect without authentication.',
+    )
+    aws_region: Optional[str] = Field(
+        default=None,
+        description='AWS region for IAM/Serverless authentication.',
+    )
+    aws_iam_arn: Optional[str] = Field(
+        default=None,
+        description='IAM role ARN for role-based authentication.',
+    )
+    aws_profile: Optional[str] = Field(
+        default=None,
+        description='AWS profile name for authentication.',
+    )
+    aws_opensearch_serverless: Optional[bool] = Field(
+        default=None,
+        description='If true, use OpenSearch Serverless service.',
+    )
+    opensearch_ssl_verify: Optional[bool] = Field(
+        default=None,
+        description='If false, disable SSL certificate verification.',
+    )
+    opensearch_timeout: Optional[int] = Field(
+        default=None,
+        description='Connection timeout in seconds.',
+    )
 
 
 class ListClustersArgs(BaseModel):

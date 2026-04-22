@@ -2,25 +2,26 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import asyncio
+import contextlib
 import logging
 import uvicorn
-import contextlib
-from typing import AsyncIterator
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import TextContent, Tool
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
-from mcp_server_opensearch.global_state import set_mode, set_profile, set_config_file_path
+from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
+from mcp_server_opensearch.server_instructions import get_server_instructions
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Mount, Route
+from starlette.types import Receive, Scope, Send
+from tools.config import apply_custom_tool_config
 from tools.tool_filter import get_tools
 from tools.tool_generator import generate_tools_from_openapi
-from starlette.types import Scope, Receive, Send
-from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from tools.tools import TOOL_REGISTRY
-from tools.config import apply_custom_tool_config
+from typing import AsyncIterator
 
 
 async def create_mcp_server(
@@ -44,7 +45,7 @@ async def create_mcp_server(
     if mode == 'multi':
         await load_clusters_from_yaml(config_file_path)
 
-    server = Server('opensearch-mcp-server')
+    server = Server('opensearch-mcp-server', instructions=get_server_instructions())
     # Call tool generator
     await generate_tools_from_openapi()
     # Apply custom tool config (custom name and description)

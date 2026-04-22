@@ -1,10 +1,10 @@
+import copy
 import pytest
 from semver import Version
-from unittest.mock import patch, MagicMock
-from tools.utils import is_tool_compatible
 from tools.tool_filter import get_tools, process_tool_filter
-from tools.tool_params import baseToolArgs
-import copy
+from tools.utils import is_tool_compatible
+from unittest.mock import MagicMock, patch
+
 
 # A dictionary for mocking TOOL_REGISTRY
 MOCK_TOOL_REGISTRY = {
@@ -157,19 +157,17 @@ class TestGetTools:
             lambda version, tool_info: tool_info['min_version'] == '1.0.0'
         )
 
-        # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools in single mode
-            result = await get_tools(mock_tool_registry)
+        # Call get_tools in single mode
+        result = await get_tools(mock_tool_registry)
 
-            # Assertions
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' not in result
-            assert 'param1' in result['ListIndexTool']['input_schema']['properties']
-            assert (
-                'opensearch_cluster_name'
-                not in result['ListIndexTool']['input_schema']['properties']
-            )
+        # Assertions
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' not in result
+        assert 'param1' in result['ListIndexTool']['input_schema']['properties']
+        assert (
+            'opensearch_cluster_name'
+            not in result['ListIndexTool']['input_schema']['properties']
+        )
 
     @pytest.mark.asyncio
     @patch.dict('os.environ', {'AWS_OPENSEARCH_SERVERLESS': 'true'})
@@ -183,21 +181,19 @@ class TestGetTools:
         mock_get_version.return_value = None
         mock_is_compatible.return_value = True  # Should return True for serverless mode
 
-        # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools in single mode with serverless environment
-            result = await get_tools(mock_tool_registry)
+        # Call get_tools in single mode with serverless environment
+        result = await get_tools(mock_tool_registry)
 
-            # is_tool_compatible should be called with None version, and should return True for serverless
-            mock_is_compatible.assert_called()
-            # Verify all calls were made with None as the version
-            for call in mock_is_compatible.call_args_list:
-                if len(call.args) > 0:  # Check if there are positional arguments
-                    assert call.args[0] is None, f'Expected None version, got {call.args[0]}'
+        # is_tool_compatible should be called with None version, and should return True for serverless
+        mock_is_compatible.assert_called()
+        # Verify all calls were made with None as the version
+        for call in mock_is_compatible.call_args_list:
+            if len(call.args) > 0:  # Check if there are positional arguments
+                assert call.args[0] is None, f'Expected None version, got {call.args[0]}'
 
-            # Both tools should be enabled in serverless mode
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' in result
+        # Both tools should be enabled in serverless mode
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' in result
 
     @pytest.mark.asyncio
     async def test_get_tools_single_mode_handles_missing_properties(self, mock_patches):
@@ -220,11 +216,10 @@ class TestGetTools:
         mock_is_compatible.return_value = True
 
         # Patch TOOL_REGISTRY to use our test tool registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', tool_without_properties):
-            # Call get_tools in single mode - should not raise error
-            result = await get_tools(tool_without_properties)
-            assert 'ListIndexTool' in result
-            assert 'properties' not in result['ListIndexTool']['input_schema']
+        # Call get_tools in single mode - should not raise error
+        result = await get_tools(tool_without_properties)
+        assert 'ListIndexTool' in result
+        assert 'properties' not in result['ListIndexTool']['input_schema']
 
     @pytest.mark.asyncio
     async def test_get_tools_default_mode_is_single(self, mock_tool_registry, mock_patches):
@@ -234,14 +229,12 @@ class TestGetTools:
         mock_get_version.return_value = Version.parse('2.5.0')
         mock_is_compatible.return_value = True
 
-        # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools without specifying mode
-            result = await get_tools(mock_tool_registry)
-            assert (
-                'opensearch_cluster_name'
-                not in result['SearchIndexTool']['input_schema']['properties']
-            )
+        # Call get_tools without specifying mode
+        result = await get_tools(mock_tool_registry)
+        assert (
+            'opensearch_cluster_name'
+            not in result['SearchIndexTool']['input_schema']['properties']
+        )
 
     @pytest.mark.asyncio
     async def test_get_tools_skills_tools_version_filtering(self, mock_tool_registry, mock_patches):
@@ -259,15 +252,14 @@ class TestGetTools:
         mock_is_compatible.side_effect = mock_compatibility
 
         # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            result = await get_tools(mock_tool_registry)
+        result = await get_tools(mock_tool_registry)
 
-            # Skills tools should be filtered out due to version incompatibility
-            assert 'DataDistributionTool' not in result
-            assert 'LogPatternAnalysisTool' not in result
-            # Other tools should still be present
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' in result
+        # Skills tools should be filtered out due to version incompatibility
+        assert 'DataDistributionTool' not in result
+        assert 'LogPatternAnalysisTool' not in result
+        # Other tools should still be present
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' in result
 
     @pytest.mark.asyncio
     async def test_get_tools_skills_tools_compatible_version(self, mock_tool_registry, mock_patches):
@@ -280,15 +272,14 @@ class TestGetTools:
         mock_is_compatible.return_value = True  # All tools compatible
 
         # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            result = await get_tools(mock_tool_registry)
+        result = await get_tools(mock_tool_registry)
 
-            # Skills tools should be excluded since the skills category is not enabled by default
-            assert 'DataDistributionTool' not in result
-            assert 'LogPatternAnalysisTool' not in result
-            # Core tools should still be present
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' in result
+        # Skills tools should be excluded since the skills category is not enabled by default
+        assert 'DataDistributionTool' not in result
+        assert 'LogPatternAnalysisTool' not in result
+        # Core tools should still be present
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' in result
 
     @pytest.mark.asyncio
     async def test_get_tools_logs_version_info(self, mock_tool_registry, mock_patches, caplog):
@@ -298,11 +289,10 @@ class TestGetTools:
         mock_is_compatible.return_value = True
 
         # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools in single mode with logging capture
-            with caplog.at_level('INFO'):
-                await get_tools(mock_tool_registry)
-                assert 'Connected OpenSearch version: 2.5.0' in caplog.text
+        # Call get_tools in single mode with logging capture
+        with caplog.at_level('INFO'):
+            await get_tools(mock_tool_registry)
+            assert 'Connected OpenSearch version: 2.5.0' in caplog.text
 
 
 class TestProcessToolFilter:
@@ -645,7 +635,7 @@ class TestAllowWriteSettings:
 
     def test_set_and_get_allow_write_setting(self):
         """Test basic set and get functionality for allow_write setting."""
-        from tools.tool_filter import set_allow_write_setting, get_allow_write_setting
+        from tools.tool_filter import get_allow_write_setting, set_allow_write_setting
 
         # Test setting to False
         set_allow_write_setting(False)
@@ -853,8 +843,7 @@ class TestMultiOnlyFilter:
         mock_get_version, _ = mock_patches
         mock_get_version.return_value = Version.parse('2.5.0')
 
-        with patch('tools.tool_filter.TOOL_REGISTRY', registry_with_multi_only):
-            result = await get_tools(registry_with_multi_only)
+        result = await get_tools(registry_with_multi_only)
 
         assert 'ListIndexTool' in result
         assert 'ListClustersTool' not in result
@@ -888,7 +877,6 @@ class TestMultiOnlyFilter:
             },
         }
 
-        with patch('tools.tool_filter.TOOL_REGISTRY', registry):
-            result = await get_tools(registry)
+        result = await get_tools(registry)
 
         assert 'ListIndexTool' in result

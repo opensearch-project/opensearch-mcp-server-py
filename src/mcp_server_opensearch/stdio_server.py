@@ -7,11 +7,12 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
-from mcp_server_opensearch.global_state import set_mode, set_profile, set_config_file_path
+from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
+from mcp_server_opensearch.server_instructions import get_server_instructions
+from tools.config import apply_custom_tool_config
 from tools.tool_filter import get_tools
 from tools.tool_generator import generate_tools_from_openapi
 from tools.tools import TOOL_REGISTRY
-from tools.config import apply_custom_tool_config
 
 
 # --- Server setup ---
@@ -32,7 +33,7 @@ async def serve(
     if config_file_path:
         set_config_file_path(config_file_path)
 
-    server = Server('opensearch-mcp-server')
+    server = Server('opensearch-mcp-server', instructions=get_server_instructions())
     # Load clusters from YAML file
     if mode == 'multi':
         await load_clusters_from_yaml(config_file_path)

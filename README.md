@@ -18,6 +18,7 @@
 - Seamless integration with AI assistants and LLMs through the MCP protocol
 - Support for both stdio and streaming server transports (SSE and Streamable HTTP)
 - Built-in tools for common OpenSearch operations
+- Dynamic per-call connection parameters for targeting different clusters without server reconfiguration
 - Easy integration with Claude Desktop and LangChain
 - Secure authentication using basic auth, IAM roles, header-based auth, and OpenSearch mTLS
 
@@ -30,6 +31,23 @@ Opensearch-mcp-server-py can be installed from [PyPI](https://pypi.org/project/o
 ```
 pip install opensearch-mcp-server-py
 ```
+
+### Zero-Config Setup
+
+The server can be started with no environment variables at all. Agents provide connection details dynamically on each tool call:
+
+```json
+{
+  "mcpServers": {
+    "opensearch": {
+      "command": "uvx",
+      "args": ["opensearch-mcp-server-py"]
+    }
+  }
+}
+```
+
+With this setup, agents pass `opensearch_url` and authentication parameters directly when calling any tool. This is useful when agents discover endpoints from a knowledge base, runbook, or SOP, or when a single agent needs to work with multiple clusters in one session. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) for details.
 
 ## Available Tools
 
@@ -107,6 +125,27 @@ Skills tools are grouped under the `skills` category and can be enabled at once 
 - [LogPatternAnalysisTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/log-pattern-analysis-tool/): Detects anomalous log patterns and sequences through comparative analysis between baseline and selection time ranges. Supports log sequence analysis with trace correlation, log pattern difference analysis, and log insights analysis for error detection.
 
 ### Tool Parameters
+
+All tools accept the following **optional connection parameters** that override the server's environment variable configuration on a per-call basis. When omitted, the server falls back to its configured environment variables or cluster config as usual.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `opensearch_url` | string | OpenSearch endpoint URL. Overrides `OPENSEARCH_URL`. |
+| `opensearch_username` | string | Username for basic auth. Overrides `OPENSEARCH_USERNAME`. |
+| `opensearch_password` | string | Password for basic auth. Overrides `OPENSEARCH_PASSWORD`. |
+| `opensearch_no_auth` | boolean | Connect without authentication. Overrides `OPENSEARCH_NO_AUTH`. |
+| `aws_region` | string | AWS region. Overrides `AWS_REGION`. |
+| `aws_iam_arn` | string | IAM role ARN. Overrides `AWS_IAM_ARN`. |
+| `aws_profile` | string | AWS profile name. Overrides `AWS_PROFILE`. |
+| `aws_opensearch_serverless` | boolean | Use OpenSearch Serverless. Overrides `AWS_OPENSEARCH_SERVERLESS`. |
+| `opensearch_ssl_verify` | boolean | SSL certificate verification. Overrides `OPENSEARCH_SSL_VERIFY`. |
+| `opensearch_timeout` | integer | Connection timeout in seconds. Overrides `OPENSEARCH_TIMEOUT`. |
+
+This allows agents to dynamically target different clusters per tool call without reconfiguring the server. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) in the User Guide for details and examples.
+
+In addition to the common connection parameters above, each tool accepts its own specific parameters:
+
+> **Note:** The `opensearch_url` parameter listed under individual tools below is part of the common connection parameters described above. All common connection parameters (`opensearch_username`, `opensearch_password`, `aws_region`, etc.) are available on every tool but are not repeated in each tool's parameter list for brevity.
 
 - **ListIndexTool**
 

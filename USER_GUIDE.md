@@ -7,6 +7,7 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Server Modes](#server-modes)
+- [Dynamic Connection Parameters](#dynamic-connection-parameters)
 - [Authentication](#authentication)
 - [Running the Server](#running-the-server)
 - [Tool Filter](#tool-filter)
@@ -211,6 +212,94 @@ The LLM needs to have context about the available cluster names to make informed
 ```
 
 The LLM should choose the appropriate cluster based on the operation context (e.g., use `local-dev` for testing, `production` for production data).
+
+## Dynamic Connection Parameters
+
+All tools accept optional connection parameters that override the server's configured environment variables (single mode) or cluster config (multi mode) on a per-call basis. This enables agents to dynamically target different OpenSearch clusters without restarting or reconfiguring the server.
+
+### How It Works
+
+When a tool is called, any connection parameter provided in the tool input takes precedence over the corresponding environment variable. Parameters that are omitted (or set to `null`) fall back to the server's existing configuration.
+
+**Priority order (highest to lowest):**
+1. Tool input parameters (per-call overrides)
+2. Header-based authentication values (when `OPENSEARCH_HEADER_AUTH=true`)
+3. Environment variables / cluster YAML config
+
+### Available Connection Parameters
+
+| Parameter | Type | Overrides | Description |
+|-----------|------|-----------|-------------|
+| `opensearch_url` | string | `OPENSEARCH_URL` | OpenSearch endpoint URL |
+| `opensearch_username` | string | `OPENSEARCH_USERNAME` | Username for basic authentication |
+| `opensearch_password` | string | `OPENSEARCH_PASSWORD` | Password for basic authentication |
+| `opensearch_no_auth` | boolean | `OPENSEARCH_NO_AUTH` | Connect without authentication |
+| `aws_region` | string | `AWS_REGION` | AWS region for IAM/Serverless auth |
+| `aws_iam_arn` | string | `AWS_IAM_ARN` | IAM role ARN for role-based auth |
+| `aws_profile` | string | `AWS_PROFILE` | AWS profile name |
+| `aws_opensearch_serverless` | boolean | `AWS_OPENSEARCH_SERVERLESS` | Use OpenSearch Serverless service |
+| `opensearch_ssl_verify` | boolean | `OPENSEARCH_SSL_VERIFY` | SSL certificate verification |
+| `opensearch_timeout` | integer | `OPENSEARCH_TIMEOUT` | Connection timeout in seconds |
+
+### Use Cases
+
+**1. Agent-driven cluster discovery:** An agent can connect to different clusters without any pre-configured environment variables:
+```json
+{
+  "opensearch_url": "https://my-cluster.us-east-1.es.amazonaws.com",
+  "aws_region": "us-east-1",
+  "index": "my-index"
+}
+```
+
+**2. Switching between clusters in a single session:** An agent can query multiple clusters in sequence by providing different URLs per call:
+```json
+{
+  "opensearch_url": "https://cluster-a.example.com",
+  "opensearch_username": "admin",
+  "opensearch_password": "password-a",
+  "index": "logs-*"
+}
+```
+```json
+{
+  "opensearch_url": "https://cluster-b.example.com",
+  "opensearch_username": "admin",
+  "opensearch_password": "password-b",
+  "index": "logs-*"
+}
+```
+
+**3. Partial overrides:** Override only the URL while keeping credentials from environment variables:
+```json
+{
+  "opensearch_url": "https://other-cluster.example.com",
+  "index": "my-index"
+}
+```
+In this example, `opensearch_username` and `opensearch_password` are not provided, so they fall back to `OPENSEARCH_USERNAME` and `OPENSEARCH_PASSWORD` environment variables.
+
+**4. MCP client configuration with no environment variables:** The server can be started with no connection environment variables at all. Agents provide everything at call time:
+```json
+{
+  "mcpServers": {
+    "opensearch-mcp-server": {
+      "command": "uvx",
+      "args": ["opensearch-mcp-server-py"],
+      "env": {}
+    }
+  }
+}
+```
+
+### Notes
+
+- Dynamic connection parameters are available in **single mode**. In multi mode, use `opensearch_cluster_name` to select a pre-configured cluster.
+- Connection override parameters are **conditionally exposed** in tool schemas:
+  - When `OPENSEARCH_URL` is **not set** (zero-config mode): override fields appear in every tool's schema, and the server provides instructions to the LLM explaining how to use them.
+  - When `OPENSEARCH_URL` **is set**: override fields are hidden from tool schemas to reduce token usage. The parameters still work if passed explicitly, but the LLM won't see them in the schema.
+- These parameters are optional on every tool. Omitting them preserves the existing behavior (environment variables are used).
+- Each tool call creates a fresh client connection using the resolved parameters, so there is no cross-contamination between calls with different overrides.
 
 ## Authentication
 

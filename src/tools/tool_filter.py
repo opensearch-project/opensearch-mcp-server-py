@@ -1,21 +1,21 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import re
-import os
 import json
 import logging
-from .tool_params import baseToolArgs
-from .tools import TOOL_REGISTRY
+import os
+import re
 from .skills_tools import SKILLS_TOOLS_REGISTRY
+from .tool_params import baseToolArgs
 from .utils import (
     is_tool_compatible,
-    parse_comma_separated,
     load_yaml_config,
+    parse_comma_separated,
     validate_tools,
 )
-from opensearch.helper import get_opensearch_version
 from mcp_server_opensearch.global_state import get_mode
+from opensearch.helper import get_opensearch_version
+
 
 # Global variable to store the resolved allow_write setting
 # This is set during server initialization and used by individual tools
@@ -374,8 +374,21 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     resolved_allow_write = _resolve_allow_write_setting(config_file_path)
     set_allow_write_setting(resolved_allow_write)
 
-    # In multi mode, return all tools without any filtering
+    # In multi mode, return all tools but conditionally strip override fields
     if mode == 'multi':
+        from mcp_server_opensearch.server_instructions import (
+            CONNECTION_OVERRIDE_FIELDS,
+            has_preconfigured_connection,
+        )
+
+        if has_preconfigured_connection():
+            for name, info in tool_registry.items():
+                schema = info['input_schema']
+                if 'properties' in schema:
+                    for field in CONNECTION_OVERRIDE_FIELDS:
+                        schema['properties'].pop(field, None)
+                        if 'required' in schema and field in schema['required']:
+                            schema['required'].remove(field)
         return tool_registry
 
     enabled = {}
@@ -419,12 +432,24 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         if not is_tool_compatible(version, info):
             continue
 
-        # Remove baseToolArgs fields from input schema for single mode
-        # This simplifies the schema since base args are handled internally
+        # Remove baseToolArgs fields from input schema for single mode.
+        # Always strip opensearch_cluster_name (mode-specific).
+        # Strip connection override fields when a connection is pre-configured
+        # (OPENSEARCH_URL set or clusters loaded from YAML), since the agent
+        # doesn't need to provide them. When nothing is configured (zero-config
+        # / multi-tenant mode), keep them so agents can pass endpoints dynamically.
         schema = tool_info['input_schema'].copy()
         if 'properties' in schema:
-            base_fields = baseToolArgs.model_fields.keys()
-            for field in base_fields:
+            from mcp_server_opensearch.server_instructions import (
+                CONNECTION_OVERRIDE_FIELDS,
+                has_preconfigured_connection,
+            )
+
+            _always_hidden = {'opensearch_cluster_name'}
+            fields_to_strip = _always_hidden | (
+                CONNECTION_OVERRIDE_FIELDS if has_preconfigured_connection() else set()
+            )
+            for field in fields_to_strip:
                 schema['properties'].pop(field, None)
                 # Also remove from required array if present
                 if 'required' in schema and field in schema['required']:
