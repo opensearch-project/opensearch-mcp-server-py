@@ -366,16 +366,3 @@ def get_memory_container_id_from_config(config_file_path: str = '') -> str:
         logging.info(f'Using memory_container_id from environment variable: {container_id}')
 
     return container_id
-
-
-def should_enable_agentic_memory_tools(config_file_path: str = '') -> bool:
-    """Check if agentic memory tools should be enabled.
-
-    Memory tools are enabled only if memory_container_id is configured either
-    in the config file or as an environment variable.
-
-    :param config_file_path: Path to the YAML configuration file
-    :return: True if agentic memory tools should be enabled, False otherwise
-    """
-    container_id = get_memory_container_id_from_config(config_file_path)
-    return bool(container_id)

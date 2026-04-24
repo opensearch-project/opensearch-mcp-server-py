@@ -1,3 +1,6 @@
+# Copyright OpenSearch Contributors
+# SPDX-License-Identifier: Apache-2.0
+
 from enum import Enum
 from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -74,6 +77,18 @@ class BaseAgenticMemoryContainerArgs(baseToolArgs):
     """Base arguments for tools operating on an existing Agentic Memory Container."""
 
     memory_container_id: str = Field(..., description='The ID of the memory container.')
+
+    @model_validator(mode='before')
+    @classmethod
+    def inject_memory_container_id(cls, data):
+        """Inject memory_container_id from config/env when not provided by the MCP client."""
+        if isinstance(data, dict) and not data.get('memory_container_id'):
+            from tools.config import get_memory_container_id_from_config
+
+            container_id = get_memory_container_id_from_config()
+            if container_id:
+                data['memory_container_id'] = container_id
+        return data
 
 
 class CreateAgenticMemorySessionArgs(BaseAgenticMemoryContainerArgs):
