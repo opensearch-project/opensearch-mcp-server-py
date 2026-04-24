@@ -3,10 +3,7 @@
 
 import logging
 import yaml
-import logging
-import inspect
 from semver import Version
-from tools.exceptions import HelperOperationError
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -69,32 +66,3 @@ def validate_tools(tool_list, display_lookup, source_name):
         else:
             logging.warning(f"Ignoring invalid tool from '{source_name}': '{tool}'")
     return valid_tools
-
-
-def helper_error(
-    action: str, exc: Exception, func_name: str | None = None
-) -> HelperOperationError:
-    """Create a HelperOperationError with context about the failed operation.
-
-    Args:
-        action: Description of the action that failed (e.g., 'search agentic memory')
-        exc: The original exception that occurred
-        func_name: Name of the function where the error occurred;
-            if None, automatically detected from direct caller function
-
-    Returns:
-        HelperOperationError: Exception enriched with context about the failure
-    """
-    if func_name is None:
-        try:
-            stack = inspect.stack()
-            caller_frame = stack[1]  # 0 = current function, 1 = direct caller
-            func_name = caller_frame.function
-        except (IndexError, AttributeError, Exception):
-            func_name = "unknown_function"
-
-    logger.error(f"[{func_name}] Failed to {action}: {exc}")
-
-    return HelperOperationError(
-        message=f"Failed to {action}", func_name=func_name, action=action, original=exc
-    )
