@@ -5,12 +5,13 @@ description = "OpenSearch MCP Server"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "aiohttp>=3.11.18",
+    "aiohttp>=3.13.4",
     "boto3>=1.38.3",
     "mcp[cli]>=1.9.4",
     "opensearch-py==3.1.0",
     "pydantic>=2.11.3",
     "pyyaml>=6.0.2",
+    "requests>=2.33.0",
     "requests-aws4auth>=1.3.1",
     "semver>=3.0.4",
     "pyjwt>=2.12.0",
@@ -27,10 +28,11 @@ dev = [
     "pytest-cov>=6.2.1",
     "ruff>=0.9.7",
 ]
-
-[tool.pytest.ini_options]
-markers = [
-    "eval: marks tests as LLM eval tests that call the Anthropic API (run with --run-evals)",
+integration = [
+    "pytest>=8.3.5",
+    "pytest-asyncio>=0.26.0",
+    "pytest-timeout>=2.2",
+    "httpx[http2]>=0.27",
 ]
 
 [build-system]
@@ -70,6 +72,7 @@ no-sections = true
 
 [tool.ruff.lint.per-file-ignores]
 "**/*.ipynb" = ["F704"]
+"integration_tests/**" = ["D101", "D102", "D103", "D107"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -90,3 +93,23 @@ Documentation = "https://github.com/opensearch-project/opensearch-mcp-server-py/
 Source = "https://github.com/opensearch-project/opensearch-mcp-server-py.git"
 "Bug Tracker" = "https://github.com/opensearch-project/opensearch-mcp-server-py/issues"
 Changelog = "https://github.com/opensearch-project/opensearch-mcp-server-py/blob/main/CHANGELOG.md"
+
+[tool.pytest.ini_options]
+markers = [
+    "eval: marks tests as LLM eval tests that call the Anthropic API (run with --run-evals)",
+    "auth: Authentication mode tests",
+    "tools: Tool coverage tests",
+    "errors: Bad-path / negative tests",
+    "concurrency: Concurrency and load tests",
+    "basic_auth: Requires basic auth credentials",
+    "aws: Requires AWS credentials",
+    "iam_role: Requires IAM role ARN",
+    "header_auth: Requires header auth setup",
+    "no_auth: Requires no-auth cluster access",
+    "server_modes: Server mode tests (single and multi-cluster)",
+]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+timeout = 120

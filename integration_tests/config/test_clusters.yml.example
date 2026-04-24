@@ -1,0 +1,16 @@
+# Integration Test Cluster Configuration
+#
+# Copy this file to test_clusters.yml and fill in your values.
+# Alternatively, set the equivalent IT_* environment variables.
+#
+# Required env vars:
+#   IT_OPENSEARCH_URL          - OpenSearch cluster URL (e.g. https://search-xxx.us-east-2.es.amazonaws.com)
+#   IT_AWS_REGION              - AWS region (e.g. us-east-2)
+#   IT_BASIC_AUTH_USERNAME     - Basic auth username
+#   IT_BASIC_AUTH_PASSWORD     - Basic auth password
+#   IT_AWS_ACCESS_KEY_ID       - AWS access key ID
+#   IT_AWS_SECRET_ACCESS_KEY   - AWS secret access key
+#   IT_AWS_SESSION_TOKEN       - AWS session token (for temporary credentials)
+#
+# Optional:
+#   IT_IAM_ROLE_ARN            - IAM role ARN for role assumption tests

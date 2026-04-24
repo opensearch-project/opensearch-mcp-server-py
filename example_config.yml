@@ -21,6 +21,14 @@ clusters:
     iam_arn: "arn:aws:iam::123456789012:role/YourOpenSearchRole"
     aws_region: "us-east-2"
     profile: "your-aws-profile"
+  
+  mtls-cluster:
+    opensearch_url: "https://your-private-opensearch.example.com:9200"
+    opensearch_username: "admin"
+    opensearch_password: "your_password_here"
+    opensearch_ca_cert_path: "/var/run/opensearch-mtls/ca.crt"
+    opensearch_client_cert_path: "/var/run/opensearch-mtls/tls.crt"
+    opensearch_client_key_path: "/var/run/opensearch-mtls/tls.key"
 
   serverless-cluster:
     opensearch_url: "https://collection-id.us-east-1.aoss.amazonaws.com"
@@ -121,4 +129,9 @@ tools:
 #    - Prevents memory issues by limiting response size
 #    - Default: 10MB (10485760 bytes)
 #    - Can be set per cluster or globally via OPENSEARCH_MAX_RESPONSE_SIZE env var
-#    - Example: max_response_size: 5242880  # 5MB limit 
+#    - Example: max_response_size: 5242880  # 5MB limit
+#
+# 7. mTLS:
+#    - Optional: opensearch_ca_cert_path, opensearch_client_cert_path, opensearch_client_key_path
+#    - Client certificate and key must be provided together
+#    - Useful when connecting from Kubernetes to private OpenSearch clusters over mutual TLS

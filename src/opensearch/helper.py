@@ -75,7 +75,7 @@ async def search_index(args: SearchIndexArgs) -> json:
         tool_info = TOOL_REGISTRY.get('SearchIndexTool', {})
         max_size_limit = tool_info.get('max_size_limit', 100)  # Default to 100 if not configured
 
-        effective_size = min(args.size, max_size_limit) if args.size else 10
+        effective_size = min(args.size, max_size_limit) if args.size is not None else 10
         query['size'] = effective_size
 
         response = await client.search(index=args.index, body=query)

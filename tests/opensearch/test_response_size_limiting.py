@@ -6,6 +6,8 @@ Unit tests for response size limiting functionality.
 """
 
 import asyncio
+import os
+import tempfile
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 import aiohttp
@@ -13,6 +15,7 @@ from aiohttp import ClientResponse
 import ssl
 
 from opensearch.client import (
+    ConfigurationError,
     _create_opensearch_client,
 )
 from opensearch.connection import (
@@ -257,6 +260,57 @@ class TestCreateOpenSearchClient:
         assert call_kwargs['timeout'] == 60
         assert call_kwargs['verify_certs'] is False
         assert call_kwargs['http_auth'] == ('user', 'pass')
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    def test_create_client_with_mtls_parameters(self, mock_opensearch):
+        """Test client creation with CA, client cert, and client key."""
+        mock_client = MagicMock()
+        mock_opensearch.return_value = mock_client
+
+        with (
+            tempfile.NamedTemporaryFile() as ca_file,
+            tempfile.NamedTemporaryFile() as cert_file,
+            tempfile.NamedTemporaryFile() as key_file,
+        ):
+            _create_opensearch_client(
+                opensearch_url='https://test.com:9200',
+                opensearch_no_auth=True,
+                opensearch_ca_cert_path=ca_file.name,
+                opensearch_client_cert_path=cert_file.name,
+                opensearch_client_key_path=key_file.name,
+            )
+
+        call_kwargs = mock_opensearch.call_args[1]
+        assert call_kwargs['ca_certs'] == ca_file.name
+        assert call_kwargs['client_cert'] == cert_file.name
+        assert call_kwargs['client_key'] == key_file.name
+
+    def test_create_client_rejects_partial_mtls_config(self):
+        """Test client creation rejects missing client key when client cert is set."""
+        with tempfile.NamedTemporaryFile() as cert_file:
+            with pytest.raises(ConfigurationError) as exc_info:
+                _create_opensearch_client(
+                    opensearch_url='https://test.com:9200',
+                    opensearch_no_auth=True,
+                    opensearch_client_cert_path=cert_file.name,
+                )
+
+        assert 'requires both client certificate and client key paths' in str(exc_info.value)
+
+    def test_create_client_rejects_missing_ca_file(self):
+        """Test client creation rejects non-existent CA file paths."""
+        missing_path = os.path.join(tempfile.gettempdir(), 'missing-ca.pem')
+        if os.path.exists(missing_path):
+            os.unlink(missing_path)
+
+        with pytest.raises(ConfigurationError) as exc_info:
+            _create_opensearch_client(
+                opensearch_url='https://test.com:9200',
+                opensearch_no_auth=True,
+                opensearch_ca_cert_path=missing_path,
+            )
+
+        assert 'CA certificate file does not exist' in str(exc_info.value)
 
 
 class TestClusterInfoMaxResponseSize:

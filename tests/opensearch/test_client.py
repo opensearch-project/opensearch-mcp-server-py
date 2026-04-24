@@ -4,16 +4,25 @@
 import boto3
 import os
 import pytest
-from opensearch.client import initialize_client, ConfigurationError, AuthenticationError, BufferedAsyncHttpConnection
-from opensearchpy import AsyncOpenSearch, AsyncHttpConnection, AWSV4SignerAsyncAuth
+import tempfile
+from opensearch.client import (
+    AuthenticationError,
+    BufferedAsyncHttpConnection,
+    ConfigurationError,
+    _parsed_with_default_ports,
+    initialize_client,
+)
+from opensearchpy import AWSV4SignerAsyncAuth
 from tools.tool_params import baseToolArgs
 from unittest.mock import Mock, patch
+from urllib.parse import urlparse
 
 
 class TestOpenSearchClient:
+    """Tests for OpenSearch client initialization."""
+
     def setup_method(self):
-        """Setup that runs before each test method."""
-        # Clear any existing environment variables
+        """Clear env vars and set single-cluster mode before each test."""
         self.original_env = {}
         for key in [
             'OPENSEARCH_USERNAME',
@@ -22,6 +31,9 @@ class TestOpenSearchClient:
             'OPENSEARCH_URL',
             'OPENSEARCH_NO_AUTH',
             'OPENSEARCH_SSL_VERIFY',
+            'OPENSEARCH_CA_CERT_PATH',
+            'OPENSEARCH_CLIENT_CERT_PATH',
+            'OPENSEARCH_CLIENT_KEY_PATH',
             'OPENSEARCH_TIMEOUT',
             'AWS_IAM_ARN',
             'AWS_ACCESS_KEY_ID',
@@ -32,26 +44,6 @@ class TestOpenSearchClient:
                 self.original_env[key] = os.environ[key]
                 del os.environ[key]
 
-    def setup_method(self):
-        """Setup before each test method."""
-        # Clear environment variables to ensure clean test state
-        for key in [
-            'OPENSEARCH_USERNAME',
-            'OPENSEARCH_PASSWORD',
-            'AWS_REGION',
-            'OPENSEARCH_URL',
-            'OPENSEARCH_NO_AUTH',
-            'OPENSEARCH_SSL_VERIFY',
-            'OPENSEARCH_TIMEOUT',
-            'AWS_IAM_ARN',
-            'AWS_ACCESS_KEY_ID',
-            'AWS_SECRET_ACCESS_KEY',
-            'AWS_SESSION_TOKEN',
-        ]:
-            if key in os.environ:
-                del os.environ[key]
-
-        # Set global mode for tests
         from mcp_server_opensearch.global_state import set_mode
 
         set_mode('single')
@@ -93,7 +85,7 @@ class TestOpenSearchClient:
         assert client == mock_client
         mock_opensearch.assert_called_once()
         call_kwargs = mock_opensearch.call_args[1]
-        assert call_kwargs['hosts'] == ['https://test-opensearch-domain.com']
+        assert call_kwargs['hosts'] == ['https://test-opensearch-domain.com:443']
         assert call_kwargs['use_ssl'] is True
         assert call_kwargs['verify_certs'] is True
         assert call_kwargs['connection_class'] == BufferedAsyncHttpConnection
@@ -136,7 +128,7 @@ class TestOpenSearchClient:
         assert client == mock_client
         mock_opensearch.assert_called_once()
         call_kwargs = mock_opensearch.call_args[1]
-        assert call_kwargs['hosts'] == ['https://test-opensearch-domain.com']
+        assert call_kwargs['hosts'] == ['https://test-opensearch-domain.com:443']
         assert call_kwargs['use_ssl'] is True
         assert call_kwargs['verify_certs'] is True
         assert call_kwargs['connection_class'] == BufferedAsyncHttpConnection
@@ -202,7 +194,7 @@ class TestOpenSearchClient:
         assert client == mock_client
         mock_opensearch.assert_called_once()
         call_kwargs = mock_opensearch.call_args[1]
-        assert call_kwargs['hosts'] == ['https://test-opensearch-domain.com']
+        assert call_kwargs['hosts'] == ['https://test-opensearch-domain.com:443']
         assert call_kwargs['use_ssl'] is True
         assert call_kwargs['verify_certs'] is True
         assert call_kwargs['connection_class'] == BufferedAsyncHttpConnection
@@ -210,6 +202,47 @@ class TestOpenSearchClient:
         assert call_kwargs['max_response_size'] is None  # No limit by default
         assert call_kwargs['headers']['user-agent'].startswith('opensearch-mcp-server-py/')
         assert 'http_auth' not in call_kwargs
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_initialize_client_basic_auth_with_mtls(self, mock_get_region, mock_opensearch):
+        """Test client initialization with CA, client cert, and client key."""
+        with (
+            tempfile.NamedTemporaryFile() as ca_file,
+            tempfile.NamedTemporaryFile() as cert_file,
+            tempfile.NamedTemporaryFile() as key_file,
+        ):
+            os.environ['OPENSEARCH_USERNAME'] = 'test-user'
+            os.environ['OPENSEARCH_PASSWORD'] = 'test-password'
+            os.environ['OPENSEARCH_URL'] = 'https://test-opensearch-domain.com'
+            os.environ['OPENSEARCH_CA_CERT_PATH'] = ca_file.name
+            os.environ['OPENSEARCH_CLIENT_CERT_PATH'] = cert_file.name
+            os.environ['OPENSEARCH_CLIENT_KEY_PATH'] = key_file.name
+
+            mock_get_region.return_value = 'us-east-1'
+            mock_client = Mock()
+            mock_opensearch.return_value = mock_client
+
+            client = initialize_client(baseToolArgs(opensearch_cluster_name=''))
+
+            assert client == mock_client
+            call_kwargs = mock_opensearch.call_args[1]
+            assert call_kwargs['ca_certs'] == ca_file.name
+            assert call_kwargs['client_cert'] == cert_file.name
+            assert call_kwargs['client_key'] == key_file.name
+            assert call_kwargs['http_auth'] == ('test-user', 'test-password')
+
+    def test_initialize_client_rejects_partial_mtls_env_config(self):
+        """Test that partial mTLS configuration is rejected in single mode."""
+        with tempfile.NamedTemporaryFile() as cert_file:
+            os.environ['OPENSEARCH_URL'] = 'https://test-opensearch-domain.com'
+            os.environ['OPENSEARCH_NO_AUTH'] = 'true'
+            os.environ['OPENSEARCH_CLIENT_CERT_PATH'] = cert_file.name
+
+            with pytest.raises(ConfigurationError) as exc_info:
+                initialize_client(baseToolArgs(opensearch_cluster_name=''))
+
+        assert 'requires both client certificate and client key paths' in str(exc_info.value)
 
     @patch('opensearch.client._initialize_client_single_mode')
     def test_initialize_client_with_timeout_env(self, mock_init):
@@ -280,6 +313,40 @@ class TestOpenSearchClient:
         assert call_kwargs['max_response_size'] is None  # No limit by default
         # Should not have http_auth when no-auth is True
         assert 'http_auth' not in call_kwargs
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_multi_mode')
+    def test__initialize_client_multi_mode_with_mtls(self, mock_get_region, mock_opensearch):
+        """Test client initialization with mTLS paths from cluster config."""
+        from mcp_server_opensearch.clusters_information import ClusterInfo
+        from opensearch.client import _initialize_client_multi_mode
+
+        with (
+            tempfile.NamedTemporaryFile() as ca_file,
+            tempfile.NamedTemporaryFile() as cert_file,
+            tempfile.NamedTemporaryFile() as key_file,
+        ):
+            cluster_info = ClusterInfo(
+                opensearch_url='https://localhost:9200',
+                opensearch_username='admin',
+                opensearch_password='password',
+                opensearch_ca_cert_path=ca_file.name,
+                opensearch_client_cert_path=cert_file.name,
+                opensearch_client_key_path=key_file.name,
+            )
+
+            mock_get_region.return_value = 'us-east-1'
+            mock_client = Mock()
+            mock_opensearch.return_value = mock_client
+
+            client = _initialize_client_multi_mode(cluster_info)
+
+            assert client == mock_client
+            call_kwargs = mock_opensearch.call_args[1]
+            assert call_kwargs['ca_certs'] == ca_file.name
+            assert call_kwargs['client_cert'] == cert_file.name
+            assert call_kwargs['client_key'] == key_file.name
+            assert call_kwargs['http_auth'] == ('admin', 'password')
 
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_multi_mode')
@@ -365,6 +432,9 @@ class TestOpenSearchClientContextManager:
             'OPENSEARCH_URL',
             'OPENSEARCH_NO_AUTH',
             'OPENSEARCH_SSL_VERIFY',
+            'OPENSEARCH_CA_CERT_PATH',
+            'OPENSEARCH_CLIENT_CERT_PATH',
+            'OPENSEARCH_CLIENT_KEY_PATH',
             'OPENSEARCH_TIMEOUT',
             'AWS_IAM_ARN',
             'AWS_ACCESS_KEY_ID',
@@ -542,6 +612,7 @@ class TestOpenSearchClientContextManager:
         # Verify all three clients were created
         assert mock_opensearch.call_count == 3
 
+
 class TestHeaderBasedBasicAuth:
     """Tests for Basic authentication via Authorization header."""
 
@@ -588,7 +659,7 @@ class TestHeaderBasedBasicAuth:
         password = 'header-password'
         credentials = f'{username}:{password}'
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-        
+
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Basic {encoded_credentials}'}
 
@@ -636,7 +707,7 @@ class TestHeaderBasedBasicAuth:
         header_password = 'header-password'
         credentials = f'{header_username}:{header_password}'
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
-        
+
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Basic {encoded_credentials}'}
 
@@ -719,9 +790,7 @@ class TestHeaderBasedBearerAuth:
 
     @patch('opensearch.client.request_ctx')
     @patch('opensearch.client.AsyncOpenSearch')
-    def test_bearer_auth_from_authorization_header(
-        self, mock_opensearch, mock_request_ctx
-    ):
+    def test_bearer_auth_from_authorization_header(self, mock_opensearch, mock_request_ctx):
         """Test Bearer auth passthrough from Authorization header."""
         from starlette.requests import Request
 
@@ -829,3 +898,37 @@ class TestHeaderBasedBearerAuth:
         assert client == mock_client
         call_kwargs = mock_opensearch.call_args[1]
         assert call_kwargs['http_auth'] == ('env-user', 'env-password')
+
+
+class TestParsedWithDefaultPorts:
+    """URL normalization used by ``_create_opensearch_client`` (same path as production)."""
+
+    @staticmethod
+    def _norm(url: str) -> str:
+        return _parsed_with_default_ports(urlparse(url))[0]
+
+    def test_https_adds_443(self):
+        """HTTPS without a port uses TCP 443."""
+        assert self._norm('https://my-cluster.example.com') == 'https://my-cluster.example.com:443'
+
+    def test_http_adds_80(self):
+        """HTTP without a port uses TCP 80."""
+        assert self._norm('http://my-cluster.example.com') == 'http://my-cluster.example.com:80'
+
+    def test_explicit_port_unchanged(self):
+        """Explicit port in the URL is preserved."""
+        assert (
+            self._norm('https://my-cluster.example.com:9200')
+            == 'https://my-cluster.example.com:9200'
+        )
+
+    def test_https_ipv6_adds_443(self):
+        """HTTPS IPv6 literal without a port gets :443."""
+        assert self._norm('https://[::1]/') == 'https://[::1]:443/'
+
+    def test_basic_auth_netloc(self):
+        """Userinfo in netloc is kept when inserting the default port."""
+        assert (
+            self._norm('https://user:secret@my-cluster.example.com/path')
+            == 'https://user:secret@my-cluster.example.com:443/path'
+        )

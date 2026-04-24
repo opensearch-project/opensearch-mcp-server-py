@@ -124,6 +124,45 @@ class TestOpenSearchHelper:
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
+    async def test_search_index_size_zero(self, mock_get_client):
+        """Test that size=0 is respected for aggregation-only queries.
+
+        size=0 is falsy in Python, so `if args.size else 10` would incorrectly
+        fall back to 10. The fix uses `if args.size is not None else 10`.
+        """
+        mock_response = {
+            'hits': {'total': {'value': 100}, 'hits': []},
+            'aggregations': {'by_status': {'buckets': [{'key': 'opened', 'doc_count': 80}]}},
+        }
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(return_value=mock_response)
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        test_query = {
+            'size': 0,
+            'query': {'match_all': {}},
+            'aggs': {'by_status': {'terms': {'field': 'status.keyword'}}},
+        }
+
+        result = await self.search_index(
+            SearchIndexArgs(
+                index='test-index', query_dsl=test_query, size=0, opensearch_cluster_name=''
+            )
+        )
+
+        assert result == mock_response
+        # size=0 must be passed through, not replaced with the default of 10
+        expected_body = {
+            'size': 0,
+            'query': {'match_all': {}},
+            'aggs': {'by_status': {'terms': {'field': 'status.keyword'}}},
+        }
+        mock_client.search.assert_called_once_with(index='test-index', body=expected_body)
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
     async def test_get_shards(self, mock_get_client):
         """Test get_shards function."""
         # Setup mock response

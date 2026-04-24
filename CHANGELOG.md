@@ -6,8 +6,18 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 - Add `User-Agent` header (`opensearch-mcp-server-py/<version>`) to all OpenSearch requests for MCP traffic identification in cluster logs ([#207](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/207))
 - Add new toolset for the OpenSearch Agentic Memory API: `CreateAgenticMemorySessionTool`, `AddAgenticMemoriesTool`, `GetAgenticMemoryTool`, `UpdateAgenticMemoryTool`, `DeleteAgenticMemoryByIDTool`, `DeleteAgenticMemoryByQueryTool`, and `SearchAgenticMemoryTool`. Agentic memory tools are in the `agentic_memory` category and can be enabled via `enabled_categories: ["agentic_memory"]`. The `memory_container_id` is automatically pre-filled in all tool calls when configured via the `agentic_memory` config section or `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable. ([#138](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/138))
+- Add `AGENTS.md` and rewrite `DEVELOPER_GUIDE.md` "Adding Custom Tools" section with detailed 4-piece tool anatomy, error handling contracts, and tool category documentation ([#214](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/214))
+
+- Add OpenSearch mTLS support for single-cluster and multi-cluster configurations, including CA bundle, client certificate, and client key settings
 
 ### Fixed
+- Switch CI from `pull_request` to `pull_request_target` so integration tests run on fork PRs ([#219](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/219))
+- Fix multi-mode IT failing for `ListClustersTool` which has no `opensearch_cluster_name` parameter ([#220](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/220))
+- Fix non-ASCII characters (e.g. Chinese, Japanese, accented characters) being escaped to Unicode sequences in all tool JSON responses ([#164](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/164))
+
+- Fix `SearchIndexTool` ignoring `size=0`, causing aggregation-only queries to always return 10 hits ([#217](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/217))
+- Infer default TCP port from URL scheme (`http` → 80, `https` → 443) when no port is specified, instead of relying on implicit 9200 behavior ([#170](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/170))
+- Move skills tools to disabled-by-default category([#225](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/225/))
 
 ### Removed
 
@@ -19,6 +29,9 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Add Search Relevance Workbench tools for experiment management (create, get, delete) ([#192](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/192))
 - Add Search Relevance Workbench `_search` API tools for querying query sets, search configurations, judgments, and experiments using OpenSearch query DSL ([#193](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/193))
 - Add `ListClustersTool` for discovering available clusters in multi-cluster mode ([#210](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/210))
+
+- Add integration test framework with 93 tests covering 6 auth modes, 19 tools, concurrency, error handling, server modes, tool filtering, and write protection ([#179](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/179))
+- Refactor CI to matrix strategy with GitHub OIDC for AWS authentication and integration tests on all 3 platforms ([#179](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/179))
 
 ### Improved
 

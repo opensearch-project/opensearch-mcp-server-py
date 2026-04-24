@@ -2,16 +2,54 @@ name: CI
 
 on:
   push:
-  pull_request:
+    branches:
+      - 'main'
+      - '[0-9]+.[0-9]+'
+      - '[0-9]+.x'
+  pull_request_target:
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
-  test-linux:
-    name: Test on Linux
-    runs-on: ubuntu-latest
-    
+  test:
+    if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+
+    env:
+      IT_OPENSEARCH_URL: ${{ secrets.IT_OPENSEARCH_URL }}
+      IT_BASIC_AUTH_USERNAME: ${{ secrets.IT_BASIC_AUTH_USERNAME }}
+      IT_BASIC_AUTH_PASSWORD: ${{ secrets.IT_BASIC_AUTH_PASSWORD }}
+      IT_IAM_ROLE_ARN: ${{ secrets.IT_IAM_ROLE_ARN }}
+      IT_AWS_REGION: us-west-2
+      IT_TEST_INDEX: mcp-it-${{ matrix.platform }}-${{ github.run_id }}
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configure AWS credentials
+        id: aws-creds
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.OPENSEARCH_MCP_CI_ROLE }}
+          aws-region: us-west-2
+          output-credentials: true
 
       - name: Set up Python 3
         uses: actions/setup-python@v5
@@ -21,69 +59,80 @@ jobs:
       - name: Install UV
         uses: astral-sh/setup-uv@v6
 
-      - name: Install dependencies
+      - name: Install dependencies (Unix)
+        if: runner.os != 'Windows'
         run: |
           uv venv
           source .venv/bin/activate
           uv sync
 
-      - name: Run tests
-        run: |
-          source .venv/bin/activate
-          python -m pytest
-
-  test-macos:
-    name: Test on macOS
-    runs-on: macOS-latest
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v6
-
-      - name: Install dependencies
-        run: |
-          uv venv
-          source .venv/bin/activate
-          uv sync
-
-      - name: Run tests
-        run: |
-          source .venv/bin/activate
-          python -m pytest
-
-  test-windows:
-    name: Test on Windows
-    runs-on: windows-latest
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v6
-
-      - name: Install dependencies
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           uv venv
           .\.venv\Scripts\Activate.ps1
           uv sync
 
-      - name: Run tests
+      - name: Run unit tests (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          source .venv/bin/activate
+          python -m pytest
+
+      - name: Run unit tests (Windows)
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           .\.venv\Scripts\Activate.ps1
           python -m pytest
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Verify distribution
+        run: twine check dist/*
+
+      - name: Install from tar.gz (Unix)
+        if: runner.os != 'Windows'
+        run: pip install dist/*.tar.gz
+
+      - name: Install from tar.gz (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $tarball = Get-ChildItem dist/*.tar.gz | Select-Object -First 1
+          pip install $tarball.FullName
+
+      - name: Show metadata (tar.gz)
+        run: pip show opensearch-mcp-server-py
+
+      - name: Uninstall tar.gz package
+        run: pip uninstall -y opensearch-mcp-server-py
+
+      - name: Install from wheel (Unix)
+        if: runner.os != 'Windows'
+        run: pip install dist/*.whl
+
+      - name: Install from wheel (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
+          pip install $wheel.FullName
+
+      - name: Show metadata (wheel)
+        run: pip show opensearch-mcp-server-py
+
+      - name: Install integration test dependencies
+        run: pip install pytest-asyncio pytest-timeout "httpx[http2]"
+
+      - name: Run integration tests
+        env:
+          IT_AWS_ACCESS_KEY_ID: ${{ steps.aws-creds.outputs.aws-access-key-id }}
+          IT_AWS_SECRET_ACCESS_KEY: ${{ steps.aws-creds.outputs.aws-secret-access-key }}
+          IT_AWS_SESSION_TOKEN: ${{ steps.aws-creds.outputs.aws-session-token }}
+        run: python -m pytest integration_tests/ -v --tb=short --timeout=300

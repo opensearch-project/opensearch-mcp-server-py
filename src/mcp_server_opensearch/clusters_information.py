@@ -22,6 +22,9 @@ class ClusterInfo(BaseModel):
     opensearch_no_auth: Optional[bool] = None
     ssl_verify: Optional[bool] = None
     opensearch_header_auth: Optional[bool] = None
+    opensearch_ca_cert_path: Optional[str] = None
+    opensearch_client_cert_path: Optional[str] = None
+    opensearch_client_key_path: Optional[str] = None
     max_response_size: Optional[int] = None
 
 
@@ -116,6 +119,13 @@ async def load_clusters_from_yaml(file_path: str) -> None:
                     opensearch_no_auth=cluster_config.get('opensearch_no_auth', None),
                     ssl_verify=cluster_config.get('ssl_verify', None),
                     opensearch_header_auth=cluster_config.get('opensearch_header_auth', None),
+                    opensearch_ca_cert_path=cluster_config.get('opensearch_ca_cert_path', None),
+                    opensearch_client_cert_path=cluster_config.get(
+                        'opensearch_client_cert_path', None
+                    ),
+                    opensearch_client_key_path=cluster_config.get(
+                        'opensearch_client_key_path', None
+                    ),
                     max_response_size=cluster_config.get('max_response_size', None),
                 )
 

@@ -278,6 +278,18 @@ export OPENSEARCH_USERNAME="<your_opensearch_domain_username>"
 export OPENSEARCH_PASSWORD="<your_opensearch_domain_password>"
 ```
 
+#### Mutual TLS (mTLS)
+```bash
+export OPENSEARCH_URL="<your_opensearch_domain_url>"
+export OPENSEARCH_USERNAME="<your_opensearch_domain_username>"
+export OPENSEARCH_PASSWORD="<your_opensearch_domain_password>"
+export OPENSEARCH_CA_CERT_PATH="/path/to/ca.crt"
+export OPENSEARCH_CLIENT_CERT_PATH="/path/to/tls.crt"
+export OPENSEARCH_CLIENT_KEY_PATH="/path/to/tls.key"
+```
+
+`OPENSEARCH_CLIENT_CERT_PATH` and `OPENSEARCH_CLIENT_KEY_PATH` must be provided together. These settings add TLS client certificates to the existing authentication flow, so you can use mTLS alongside basic auth, IAM, or no-auth clusters.
+
 #### AWS Credentials Authentication
 ```bash
 export OPENSEARCH_URL="<your_opensearch_domain_url>"
@@ -315,6 +327,15 @@ clusters:
     opensearch_url: "http://localhost:9200"
     opensearch_username: "admin"
     opensearch_password: "your_password_here"
+
+  # Mutual TLS (mTLS)
+  mtls-cluster:
+    opensearch_url: "https://private-opensearch.example.com:9200"
+    opensearch_username: "admin"
+    opensearch_password: "your_password_here"
+    opensearch_ca_cert_path: "/var/run/opensearch-mtls/ca.crt"
+    opensearch_client_cert_path: "/var/run/opensearch-mtls/tls.crt"
+    opensearch_client_key_path: "/var/run/opensearch-mtls/tls.key"
 
   # AWS Credentials Authentication
   remote-cluster:
@@ -361,7 +382,12 @@ clusters:
 4. **Basic Authentication:**
    - Requires: `opensearch_url`, `opensearch_username`, `opensearch_password`
 
-5. **AWS Credentials Authentication:**
+5. **Mutual TLS (mTLS):**
+   - Optional: `opensearch_ca_cert_path`, `opensearch_client_cert_path`, `opensearch_client_key_path`
+   - `opensearch_client_cert_path` and `opensearch_client_key_path` must be configured together
+   - Adds TLS client certificates for OpenSearch connections and can be combined with the auth methods above
+
+6. **AWS Credentials Authentication:**
    - Requires: `opensearch_url`, `profile` (optional)
    - Uses AWS credentials from the specified profile or default credentials
 
@@ -401,6 +427,15 @@ python -m mcp_server_opensearch --transport stream
 
 # With AWS Profile
 python -m mcp_server_opensearch --profile my-aws-profile
+
+# Streaming Server with outbound mTLS
+OPENSEARCH_URL="https://private-opensearch.example.com:9200" \
+OPENSEARCH_USERNAME="admin" \
+OPENSEARCH_PASSWORD="password" \
+OPENSEARCH_CA_CERT_PATH="/path/to/ca.crt" \
+OPENSEARCH_CLIENT_CERT_PATH="/path/to/tls.crt" \
+OPENSEARCH_CLIENT_KEY_PATH="/path/to/tls.key" \
+python -m mcp_server_opensearch --transport stream
 ```
 
 ### Multi Mode
@@ -418,6 +453,8 @@ python -m mcp_server_opensearch --mode multi --config config.yml --profile my-aw
 python -m mcp_server_opensearch --mode multi
 ```
 
+
+
 ## Command Line Parameters
 
 | Parameter | Type | Default | Description |
@@ -433,6 +470,18 @@ python -m mcp_server_opensearch --mode multi
 ## Environment Variables
 
 ### Connection & Authentication Variables
+
+`OPENSEARCH_URL` (and each cluster’s `opensearch_url` in multi-cluster YAML) must include a scheme (`http://` or `https://`). The TCP port used is determined as follows:
+
+| Example URL | Port in the URL? | TCP port used |
+|---------------|------------------|---------------|
+| `https://cluster.example.com` | Omitted | **443** (HTTPS default) |
+| `http://cluster.example.com` | Omitted | **80** (HTTP default) |
+| `https://cluster.example.com:9200` | Set to `9200` | **9200** |
+| `http://localhost:9200` | Set to `9200` | **9200** |
+| `https://cluster.example.com:9443` | Set to `9443` (or any other value) | **Same as in the URL** |
+
+If the port is omitted, this server inserts the usual HTTP(S) default so traffic does not fall back to the OpenSearch Python client’s implicit **9200** (Elasticsearch-style default when no port appears in the string). For a typical local OpenSearch process listening on 9200, set the URL to `http://localhost:9200` (or another host) **with `:9200` explicitly**.
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
@@ -455,6 +504,9 @@ python -m mcp_server_opensearch --mode multi
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OPENSEARCH_SSL_VERIFY` | No | `"true"` | Control SSL certificate verification (`"true"` or `"false"`) |
+| `OPENSEARCH_CA_CERT_PATH` | No | `''` | Path to the CA certificate bundle used to verify the OpenSearch server |
+| `OPENSEARCH_CLIENT_CERT_PATH` | No | `''` | Path to the client certificate used for OpenSearch mTLS |
+| `OPENSEARCH_CLIENT_KEY_PATH` | No | `''` | Path to the client private key used for OpenSearch mTLS |
 
 ### Response Size Control Variables
 
@@ -503,6 +555,9 @@ When using multi-mode, each cluster in your YAML configuration file accepts the 
 | `is_serverless` | boolean | No | Set to `true` for OpenSearch Serverless |
 | `opensearch_no_auth` | boolean | No | Set to `true` to connect without authentication |
 | `opensearch_header_auth` | boolean | No | Set to `true` to enable header-based authentication (headers take priority over config values) |
+| `opensearch_ca_cert_path` | string | No | Path to the CA certificate bundle used to verify the OpenSearch server |
+| `opensearch_client_cert_path` | string | No | Path to the client certificate used for OpenSearch mTLS |
+| `opensearch_client_key_path` | string | No | Path to the client private key used for OpenSearch mTLS |
 | `timeout` | integer | No | Connection timeout in seconds for OpenSearch operations |
 | `max_response_size` | integer | No | Maximum response size in bytes (defaults to 10MB if not specified) |
 
@@ -516,6 +571,7 @@ When using multi-mode, each cluster in your YAML configuration file accepts the 
 | **Header-Based Authentication** | `opensearch_header_auth: true`, Required from header/config/env: `opensearch_url`, `aws-region`, `aws-access-key-id`, `aws-secret-access-key` | `aws-session-token`, `aws-service-name` |
 | **IAM Role Authentication** | `opensearch_url`, `iam_arn`, `aws_region` | `profile` |
 | **Basic Authentication** | `opensearch_url`, `opensearch_username`, `opensearch_password` | `profile` |
+| **Mutual TLS (mTLS)** | `opensearch_client_cert_path`, `opensearch_client_key_path` | `opensearch_ca_cert_path` |
 | **AWS Credentials Authentication** | `opensearch_url` | `aws_region`, `profile` |
 | **OpenSearch Serverless** | `opensearch_url`, `aws_region` | `profile`, `is_serverless: true` |
 

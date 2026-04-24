@@ -271,7 +271,8 @@ class TestGetTools:
 
     @pytest.mark.asyncio
     async def test_get_tools_skills_tools_compatible_version(self, mock_tool_registry, mock_patches):
-        """Test that skills tools are included when OpenSearch version is compatible."""
+        """Test that skills tools are excluded by default even when version is compatible,
+        since they belong to the 'skills' category which is not enabled by default."""
         mock_get_version, mock_is_compatible = mock_patches
 
         # Setup mocks - simulate OpenSearch 3.5.0 (above skills tools min version 3.3.0)
@@ -282,9 +283,10 @@ class TestGetTools:
         with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
             result = await get_tools(mock_tool_registry)
 
-            # All tools should be present including skills tools
-            assert 'DataDistributionTool' in result
-            assert 'LogPatternAnalysisTool' in result
+            # Skills tools should be excluded since the skills category is not enabled by default
+            assert 'DataDistributionTool' not in result
+            assert 'LogPatternAnalysisTool' not in result
+            # Core tools should still be present
             assert 'ListIndexTool' in result
             assert 'SearchIndexTool' in result
 
@@ -417,6 +419,69 @@ class TestProcessToolFilter:
         assert 'ListIndexTool' not in self.tool_registry
         assert 'ClusterHealthTool' not in self.tool_registry
         assert 'ExplainTool' not in self.tool_registry
+
+    def test_skills_category_is_not_enabled_by_default(self):
+        """skills tools are not enabled unless the category is explicitly enabled."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'DataDistributionTool': {
+                'display_name': 'DataDistributionTool',
+                'http_methods': 'POST',
+            },
+            'LogPatternAnalysisTool': {
+                'display_name': 'LogPatternAnalysisTool',
+                'http_methods': 'POST',
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=True)
+
+        assert 'ListIndexTool' in registry
+        assert 'DataDistributionTool' not in registry
+        assert 'LogPatternAnalysisTool' not in registry
+
+    def test_skills_category_can_be_enabled(self):
+        """skills tools are exposed when the category is explicitly enabled."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'DataDistributionTool': {
+                'display_name': 'DataDistributionTool',
+                'http_methods': 'POST',
+            },
+            'LogPatternAnalysisTool': {
+                'display_name': 'LogPatternAnalysisTool',
+                'http_methods': 'POST',
+            },
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            enabled_categories='core_tools,skills',
+            allow_write=True,
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'DataDistributionTool' in registry
+        assert 'LogPatternAnalysisTool' in registry
+
+    def test_data_distribution_and_log_pattern_not_in_core_tools(self):
+        """DataDistributionTool and LogPatternAnalysisTool are not part of core_tools category."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'ClusterHealthTool': {'display_name': 'ClusterHealthTool', 'http_methods': 'GET'},
+            'DataDistributionTool': {
+                'display_name': 'DataDistributionTool',
+                'http_methods': 'POST',
+            },
+            'LogPatternAnalysisTool': {
+                'display_name': 'LogPatternAnalysisTool',
+                'http_methods': 'POST',
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=True)
+
+        assert 'ListIndexTool' in registry
+        assert 'ClusterHealthTool' in registry
+        assert 'DataDistributionTool' not in registry
+        assert 'LogPatternAnalysisTool' not in registry
 
     def test_search_relevance_category_is_not_enabled_by_default(self):
         """search_relevance tools are not enabled unless the category is explicitly enabled."""

@@ -1,0 +1,15 @@
+# Multi-mode configuration for integration tests.
+#
+# Used by server_modes/test_multi_mode.py.
+# The test generates this dynamically from env vars, so this file
+# is for reference only.
+version: "1.0"
+clusters:
+  cluster1:
+    opensearch_url: "https://search-xxx.us-east-2.es.amazonaws.com"
+    opensearch_username: "admin"
+    opensearch_password: "changeme"
+  cluster2:
+    opensearch_url: "https://search-xxx.us-east-2.es.amazonaws.com"
+    opensearch_username: "admin"
+    opensearch_password: "changeme"

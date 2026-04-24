@@ -1,0 +1,51 @@
+# Copyright OpenSearch Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+import asyncio
+import pytest
+import time
+from integration_tests.framework.assertions import assert_tool_success
+from integration_tests.framework.aws_helpers import build_header_auth_headers
+from integration_tests.framework.client import mcp_client
+
+
+NUM_CALLS = 5
+CONCURRENCY = 5
+
+
+@pytest.mark.concurrency
+class TestConcurrentMultiClient:
+    """Each worker creates its own MCP session (separate HTTP connections)."""
+
+    async def test_concurrent_faster_than_sequential(
+        self, header_auth_server, sequential_baseline
+    ):
+        """FAIL if wall-clock > 90% of sequential total."""
+        headers = build_header_auth_headers()
+        sem = asyncio.Semaphore(CONCURRENCY)
+
+        async def worker(i):
+            async with sem:
+                async with mcp_client(header_auth_server.url, headers=headers) as session:
+                    t0 = time.perf_counter()
+                    result = await session.call_tool('ListIndexTool', arguments={})
+                    return time.perf_counter() - t0, result
+
+        t_start = time.perf_counter()
+        results = await asyncio.gather(*[worker(i) for i in range(NUM_CALLS)])
+        wall_clock = time.perf_counter() - t_start
+        threshold = sequential_baseline * 0.90
+
+        for _, result in results:
+            assert_tool_success(result)
+
+        assert wall_clock < threshold, (
+            f'Concurrent multi-client ({wall_clock:.2f}s) was NOT faster than '
+            f'90% of sequential ({sequential_baseline:.2f}s, threshold={threshold:.2f}s). '
+            f'Server may be bottlenecked.'
+        )
+        speedup = sequential_baseline / wall_clock if wall_clock > 0 else float('inf')
+        print(
+            f'PASS: concurrent={wall_clock:.2f}s < threshold={threshold:.2f}s '
+            f'(speedup: {speedup:.1f}x)'
+        )

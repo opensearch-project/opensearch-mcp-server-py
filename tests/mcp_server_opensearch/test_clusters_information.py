@@ -35,6 +35,9 @@ class TestClusterInfo:
             profile='default',
             timeout=30,
             opensearch_no_auth=True,
+            opensearch_ca_cert_path='/tmp/ca.pem',
+            opensearch_client_cert_path='/tmp/client.pem',
+            opensearch_client_key_path='/tmp/client.key',
         )
         assert cluster.opensearch_url == 'https://localhost:9200'
         assert cluster.iam_arn == 'arn:aws:iam::123456789012:role/OpenSearchRole'
@@ -44,6 +47,9 @@ class TestClusterInfo:
         assert cluster.profile == 'default'
         assert cluster.timeout == 30
         assert cluster.opensearch_no_auth is True
+        assert cluster.opensearch_ca_cert_path == '/tmp/ca.pem'
+        assert cluster.opensearch_client_cert_path == '/tmp/client.pem'
+        assert cluster.opensearch_client_key_path == '/tmp/client.key'
 
     def test_cluster_info_with_timeout_only(self):
         """Test creating ClusterInfo with timeout parameter."""
@@ -132,6 +138,9 @@ clusters:
     opensearch_username: "admin"
     opensearch_password: "password"
     timeout: 45
+    opensearch_ca_cert_path: "/etc/opensearch/ca.pem"
+    opensearch_client_cert_path: "/etc/opensearch/tls.crt"
+    opensearch_client_key_path: "/etc/opensearch/tls.key"
   cluster2:
     opensearch_url: "https://localhost:9201"
     iam_arn: "arn:aws:iam::123456789012:role/OpenSearchRole"
@@ -154,6 +163,9 @@ clusters:
         assert cluster1.opensearch_username == 'admin'
         assert cluster1.opensearch_password == 'password'
         assert cluster1.timeout == 45
+        assert cluster1.opensearch_ca_cert_path == '/etc/opensearch/ca.pem'
+        assert cluster1.opensearch_client_cert_path == '/etc/opensearch/tls.crt'
+        assert cluster1.opensearch_client_key_path == '/etc/opensearch/tls.key'
 
         cluster2 = cluster_registry['cluster2']
         assert cluster2.opensearch_url == 'https://localhost:9201'
