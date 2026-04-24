@@ -1,3 +1,6 @@
+# Copyright OpenSearch Contributors
+# SPDX-License-Identifier: Apache-2.0
+
 import json
 from .params import (
     AddAgenticMemoriesArgs,
@@ -17,230 +20,169 @@ from opensearch.helper import (
     search_agentic_memory,
     update_agentic_memory,
 )
-from tools.exceptions import HelperOperationError
+from tools.tool_logging import log_tool_error
 
 
 async def create_agentic_memory_session_tool(
     args: CreateAgenticMemorySessionArgs,
 ) -> list[dict]:
-    """Tool to create a new session in an agentic memory container.
-
-    Args:
-        args: CreateAgenticMemorySessionArgs containing the memory_container_id and optional session details like session_id, summary, metadata, or namespace.
-
-    Returns:
-        list[dict]: A confirmation message with the new session ID in MCP format.
-    """
+    """Tool to create a new session in an agentic memory container."""
     try:
         from tools.tools import check_tool_compatibility
 
         await check_tool_compatibility('CreateAgenticMemorySessionTool', args)
         result = await create_agentic_memory_session(args)
-
-        session_id = result.get('session_id')
-        message = (
-            f'Successfully created session. ID: {session_id}. Response: {json.dumps(result)}'
-            if session_id
-            else f'Session created, but no ID was returned. Response: {json.dumps(result)}'
-        )
-        return [{'type': 'text', 'text': message}]
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Session created:\n{formatted}'}]
     except Exception as e:
-        error_to_report = e
-        if isinstance(e, HelperOperationError):
-            error_to_report = e.original
-        return [{'type': 'text', 'text': f'Error creating session: {str(error_to_report)}'}]
+        return log_tool_error('CreateAgenticMemorySessionTool', e, 'creating session')
 
 
 async def add_agentic_memories_tool(args: AddAgenticMemoriesArgs) -> list[dict]:
-    """Tool to add memories to an agentic memory container.
-
-    Args:
-        args: AddAgenticMemoriesArgs containing the memory_container_id, payload_type, and content (either messages or structured_data).
-
-    Returns:
-        list[dict]: A confirmation message, often including the new working_memory_id or session_id, in MCP format.
-    """
+    """Tool to add memories to an agentic memory container."""
     try:
         from tools.tools import check_tool_compatibility
 
         await check_tool_compatibility('AddAgenticMemoriesTool', args)
         result = await add_agentic_memories(args)
-
-        session_id = result.get('session_id')
-        memory_id = result.get('working_memory_id')
-
-        message = 'Successfully added memory.'
-        if memory_id:
-            message += f' Working Memory ID: {memory_id}.'
-        if session_id:
-            message += f' Session ID: {session_id}.'
-        message += f' Response: {json.dumps(result)}'
-
-        return [{'type': 'text', 'text': message}]
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Memories added:\n{formatted}'}]
     except Exception as e:
-        error_to_report = e
-        if isinstance(e, HelperOperationError):
-            error_to_report = e.original
-        return [{'type': 'text', 'text': f'Error adding memory: {str(error_to_report)}'}]
+        return log_tool_error('AddAgenticMemoriesTool', e, 'adding memories')
 
 
 async def get_agentic_memory_tool(args: GetAgenticMemoryArgs) -> list[dict]:
-    """Tool to retrieve a specific agentic memory by its type and ID.
-
-    Args:
-        args: GetAgenticMemoryArgs containing the memory_container_id, memory_type, and the specific memory id.
-
-    Returns:
-        list[dict]: The retrieved memory object as a JSON string within a confirmation message, in MCP format.
-    """
+    """Tool to retrieve a specific agentic memory by its type and ID."""
     try:
         from tools.tools import check_tool_compatibility
 
         await check_tool_compatibility('GetAgenticMemoryTool', args)
         result = await get_agentic_memory(args)
-
-        message = f'Successfully retrieved memory {args.id} ({args.memory_type.value}): {json.dumps(result)}'
-        return [{'type': 'text', 'text': message}]
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Memory {args.id} ({args.memory_type.value}):\n{formatted}'}]
     except Exception as e:
-        error_to_report = e
-        if isinstance(e, HelperOperationError):
-            error_to_report = e.original
-        return [{'type': 'text', 'text': f'Error getting memory: {str(error_to_report)}'}]
+        return log_tool_error('GetAgenticMemoryTool', e, 'retrieving memory')
 
 
 async def update_agentic_memory_tool(args: UpdateAgenticMemoryArgs) -> list[dict]:
-    """Tool to update a specific agentic memory (session, working, or long-term) by its ID.
-
-    Args:
-        args: UpdateAgenticMemoryArgs containing the memory_container_id, memory_type, id, and the fields to be updated.
-
-    Returns:
-        list[dict]: A confirmation message of the update operation in MCP format.
-    """
+    """Tool to update a specific agentic memory by its type and ID."""
     try:
         from tools.tools import check_tool_compatibility
 
         await check_tool_compatibility('UpdateAgenticMemoryTool', args)
         result = await update_agentic_memory(args)
-
-        memory_id = result.get('_id', args.id)
-        message = f'Successfully updated memory {memory_id} ({args.memory_type.value}). Response: {json.dumps(result)}'
-        return [{'type': 'text', 'text': message}]
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Memory updated:\n{formatted}'}]
     except Exception as e:
-        error_to_report = e
-        if isinstance(e, HelperOperationError):
-            error_to_report = e.original
-        return [{'type': 'text', 'text': f'Error updating memory: {str(error_to_report)}'}]
+        return log_tool_error('UpdateAgenticMemoryTool', e, 'updating memory')
 
 
 async def delete_agentic_memory_by_id_tool(
     args: DeleteAgenticMemoryByIDArgs,
 ) -> list[dict]:
-    """Tool to delete a specific agentic memory by its type and ID.
-
-    Args:
-        args: DeleteAgenticMemoryByIDArgs containing the memory_container_id, memory_type, and the id of the memory to delete.
-
-    Returns:
-        list[dict]: A confirmation message of the deletion in MCP format.
-    """
+    """Tool to delete a specific agentic memory by its type and ID."""
     try:
         from tools.tools import check_tool_compatibility
 
         await check_tool_compatibility('DeleteAgenticMemoryByIDTool', args)
         result = await delete_agentic_memory_by_id(args)
-
-        memory_id = result.get('_id', args.id)
-        message = f'Successfully deleted memory {memory_id} ({args.memory_type.value}). Response: {json.dumps(result)}'
-        return [{'type': 'text', 'text': message}]
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Memory deleted:\n{formatted}'}]
     except Exception as e:
-        error_to_report = e
-        if isinstance(e, HelperOperationError):
-            error_to_report = e.original
-        return [{'type': 'text', 'text': f'Error deleting memory: {str(error_to_report)}'}]
+        return log_tool_error('DeleteAgenticMemoryByIDTool', e, 'deleting memory')
 
 
 async def delete_agentic_memory_by_query_tool(
     args: DeleteAgenticMemoryByQueryArgs,
 ) -> list[dict]:
-    """Tool to delete agentic memories matching an OpenSearch query DSL.
-
-    Args:
-        args: DeleteAgenticMemoryByQueryArgs containing the memory_container_id, memory_type, and the query.
-
-    Returns:
-        list[dict]: A summary of the delete-by-query operation, including counts, in MCP format.
-    """
+    """Tool to delete agentic memories matching an OpenSearch query DSL."""
     try:
         from tools.tools import check_tool_compatibility
 
         await check_tool_compatibility('DeleteAgenticMemoryByQueryTool', args)
         result = await delete_agentic_memory_by_query(args)
-
-        deleted_count = result.get('deleted', 0)
-        failures = result.get('failures', [])
-
-        message = (
-            f'Delete by query for {args.memory_type.value} completed with {len(failures)} failures. '
-            f'Deleted: {deleted_count}. Response: {json.dumps(result)}'
-            if failures
-            else f'Successfully deleted memories by query for {args.memory_type.value}. '
-            f'Deleted: {deleted_count}. Response: {json.dumps(result)}'
-        )
-
-        return [{'type': 'text', 'text': message}]
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Memories deleted by query:\n{formatted}'}]
     except Exception as e:
-        error_to_report = e
-        if isinstance(e, HelperOperationError):
-            error_to_report = e.original
-        return [
-            {
-                'type': 'text',
-                'text': f'Error deleting memories by query: {str(error_to_report)}',
-            }
-        ]
+        return log_tool_error('DeleteAgenticMemoryByQueryTool', e, 'deleting memories by query')
 
 
 async def search_agentic_memory_tool(args: SearchAgenticMemoryArgs) -> list[dict]:
-    """Tool to search for agentic memories using an OpenSearch query DSL.
-
-    Args:
-        args: SearchAgenticMemoryArgs containing the memory_container_id, memory_type, query, and optional sort parameters.
-
-    Returns:
-        list[dict]: The search results from OpenSearch as a JSON string within a summary message, in MCP format.
-    """
+    """Tool to search for agentic memories using an OpenSearch query DSL."""
     try:
         from tools.tools import check_tool_compatibility
 
         await check_tool_compatibility('SearchAgenticMemoryTool', args)
         result = await search_agentic_memory(args)
-
-        hits = result.get('hits', {}).get('hits', [])
-        count = len(hits)
-        total = result.get('hits', {}).get('total', {}).get('value', count)
-
-        message = (
-            f'Search results for {args.memory_type.value}: No memories found. Response: {json.dumps(result)}'
-            if total == 0
-            else f'Search results for {args.memory_type.value}: Found {total} memories, returning {count}. '
-            f'Response: {json.dumps(result)}'
-        )
-
-        return [{'type': 'text', 'text': message}]
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Search results ({args.memory_type.value}):\n{formatted}'}]
     except Exception as e:
-        error_to_report = e
-        if isinstance(e, HelperOperationError):
-            error_to_report = e.original
-        return [{'type': 'text', 'text': f'Error searching memory: {str(error_to_report)}'}]
+        return log_tool_error('SearchAgenticMemoryTool', e, 'searching memory')
 
 
-__all__ = [
-    'create_agentic_memory_session_tool',
-    'add_agentic_memories_tool',
-    'get_agentic_memory_tool',
-    'update_agentic_memory_tool',
-    'delete_agentic_memory_by_id_tool',
-    'delete_agentic_memory_by_query_tool',
-    'search_agentic_memory_tool',
-]
+# Agentic memory tools registry - spread into TOOL_REGISTRY like SKILLS_TOOLS_REGISTRY
+AGENTIC_MEMORY_TOOLS_REGISTRY = {
+    'CreateAgenticMemorySessionTool': {
+        'display_name': 'CreateAgenticMemorySessionTool',
+        'description': 'Create a new session in a memory container.',
+        'input_schema': CreateAgenticMemorySessionArgs.model_json_schema(),
+        'function': create_agentic_memory_session_tool,
+        'args_model': CreateAgenticMemorySessionArgs,
+        'min_version': '3.3.0',
+        'http_methods': 'POST',
+    },
+    'AddAgenticMemoriesTool': {
+        'display_name': 'AddAgenticMemoriesTool',
+        'description': 'Add an agentic memory to a memory container.',
+        'input_schema': AddAgenticMemoriesArgs.model_json_schema(),
+        'function': add_agentic_memories_tool,
+        'args_model': AddAgenticMemoriesArgs,
+        'min_version': '3.3.0',
+        'http_methods': 'POST',
+    },
+    'GetAgenticMemoryTool': {
+        'display_name': 'GetAgenticMemoryTool',
+        'description': 'Retrieve a specific memory by its type and ID.',
+        'input_schema': GetAgenticMemoryArgs.model_json_schema(),
+        'function': get_agentic_memory_tool,
+        'args_model': GetAgenticMemoryArgs,
+        'min_version': '3.3.0',
+        'http_methods': 'GET',
+    },
+    'UpdateAgenticMemoryTool': {
+        'display_name': 'UpdateAgenticMemoryTool',
+        'description': 'Update a specific memory by its type and ID.',
+        'input_schema': UpdateAgenticMemoryArgs.model_json_schema(),
+        'function': update_agentic_memory_tool,
+        'args_model': UpdateAgenticMemoryArgs,
+        'min_version': '3.3.0',
+        'http_methods': 'PUT',
+    },
+    'DeleteAgenticMemoryByIDTool': {
+        'display_name': 'DeleteAgenticMemoryByIDTool',
+        'description': 'Deletes specific agentic memory container by its type and ID.',
+        'input_schema': DeleteAgenticMemoryByIDArgs.model_json_schema(),
+        'function': delete_agentic_memory_by_id_tool,
+        'args_model': DeleteAgenticMemoryByIDArgs,
+        'min_version': '3.3.0',
+        'http_methods': 'DELETE',
+    },
+    'DeleteAgenticMemoryByQueryTool': {
+        'display_name': 'DeleteAgenticMemoryByQueryTool',
+        'description': 'Deletes specific agentic memory by query.',
+        'input_schema': DeleteAgenticMemoryByQueryArgs.model_json_schema(),
+        'function': delete_agentic_memory_by_query_tool,
+        'args_model': DeleteAgenticMemoryByQueryArgs,
+        'min_version': '3.3.0',
+        'http_methods': 'POST',
+    },
+    'SearchAgenticMemoryTool': {
+        'display_name': 'SearchAgenticMemoryTool',
+        'description': 'Search for memories of a specific type within a memory container.',
+        'input_schema': SearchAgenticMemoryArgs.model_json_schema(),
+        'function': search_agentic_memory_tool,
+        'args_model': SearchAgenticMemoryArgs,
+        'min_version': '3.3.0',
+        'http_methods': 'GET',
+    },
+}
