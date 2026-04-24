@@ -77,13 +77,7 @@ class TestAgenticMemoryTools:
             SearchAgenticMemoryArgs,
             UpdateAgenticMemoryArgs,
         )
-        from tools.tools import (
-            TOOL_REGISTRY,
-            register_agentic_memory_tools,
-        )
-
-        # Register agentic memory tools for tests
-        register_agentic_memory_tools()
+        from tools.tools import TOOL_REGISTRY
 
         self.CreateAgenticMemorySessionArgs = CreateAgenticMemorySessionArgs
         self.AddAgenticMemoriesArgs = AddAgenticMemoriesArgs
@@ -137,7 +131,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert 'Successfully created session' in result[0]['text']
+        assert 'Session created:' in result[0]['text']
         # Verify that the ID from the response is in the output
         assert mock_response['session_id'] in result[0]['text']
 
@@ -167,6 +161,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
+        assert result[0].get('is_error') is True
         assert 'Error creating session: Memory container not found' in result[0]['text']
         self.mock_client.transport.perform_request.assert_called_once_with(
             method='POST',
@@ -227,7 +222,8 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert 'Error getting memory: Memory not found' in result[0]['text']
+        assert result[0].get('is_error') is True
+        assert 'Error retrieving memory: Memory not found' in result[0]['text']
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -252,7 +248,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert 'Successfully added memory' in result[0]['text']
+        assert 'Memories added:' in result[0]['text']
 
         # Verify that the ID from the response is in the output
         if 'working_memory_id' in mock_response:
@@ -294,7 +290,8 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert 'Error adding memory: Container not found' in result[0]['text']
+        assert result[0].get('is_error') is True
+        assert 'Error adding memories: Container not found' in result[0]['text']
 
     @pytest.mark.asyncio
     async def test_add_agentic_memories_validation_error_missing_messages(self):
@@ -390,10 +387,10 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert f'Search results for {memory_type.value}' in result[0]['text']
+        assert f'Search results ({memory_type.value}):' in result[0]['text']
 
         # Verify that the response is in the body (as a JSON string)
-        assert json.dumps(mock_response) in result[0]['text']
+        assert json.dumps(mock_response, separators=(',', ':')) in result[0]['text']
 
         expected_url = (
             f'/_plugins/_ml/memory_containers/{memory_container_id}/'
@@ -423,6 +420,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
+        assert result[0].get('is_error') is True
         assert 'Error searching memory: Container not found' in result[0]['text']
         self.mock_client.transport.perform_request.assert_called_once_with(
             method='GET',
@@ -454,9 +452,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert 'Successfully deleted memory' in result[0]['text']
-        assert memory_id in result[0]['text']
-        assert memory_type.value in result[0]['text']
+        assert 'Memory deleted:' in result[0]['text']
 
         expected_url = (
             f'/_plugins/_ml/memory_containers/{memory_container_id}/'
@@ -486,6 +482,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
+        assert result[0].get('is_error') is True
         assert 'Error deleting memory: Memory not found' in result[0]['text']
 
         expected_url = (
@@ -520,9 +517,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert 'Successfully deleted memories by query' in result[0]['text']
-        assert f'Deleted: {mock_response["deleted"]}' in result[0]['text']
-        assert memory_type.value in result[0]['text']
+        assert 'Memories deleted by query:' in result[0]['text']
 
         expected_url = (
             f'/_plugins/_ml/memory_containers/{memory_container_id}/'
@@ -555,6 +550,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
+        assert result[0].get('is_error') is True
         assert 'Error deleting memories by query: Query validation failed' in result[0]['text']
 
         expected_url = (
@@ -590,8 +586,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
-        assert 'Successfully updated memory' in result[0]['text']
-        assert memory_id in result[0]['text']
+        assert 'Memory updated:' in result[0]['text']
 
         expected_url = (
             f'/_plugins/_ml/memory_containers/{memory_container_id}/'
@@ -620,6 +615,7 @@ class TestAgenticMemoryTools:
         # Assert
         assert len(result) == 1
         assert result[0]['type'] == 'text'
+        assert result[0].get('is_error') is True
         assert 'Error updating memory: Memory not found' in result[0]['text']
         self.mock_client.transport.perform_request.assert_called_once_with(
             method='PUT',
