@@ -7,11 +7,17 @@ import csv
 import io
 import math
 from decimal import Decimal
-import json
 from semver import Version
 from tools.tool_params import *
-from tools.agentic_memory.params import *
-from tools.utils import helper_error
+from tools.agentic_memory.params import (
+    AddAgenticMemoriesArgs,
+    CreateAgenticMemorySessionArgs,
+    DeleteAgenticMemoryByIDArgs,
+    DeleteAgenticMemoryByQueryArgs,
+    GetAgenticMemoryArgs,
+    SearchAgenticMemoryArgs,
+    UpdateAgenticMemoryArgs,
+)
 from urllib.parse import quote
 
 
@@ -733,12 +739,7 @@ async def create_agentic_memory_session(
             exclude_none=True,
         )
 
-        try:
-            response = await client.transport.perform_request(method='POST', url=url, body=body)
-        except Exception as e:
-            raise helper_error('create agentic memory session', e)
-
-        return response
+        return await client.transport.perform_request(method='POST', url=url, body=body)
 
 
 async def add_agentic_memories(args: AddAgenticMemoriesArgs) -> Dict[str, Any]:
@@ -766,12 +767,7 @@ async def add_agentic_memories(args: AddAgenticMemoriesArgs) -> Dict[str, Any]:
             by_alias=True,
         )
 
-        try:
-            response = await client.transport.perform_request(method='POST', url=url, body=body)
-        except Exception as e:
-            raise helper_error('add agentic memories', e)
-
-        return response
+        return await client.transport.perform_request(method='POST', url=url, body=body)
 
 
 async def get_agentic_memory(args: GetAgenticMemoryArgs) -> Dict[str, Any]:
@@ -795,12 +791,7 @@ async def get_agentic_memory(args: GetAgenticMemoryArgs) -> Dict[str, Any]:
         ]
         url = '/'.join(url_parts)
 
-        try:
-            response = await client.transport.perform_request(method='GET', url=url)
-        except Exception as e:
-            raise helper_error('get agentic memory', e)
-
-        return response
+        return await client.transport.perform_request(method='GET', url=url)
 
 
 async def update_agentic_memory(args: UpdateAgenticMemoryArgs) -> Dict[str, Any]:
@@ -835,12 +826,7 @@ async def update_agentic_memory(args: UpdateAgenticMemoryArgs) -> Dict[str, Any]
             by_alias=True,
         )
 
-        try:
-            response = await client.transport.perform_request(method='PUT', url=url, body=body)
-        except Exception as e:
-            raise helper_error('update agentic memory', e)
-
-        return response
+        return await client.transport.perform_request(method='PUT', url=url, body=body)
 
 
 async def delete_agentic_memory_by_id(
@@ -866,12 +852,7 @@ async def delete_agentic_memory_by_id(
         ]
         url = '/'.join(url_parts)
 
-        try:
-            response = await client.transport.perform_request(method='DELETE', url=url)
-        except Exception as e:
-            raise helper_error('delete agentic memory by ID', e)
-
-        return response
+        return await client.transport.perform_request(method='DELETE', url=url)
 
 
 async def delete_agentic_memory_by_query(
@@ -902,12 +883,7 @@ async def delete_agentic_memory_by_query(
             exclude_none=True,
         )
 
-        try:
-            response = await client.transport.perform_request(method='POST', url=url, body=body)
-        except Exception as e:
-            raise helper_error('delete agentic memory by query', e)
-
-        return response
+        return await client.transport.perform_request(method='POST', url=url, body=body)
 
 
 async def search_agentic_memory(args: SearchAgenticMemoryArgs) -> Dict[str, Any]:
@@ -936,12 +912,7 @@ async def search_agentic_memory(args: SearchAgenticMemoryArgs) -> Dict[str, Any]
             exclude_none=True,
         )
 
-        try:
-            response = await client.transport.perform_request(method='GET', url=url, body=body)
-        except Exception as e:
-            raise helper_error('search agentic memory', e)
-
-        return response
+        return await client.transport.perform_request(method='GET', url=url, body=body)
 
 
 def plain_float(value):
