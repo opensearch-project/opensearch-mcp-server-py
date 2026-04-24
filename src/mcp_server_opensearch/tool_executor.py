@@ -65,7 +65,7 @@ async def execute_tool(
         tool = enabled_tools[found_tool_key]
         from tools.tool_params import validate_args_for_mode
 
-        parsed = validate_args_for_mode(arguments, tool['args_model'], tool['input_schema'])
+        parsed = validate_args_for_mode(arguments, tool['args_model'])
         result = await tool['function'](parsed)
 
         # Detect soft errors: tools catch exceptions internally and

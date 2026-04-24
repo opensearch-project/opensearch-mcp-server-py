@@ -47,9 +47,6 @@ async def create_mcp_server(
     server = Server('opensearch-mcp-server')
     # Call tool generator
     await generate_tools_from_openapi()
-    # Register agentic memory tools if memory_container_id is configured
-    from tools.tools import register_agentic_memory_tools
-    register_agentic_memory_tools(config_file_path)
     # Apply custom tool config (custom name and description)
     customized_registry = apply_custom_tool_config(
         TOOL_REGISTRY, config_file_path, cli_tool_overrides or {}
