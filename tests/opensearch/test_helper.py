@@ -163,6 +163,66 @@ class TestOpenSearchHelper:
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
+    @patch.dict('os.environ', {'OPENSEARCH_QUERY_TIMEOUT': '10s'})
+    async def test_search_index_with_query_timeout(self, mock_get_client):
+        """Test that OPENSEARCH_QUERY_TIMEOUT is passed as cancel_after_time_interval."""
+        mock_response = {
+            'hits': {
+                'total': {'value': 1},
+                'hits': [{'_index': 'test-index', '_id': '1', '_source': {'field': 'value'}}],
+            }
+        }
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(return_value=mock_response)
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        test_query = {'query': {'match_all': {}}}
+
+        result = await self.search_index(
+            SearchIndexArgs(index='test-index', query_dsl=test_query, opensearch_cluster_name='')
+        )
+
+        assert result == mock_response
+        expected_body = {'query': {'match_all': {}}, 'size': 10}
+        mock_client.search.assert_called_once_with(
+            index='test-index', body=expected_body, cancel_after_time_interval='10s'
+        )
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    @patch.dict('os.environ', {}, clear=False)
+    async def test_search_index_without_query_timeout(self, mock_get_client):
+        """Test that cancel_after_time_interval is omitted when OPENSEARCH_QUERY_TIMEOUT is not set."""
+        mock_response = {
+            'hits': {
+                'total': {'value': 1},
+                'hits': [{'_index': 'test-index', '_id': '1', '_source': {'field': 'value'}}],
+            }
+        }
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(return_value=mock_response)
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        test_query = {'query': {'match_all': {}}}
+
+        # Ensure env var is not set
+        import os
+        os.environ.pop('OPENSEARCH_QUERY_TIMEOUT', None)
+
+        result = await self.search_index(
+            SearchIndexArgs(index='test-index', query_dsl=test_query, opensearch_cluster_name='')
+        )
+
+        assert result == mock_response
+        expected_body = {'query': {'match_all': {}}, 'size': 10}
+        mock_client.search.assert_called_once_with(index='test-index', body=expected_body)
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
     async def test_get_shards(self, mock_get_client):
         """Test get_shards function."""
         # Setup mock response
