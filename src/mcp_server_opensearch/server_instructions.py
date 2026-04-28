@@ -44,6 +44,30 @@ Parameters not provided fall back to server environment variables (if any).\
 """
 
 
+def is_dynamic_mode_enabled() -> bool:
+    """Determine whether dynamic (per-call) connection mode is active.
+
+    Checks ``OPENSEARCH_DYNAMIC_CONNECTION`` first for an explicit override,
+    then falls back to auto-detection based on whether a connection is
+    pre-configured.
+
+    ``OPENSEARCH_DYNAMIC_CONNECTION`` accepted values (case-insensitive):
+    - ``"true"`` / ``"1"``  → force dynamic mode on (expose override fields)
+    - ``"false"`` / ``"0"`` → force dynamic mode off (hide override fields)
+    - unset / empty         → auto-detect (on when no URL or YAML config found)
+
+    Returns:
+        bool: True if dynamic mode is active, False otherwise.
+    """
+    explicit = os.getenv('OPENSEARCH_DYNAMIC_CONNECTION', '').strip().lower()
+    if explicit in ('true', '1'):
+        return True
+    if explicit in ('false', '0'):
+        return False
+    # Auto-detect: dynamic when nothing is pre-configured
+    return not has_preconfigured_connection()
+
+
 def has_preconfigured_connection() -> bool:
     """Check whether the server has any pre-configured OpenSearch connection.
 
@@ -68,14 +92,14 @@ def has_preconfigured_connection() -> bool:
 def get_server_instructions() -> str | None:
     """Return server instructions based on current configuration.
 
-    When no connection is pre-configured (no OPENSEARCH_URL and no clusters
-    in the registry), returns instructions explaining the dynamic connection
-    parameters. Otherwise returns None since the connection params are hidden
-    from tool schemas.
+    When dynamic mode is active (no pre-configured connection, or
+    ``OPENSEARCH_DYNAMIC_CONNECTION=true``), returns instructions explaining
+    the per-call connection parameters. Otherwise returns None since the
+    connection params are hidden from tool schemas.
 
     Returns:
         str or None: Instructions text, or None if not needed.
     """
-    if has_preconfigured_connection():
+    if not is_dynamic_mode_enabled():
         return None
     return _DYNAMIC_CONNECTION_INSTRUCTIONS

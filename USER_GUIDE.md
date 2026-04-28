@@ -235,6 +235,10 @@ When a tool is called, any connection parameter provided in the tool input takes
 | No `OPENSEARCH_URL`, no YAML config (zero-config mode) | Exposed — agent must supply `opensearch_url` |
 | `OPENSEARCH_URL` set | Hidden — URL already configured |
 | YAML cluster config loaded (multi mode) | Hidden — clusters already configured |
+| `OPENSEARCH_DYNAMIC_CONNECTION=true` | Exposed — forced on regardless of other config |
+| `OPENSEARCH_DYNAMIC_CONNECTION=false` | Hidden — forced off regardless of other config |
+
+`OPENSEARCH_DYNAMIC_CONNECTION` takes precedence over auto-detection. Use it to explicitly enable dynamic mode when you want agents to override a pre-configured URL, or to explicitly disable it in zero-config deployments where you don't want the override fields exposed.
 
 ### How It Works
 

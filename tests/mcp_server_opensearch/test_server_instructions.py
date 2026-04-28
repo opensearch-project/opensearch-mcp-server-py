@@ -69,9 +69,11 @@ class TestGetServerInstructions:
     """Tests for get_server_instructions based on configuration state."""
 
     def setup_method(self):
-        """Save and clear OPENSEARCH_URL and cluster registry."""
+        """Save and clear OPENSEARCH_URL, OPENSEARCH_DYNAMIC_CONNECTION, and cluster registry."""
         self._original = os.environ.get('OPENSEARCH_URL')
+        self._original_dynamic = os.environ.get('OPENSEARCH_DYNAMIC_CONNECTION')
         os.environ.pop('OPENSEARCH_URL', None)
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
         from mcp_server_opensearch.clusters_information import cluster_registry
 
         cluster_registry.clear()
@@ -82,6 +84,10 @@ class TestGetServerInstructions:
             os.environ['OPENSEARCH_URL'] = self._original
         else:
             os.environ.pop('OPENSEARCH_URL', None)
+        if self._original_dynamic is not None:
+            os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = self._original_dynamic
+        else:
+            os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
         from mcp_server_opensearch.clusters_information import cluster_registry
 
         cluster_registry.clear()
@@ -117,6 +123,108 @@ class TestGetServerInstructions:
         for param in ['opensearch_url', 'aws_region', 'aws_profile', 'opensearch_username']:
             assert param in result
 
+    def test_dynamic_connection_true_forces_instructions_even_with_url(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION=true forces instructions even when URL is set."""
+        os.environ['OPENSEARCH_URL'] = 'https://my-cluster.example.com'
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
+        from mcp_server_opensearch.server_instructions import get_server_instructions
+
+        result = get_server_instructions()
+        assert result is not None
+        assert 'opensearch_url' in result
+
+    def test_dynamic_connection_false_suppresses_instructions_in_zero_config(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION=false suppresses instructions even with no URL."""
+        os.environ.pop('OPENSEARCH_URL', None)
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'false'
+        from mcp_server_opensearch.server_instructions import get_server_instructions
+
+        assert get_server_instructions() is None
+
+
+class TestIsDynamicModeEnabled:
+    """Tests for the is_dynamic_mode_enabled() function."""
+
+    def setup_method(self):
+        self._original_url = os.environ.get('OPENSEARCH_URL')
+        self._original_dynamic = os.environ.get('OPENSEARCH_DYNAMIC_CONNECTION')
+        os.environ.pop('OPENSEARCH_URL', None)
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        from mcp_server_opensearch.clusters_information import cluster_registry
+
+        cluster_registry.clear()
+
+    def teardown_method(self):
+        if self._original_url is not None:
+            os.environ['OPENSEARCH_URL'] = self._original_url
+        else:
+            os.environ.pop('OPENSEARCH_URL', None)
+        if self._original_dynamic is not None:
+            os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = self._original_dynamic
+        else:
+            os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        from mcp_server_opensearch.clusters_information import cluster_registry
+
+        cluster_registry.clear()
+
+    def test_auto_on_when_nothing_configured(self):
+        """Auto-detects dynamic mode on when no URL and no clusters."""
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        assert is_dynamic_mode_enabled() is True
+
+    def test_auto_off_when_url_configured(self):
+        """Auto-detects dynamic mode off when OPENSEARCH_URL is set."""
+        os.environ['OPENSEARCH_URL'] = 'https://cluster.example.com'
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        assert is_dynamic_mode_enabled() is False
+
+    def test_auto_off_when_clusters_loaded(self):
+        """Auto-detects dynamic mode off when clusters are in the registry."""
+        from mcp_server_opensearch.clusters_information import ClusterInfo, add_cluster
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        add_cluster('prod', ClusterInfo(opensearch_url='https://prod.example.com'))
+        assert is_dynamic_mode_enabled() is False
+
+    def test_explicit_true_overrides_url(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION=true forces on even when URL is set."""
+        os.environ['OPENSEARCH_URL'] = 'https://cluster.example.com'
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        assert is_dynamic_mode_enabled() is True
+
+    def test_explicit_1_overrides_url(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION=1 is treated as true."""
+        os.environ['OPENSEARCH_URL'] = 'https://cluster.example.com'
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = '1'
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        assert is_dynamic_mode_enabled() is True
+
+    def test_explicit_false_overrides_zero_config(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION=false forces off even with no URL."""
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'false'
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        assert is_dynamic_mode_enabled() is False
+
+    def test_explicit_0_overrides_zero_config(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION=0 is treated as false."""
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = '0'
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        assert is_dynamic_mode_enabled() is False
+
+    def test_case_insensitive(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION is case-insensitive."""
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'TRUE'
+        from mcp_server_opensearch.server_instructions import is_dynamic_mode_enabled
+
+        assert is_dynamic_mode_enabled() is True
+
 
 class TestConditionalSchemaStripping:
     """Tests that tool schemas are conditionally stripped based on configuration."""
@@ -127,6 +235,8 @@ class TestConditionalSchemaStripping:
 
         set_mode('single')
         self._original = os.environ.get('OPENSEARCH_URL')
+        self._original_dynamic = os.environ.get('OPENSEARCH_DYNAMIC_CONNECTION')
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
         from mcp_server_opensearch.clusters_information import cluster_registry
 
         cluster_registry.clear()
@@ -137,6 +247,10 @@ class TestConditionalSchemaStripping:
             os.environ['OPENSEARCH_URL'] = self._original
         else:
             os.environ.pop('OPENSEARCH_URL', None)
+        if self._original_dynamic is not None:
+            os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = self._original_dynamic
+        else:
+            os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
         from mcp_server_opensearch.clusters_information import cluster_registry
 
         cluster_registry.clear()

@@ -378,10 +378,10 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     if mode == 'multi':
         from mcp_server_opensearch.server_instructions import (
             CONNECTION_OVERRIDE_FIELDS,
-            has_preconfigured_connection,
+            is_dynamic_mode_enabled,
         )
 
-        if has_preconfigured_connection():
+        if not is_dynamic_mode_enabled():
             for name, info in tool_registry.items():
                 schema = info['input_schema']
                 if 'properties' in schema:
@@ -442,12 +442,12 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         if 'properties' in schema:
             from mcp_server_opensearch.server_instructions import (
                 CONNECTION_OVERRIDE_FIELDS,
-                has_preconfigured_connection,
+                is_dynamic_mode_enabled,
             )
 
             _always_hidden = {'opensearch_cluster_name'}
             fields_to_strip = _always_hidden | (
-                CONNECTION_OVERRIDE_FIELDS if has_preconfigured_connection() else set()
+                set() if is_dynamic_mode_enabled() else CONNECTION_OVERRIDE_FIELDS
             )
             for field in fields_to_strip:
                 schema['properties'].pop(field, None)
