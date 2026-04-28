@@ -215,7 +215,26 @@ The LLM should choose the appropriate cluster based on the operation context (e.
 
 ## Dynamic Connection Parameters
 
-All tools accept optional connection parameters that override the server's configured environment variables (single mode) or cluster config (multi mode) on a per-call basis. This enables agents to dynamically target different OpenSearch clusters without restarting or reconfiguring the server.
+When the server starts with no pre-configured connection (no `OPENSEARCH_URL` environment variable and no YAML cluster config), it enters **zero-config mode**: all connection override fields are automatically exposed in every tool's schema, and server-level instructions guide the LLM to provide them. This lets a single MCP server instance serve multiple clusters without any restart or reconfiguration.
+
+When `OPENSEARCH_URL` is set or clusters are loaded from a YAML config file, the override fields are hidden from tool schemas (zero token overhead) since the agent doesn't need to supply them.
+
+### How It Works
+
+When a tool is called, any connection parameter provided in the tool input takes precedence over the corresponding environment variable. Parameters that are omitted (or set to `null`) fall back to the server's existing configuration.
+
+**Priority order (highest to lowest):**
+1. Tool input parameters (per-call overrides)
+2. Header-based authentication values (when `OPENSEARCH_HEADER_AUTH=true`)
+3. Environment variables / cluster YAML config
+
+### Schema Exposure Rules
+
+| Server configuration | Override fields in schema |
+|---|---|
+| No `OPENSEARCH_URL`, no YAML config (zero-config mode) | Exposed — agent must supply `opensearch_url` |
+| `OPENSEARCH_URL` set | Hidden — URL already configured |
+| YAML cluster config loaded (multi mode) | Hidden — clusters already configured |
 
 ### How It Works
 

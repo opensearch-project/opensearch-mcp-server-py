@@ -107,6 +107,7 @@ markers = [
     "header_auth: Requires header auth setup",
     "no_auth: Requires no-auth cluster access",
     "server_modes: Server mode tests (single and multi-cluster)",
+    "dynamic_connection: Dynamic per-call connection parameter tests",
 ]
 testpaths = ["tests"]
 asyncio_mode = "auto"

@@ -33,10 +33,12 @@ async def serve(
     if config_file_path:
         set_config_file_path(config_file_path)
 
-    server = Server('opensearch-mcp-server', instructions=get_server_instructions())
-    # Load clusters from YAML file
+    # Load clusters from YAML file before evaluating server instructions,
+    # so has_preconfigured_connection() sees the populated cluster registry.
     if mode == 'multi':
         await load_clusters_from_yaml(config_file_path)
+
+    server = Server('opensearch-mcp-server', instructions=get_server_instructions())
 
     # Call tool generator
     await generate_tools_from_openapi()
