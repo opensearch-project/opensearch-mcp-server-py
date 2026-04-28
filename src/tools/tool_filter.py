@@ -7,6 +7,7 @@ import json
 import logging
 from .tool_params import baseToolArgs
 from .tools import TOOL_REGISTRY
+from .skills_tools import SKILLS_TOOLS_REGISTRY
 from .utils import (
     is_tool_compatible,
     parse_comma_separated,
@@ -171,8 +172,6 @@ def process_tool_filter(
             'ExplainTool',
             'MsearchTool',
             'GenericOpenSearchApiTool',
-            'DataDistributionTool',
-            'LogPatternAnalysisTool',
         ]
 
         # Build core tools list using display names
@@ -216,6 +215,12 @@ def process_tool_filter(
 
         # Add search_relevance as a built-in category (not enabled by default)
         category_to_tools['search_relevance'] = search_relevance_display_names
+
+        # Add skills as a built-in category (not enabled by default)
+        skills_display_names = [
+            info.get('display_name', name) for name, info in SKILLS_TOOLS_REGISTRY.items()
+        ]
+        category_to_tools['skills'] = skills_display_names
 
         # Process YAML config file if provided
         config = load_yaml_config(filter_path)

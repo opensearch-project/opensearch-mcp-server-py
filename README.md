@@ -86,9 +86,9 @@ Search Relevance Workbench tools are grouped under the `search_relevance` catego
 - [SearchJudgmentsTool](https://docs.opensearch.org/latest/search-plugins/search-relevance/judgments/): Searches judgments using OpenSearch query DSL. Defaults to match_all if no query body is provided.
 - [SearchExperimentsTool](https://docs.opensearch.org/latest/search-plugins/search-relevance/experiments/): Searches experiments using OpenSearch query DSL. Defaults to match_all if no query body is provided.
 
-### Skills Tools (Enabled by Default)
+### Skills Tools (Disabled by Default)
 
-Advanced analysis tools for data analysis and troubleshooting.
+Skills tools are grouped under the `skills` category and can be enabled at once using `OPENSEARCH_ENABLED_CATEGORIES=skills` or by adding `enabled_categories: [skills]` to the config file. See the [Tool Filter](USER_GUIDE.md#tool-filter) section in the User Guide for additional information about how to filter tools.
 
 - [DataDistributionTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/data-distribution-tool/): Analyzes data distribution patterns and field value frequencies within OpenSearch indices. Supports both single dataset analysis and comparative analysis between two time periods to identify distribution changes.
 - [LogPatternAnalysisTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/log-pattern-analysis-tool/): Detects anomalous log patterns and sequences through comparative analysis between baseline and selection time ranges. Supports log sequence analysis with trace correlation, log pattern difference analysis, and log insights analysis for error detection.

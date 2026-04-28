@@ -548,6 +548,7 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 | `OPENSEARCH_NO_AUTH` | No | `''` | Set to `"true"` to connect without authentication |
 | `OPENSEARCH_HEADER_AUTH` | No | `''` | Set to `"true"` to enable header-based authentication (headers take priority over env vars) |
 | `OPENSEARCH_TIMEOUT` | No | `''` | Connection timeout in seconds for OpenSearch operations |
+| `OPENSEARCH_QUERY_TIMEOUT` | No | `''` | Server-side query timeout passed as `cancel_after_time_interval` to search requests (e.g., `"10s"`). Cancels long-running queries after the specified duration. |
 | `MCP_OAUTH_ENABLED` | No | `''` | Set to `"true"` to require OAuth bearer tokens on streaming MCP endpoints |
 | `MCP_OAUTH_ISSUER_URL` | Required when OAuth is enabled | `''` | OAuth/OIDC issuer URL that issues tokens for this MCP resource |
 | `MCP_OAUTH_RESOURCE_URL` | No | `http://<host>:<port>/mcp/` | Public MCP resource URL used in protected resource metadata |

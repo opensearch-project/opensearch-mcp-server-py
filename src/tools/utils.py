@@ -1,9 +1,19 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import json
 import logging
 import yaml
 from semver import Version
+
+
+def format_json(data) -> str:
+    """Format data as compact JSON with non-ASCII character preservation.
+
+    All tool responses should use this function instead of calling json.dumps
+    directly to ensure consistent formatting across the codebase.
+    """
+    return json.dumps(data, separators=(',', ':'), ensure_ascii=False)
 
 
 def is_tool_compatible(current_version: Version | None, tool_info: dict = {}):

@@ -6,8 +6,8 @@ import logging
 import csv
 import io
 import math
+import os
 from decimal import Decimal
-import json
 from semver import Version
 from tools.tool_params import *
 
@@ -68,7 +68,13 @@ async def search_index(args: SearchIndexArgs) -> json:
         effective_size = min(args.size, max_size_limit) if args.size is not None else 10
         query['size'] = effective_size
 
-        response = await client.search(index=args.index, body=query)
+        search_params = {'index': args.index, 'body': query}
+
+        query_timeout = os.getenv('OPENSEARCH_QUERY_TIMEOUT', '').strip() or None
+        if query_timeout:
+            search_params['cancel_after_time_interval'] = query_timeout
+
+        response = await client.search(**search_params)
         return response
 
 

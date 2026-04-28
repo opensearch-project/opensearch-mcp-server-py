@@ -4,16 +4,20 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
 ### Added
+- Add configurable server-side query timeout via `OPENSEARCH_QUERY_TIMEOUT` environment variable, passed as `cancel_after_time_interval` to OpenSearch search requests ([#228](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/228))
 - Add `User-Agent` header (`opensearch-mcp-server-py/<version>`) to all OpenSearch requests for MCP traffic identification in cluster logs ([#207](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/207))
+- Add `AGENTS.md` and rewrite `DEVELOPER_GUIDE.md` "Adding Custom Tools" section with detailed 4-piece tool anatomy, error handling contracts, and tool category documentation ([#214](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/214))
 
 - Add OpenSearch mTLS support for single-cluster and multi-cluster configurations, including CA bundle, client certificate, and client key settings
 
 ### Fixed
 - Switch CI from `pull_request` to `pull_request_target` so integration tests run on fork PRs ([#219](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/219))
 - Fix multi-mode IT failing for `ListClustersTool` which has no `opensearch_cluster_name` parameter ([#220](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/220))
+- Fix non-ASCII characters (e.g. Chinese, Japanese, accented characters) being escaped to Unicode sequences in all tool JSON responses ([#164](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/164))
 
 - Fix `SearchIndexTool` ignoring `size=0`, causing aggregation-only queries to always return 10 hits ([#217](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/217))
 - Infer default TCP port from URL scheme (`http` → 80, `https` → 443) when no port is specified, instead of relying on implicit 9200 behavior ([#170](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/170))
+- Move skills tools to disabled-by-default category([#225](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/225/))
 
 ### Removed
 

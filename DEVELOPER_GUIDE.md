@@ -248,113 +248,101 @@ uv sync
 
 ## Adding Custom Tools
 
-To add a new tool to the MCP server, follow these steps:
+Every tool has 4 pieces. Follow the existing patterns exactly — read the referenced files to see how current tools are structured.
 
-### 1. Create the Tool Function
+### 1. Pydantic params — `src/tools/tool_params.py`
 
-Add your tool function in `src/mcp_server_opensearch/tools/tools.py`:
+Add your args model here, extending `baseToolArgs`. See existing models like `SearchIndexArgs` or `GetIndexMappingArgs` for the pattern.
+
+```python
+class YourToolArgs(baseToolArgs):
+    param1: str = Field(description="Description of param1")
+    optional_param: Optional[str] = Field(default=None, description="Optional param")
+```
+
+### 2. Async helper — `src/opensearch/helper.py`
+
+Add your OpenSearch call here. Helpers should be simple — make the call and let exceptions propagate. **Do not add try/except in helpers**; error handling belongs in the tool function.
+
+```python
+async def your_helper(args: YourToolArgs):
+    async with get_opensearch_client(args) as client:
+        return await client.some_api(param=args.param1)
+```
+
+### 3. Async tool function — `src/tools/tools.py`
+
+Add your tool function here. For error handling, **always use `log_tool_error()`** from `src/tools/tool_logging.py`:
 
 ```python
 async def your_tool_function(args: YourToolArgs) -> list[dict]:
-    """
-    Description of what your tool does.
-    
-    Args:
-        args: Tool arguments
-        
-    Returns:
-        List of response objects
-    """
     try:
-        # Your tool implementation here
-        result = your_implementation()
-        return [{
-            "type": "text",
-            "text": result
-        }]
+        await check_tool_compatibility('YourToolName', args)
+        result = await your_helper(args)
+        formatted = json.dumps(result, separators=(',', ':'))
+        return [{'type': 'text', 'text': f'Result:\n{formatted}'}]
     except Exception as e:
-        return [{
-            "type": "text",
-            "text": f"Error: {str(e)}"
-        }]
+        return log_tool_error('YourToolName', e, 'description of what failed')
 ```
 
-### 2. Define the Arguments Model
+This is critical — `log_tool_error()` returns responses with `is_error: True`, which `tool_executor.py` uses for metrics and monitoring. Without it, errors are silently logged as successes.
 
-Create a Pydantic model for your tool's arguments that extends `baseToolArgs`:
+### 4. `TOOL_REGISTRY` entry — `src/tools/tools.py`
+
+Add your tool to the static `TOOL_REGISTRY` dict. Look at any existing entry for the format.
 
 ```python
-from pydantic import Field
-from .tool_params import baseToolArgs
-
-class YourToolArgs(baseToolArgs):
-    """Arguments for the YourTool tool."""
-    
-    param1: str = Field(description="Description of param1")
-    param2: int = Field(description="Description of param2", ge=0)
-    
-    class Config:
-        json_schema_extra = {
-            "examples": [
-                {
-                    "param1": "example_value",
-                    "param2": 10
-                }
-            ]
-        }
+'YourToolName': {
+    'display_name': 'YourToolName',
+    'description': 'What the tool does',
+    'input_schema': YourToolArgs.model_json_schema(),
+    'function': your_tool_function,
+    'args_model': YourToolArgs,
+    'http_methods': 'GET',          # Controls write protection filter
+    'min_version': '2.0.0',         # Optional: minimum OpenSearch version
+},
 ```
 
-### 3. Add Helper Functions
+Key fields:
+- `display_name` — name exposed to MCP clients (must match the registry key)
+- `http_methods` — `'GET'`, `'POST'`, `'PUT'`, `'DELETE'`, or `'GET, POST'`. When write protection is enabled, non-GET tools are filtered out
+- `min_version` / `max_version` — optional semver strings for OpenSearch version gating
+- `multi_only` — optional bool, if `True` the tool only appears in multi-cluster mode
 
-Create helper functions in `src/mcp_server_opensearch/opensearch/helper.py`:
+### 5. Tool category — `src/tools/tool_filter.py`
 
-```python
-def your_helper_function(args: YourToolArgs) -> dict:
-    """
-    Helper function that performs a single REST call to OpenSearch.
+Add your tool to the appropriate category list (`core_tools`, `search_relevance`, or a new category). Tools not in any enabled category are **filtered out** and invisible to clients. See the `search_relevance` category definition for how to add a new opt-in category.
 
-    Returns:
-        OpenSearch response data
-        
-    Raises:
-        OpenSearchException: If the OpenSearch request fails
-    """
-    # Your OpenSearch REST call implementation here
-    return result
+Categories are enabled via YAML config or environment variable. Only `core_tools` is enabled by default.
+
+**Via YAML config**:
+```yaml
+tool_filters:
+  enabled_categories:
+    - search_relevance
+    - my_custom_category
 ```
 
-### 4. Register Your Tool
-
-Add your tool to the `TOOL_REGISTRY` dictionary in `src/mcp_server_opensearch/tools/tools.py`:
-
-```python
-TOOL_REGISTRY = {
-    # ... existing tools ...
-    "YourToolName": {
-        "description": "Description of what your tool does",
-        "input_schema": YourToolArgs.model_json_schema(),
-        "function": your_tool_function,
-        "args_model": YourToolArgs,
-    }
-}
+**Via environment variable**:
+```bash
+export OPENSEARCH_ENABLED_CATEGORIES="search_relevance,my_custom_category"
 ```
 
-### 5. Import Helper Functions
+In multi-cluster mode, all tools are returned without category filtering.
 
-Import and use the helper functions in your tool:
+### 6. Tests
 
-```python
-from mcp_server_opensearch.opensearch.helper import your_helper_function
-```
+Add unit tests in `tests/tools/` following existing test patterns.
 
+### Reference
 
-The tool will be automatically available through the MCP server after registration.
+The Search Relevance Workbench added 18 tools with zero infrastructure changes — all params in `tool_params.py`, helpers in `helper.py`, tool functions in `tools.py`, entries in `TOOL_REGISTRY`, and an opt-in `search_relevance` category in `tool_filter.py`. Use it as a blueprint for adding tool groups.
 
-> Note: Each helper function should perform a single REST call to OpenSearch. This design promotes:
-> - Clear separation of concerns
-> - Easy testing and maintenance
-> - Extensible architecture
-> - Reusable OpenSearch operations
+> **Note**: All new source files must include the Apache 2.0 license header:
+> ```python
+> # Copyright OpenSearch Contributors
+> # SPDX-License-Identifier: Apache-2.0
+> ```
 
 
 ## Testing
