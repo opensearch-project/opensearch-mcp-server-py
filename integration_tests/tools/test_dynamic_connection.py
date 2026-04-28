@@ -20,6 +20,41 @@ from integration_tests.framework.server import MCPServerProcess
 from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
 
 
+def _build_inline_call_args() -> dict:
+    """Build per-call connection args suitable for a zero-config server.
+
+    A zero-config server has NO env vars set, so the inline params must be
+    fully self-contained — they cannot rely on ambient AWS credentials or
+    profiles on the server side.
+
+    Prefers basic auth (username/password passed directly as tool params)
+    over AWS auth, because AWS auth requires the server process to have
+    credentials in its environment (which zero-config servers don't have).
+    Falls back to opensearch_no_auth=True if neither is available.
+
+    Calls pytest.skip if IT_OPENSEARCH_URL is not set.
+    """
+    url = os.environ.get('IT_OPENSEARCH_URL')
+    if not url:
+        pytest.skip('IT_OPENSEARCH_URL not set')
+
+    basic_user = os.environ.get('IT_BASIC_AUTH_USERNAME')
+    basic_pass = os.environ.get('IT_BASIC_AUTH_PASSWORD')
+
+    if basic_user and basic_pass:
+        return {
+            'opensearch_url': url,
+            'opensearch_username': basic_user,
+            'opensearch_password': basic_pass,
+        }
+
+    # No basic auth — try no-auth (works for local/dev clusters)
+    return {
+        'opensearch_url': url,
+        'opensearch_no_auth': True,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -76,58 +111,19 @@ class TestZeroConfigMode:
 
     async def test_tool_call_with_inline_connection_params(self, zero_config_server):
         """A tool call that supplies opensearch_url inline should succeed."""
-        env = get_default_server_env()
-        opensearch_url = env.get('OPENSEARCH_URL')
-        if not opensearch_url:
-            pytest.skip('IT_OPENSEARCH_URL not set')
-
-        # Build per-call auth params from whatever auth is available
-        call_args: dict = {'opensearch_url': opensearch_url}
-
-        aws_key = os.environ.get('IT_AWS_ACCESS_KEY_ID')
-        aws_secret = os.environ.get('IT_AWS_SECRET_ACCESS_KEY')
-        aws_region = os.environ.get('IT_AWS_REGION', 'us-west-2')
-        basic_user = os.environ.get('IT_BASIC_AUTH_USERNAME')
-        basic_pass = os.environ.get('IT_BASIC_AUTH_PASSWORD')
-
-        if aws_key and aws_secret:
-            call_args['aws_region'] = aws_region
-        elif basic_user and basic_pass:
-            call_args['opensearch_username'] = basic_user
-            call_args['opensearch_password'] = basic_pass
-        else:
-            pytest.skip('No auth credentials available for inline connection test')
-
+        call_args = _build_inline_call_args()
         async with mcp_client(zero_config_server.url) as session:
             result = await session.call_tool('ListIndexTool', arguments=call_args)
             response = assert_tool_success(result)
             assert TEST_INDEX in response
 
     async def test_inline_params_take_precedence_over_env_vars(self, zero_config_server):
-        """Per-call opensearch_url must override any env var that might be set."""
-        env = get_default_server_env()
-        opensearch_url = env.get('OPENSEARCH_URL')
-        if not opensearch_url:
-            pytest.skip('IT_OPENSEARCH_URL not set')
+        """Per-call opensearch_url must override any env var that might be set.
 
-        call_args: dict = {'opensearch_url': opensearch_url}
-
-        aws_key = os.environ.get('IT_AWS_ACCESS_KEY_ID')
-        aws_secret = os.environ.get('IT_AWS_SECRET_ACCESS_KEY')
-        aws_region = os.environ.get('IT_AWS_REGION', 'us-west-2')
-        basic_user = os.environ.get('IT_BASIC_AUTH_USERNAME')
-        basic_pass = os.environ.get('IT_BASIC_AUTH_PASSWORD')
-
-        if aws_key and aws_secret:
-            call_args['aws_region'] = aws_region
-        elif basic_user and basic_pass:
-            call_args['opensearch_username'] = basic_user
-            call_args['opensearch_password'] = basic_pass
-        else:
-            pytest.skip('No auth credentials available')
-
-        # The zero_config_server has no env vars set, so the only way this
-        # succeeds is if the per-call params are actually used.
+        The zero_config_server has no env vars set, so the only way this
+        succeeds is if the per-call params are actually used.
+        """
+        call_args = _build_inline_call_args()
         async with mcp_client(zero_config_server.url) as session:
             result = await session.call_tool('ClusterHealthTool', arguments=call_args)
             assert_tool_success(result)
