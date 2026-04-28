@@ -35,7 +35,7 @@ IDE_CONFIGS = {
     },
     'claude-code': {
         'name': 'Claude Code',
-        'mcp_path': Path.home() / '.claude' / 'settings.json',
+        'mcp_path': Path.home() / '.claude' / 'claude.json',
     },
     'cursor': {
         'name': 'Cursor',
@@ -80,7 +80,7 @@ def _build_mcp_server_config(
         'AWS_REGION': aws_region,
         'AWS_OPENSEARCH_SERVERLESS': 'true',
         'MEMORY_TOOLS_ENABLED': 'true',
-        'OPENSEARCH_DISABLED_CATEGORIES': 'core_tools,skills_tools',
+        'OPENSEARCH_DISABLED_CATEGORIES': 'core_tools,skills',
     }
     if aws_profile:
         env['AWS_PROFILE'] = aws_profile
@@ -329,6 +329,10 @@ def run_install(from_git: str = '') -> None:
             actions.append(_install_claude_md())
         elif ide_id == 'cursor':
             actions.append(_configure_cursor_mcp(mcp_config))
+            # Install Cursor hooks for memory search/save
+            from .install_hooks import _install_cursor_hooks
+            cursor_hook_actions = _install_cursor_hooks('user')
+            actions.extend(cursor_hook_actions if cursor_hook_actions else ['  Cursor hooks already installed.'])
 
     print()
     print('Done!')

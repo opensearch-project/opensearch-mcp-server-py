@@ -64,7 +64,7 @@ def _run_install_hooks(argv: list) -> None:
     parser.add_argument(
         '--client',
         required=True,
-        choices=['kiro', 'claude-code'],
+        choices=['kiro', 'claude-code', 'cursor'],
         help='AI client to install hooks for.',
     )
     parser.add_argument(

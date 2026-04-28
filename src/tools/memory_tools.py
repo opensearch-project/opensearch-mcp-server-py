@@ -64,6 +64,16 @@ def _get_memory_index_name() -> str:
     return os.getenv('MEMORY_INDEX_NAME', DEFAULT_MEMORY_INDEX_NAME)
 
 
+def _get_default_user_id() -> Optional[str]:
+    """Return the default user_id from env, or None if not set."""
+    return os.getenv('MEMORY_USER_ID', '').strip() or None
+
+
+def _get_default_agent_id() -> Optional[str]:
+    """Return the default agent_id from env, or None if not set."""
+    return os.getenv('MEMORY_AGENT_ID', '').strip() or None
+
+
 # ---------------------------------------------------------------------------
 # Index lifecycle helpers (boto3)
 # ---------------------------------------------------------------------------
@@ -490,12 +500,16 @@ async def save_memory_tool(args: SaveMemoryArgs) -> list[dict]:
             'created_at': now,
             'updated_at': now,
         }
-        if args.user_id:
-            doc['user_id'] = args.user_id
-        if args.agent_id:
-            doc['agent_id'] = args.agent_id
-        if args.session_id:
-            doc['session_id'] = args.session_id
+        # Apply env var defaults when caller doesn't provide explicit values
+        user_id = args.user_id or _get_default_user_id()
+        agent_id = args.agent_id or _get_default_agent_id()
+        session_id = args.session_id
+        if user_id:
+            doc['user_id'] = user_id
+        if agent_id:
+            doc['agent_id'] = agent_id
+        if session_id:
+            doc['session_id'] = session_id
         if args.tags:
             doc['tags'] = [t.strip() for t in args.tags.split(',') if t.strip()]
 
@@ -521,14 +535,19 @@ async def search_memory_tool(args: SearchMemoryArgs) -> list[dict]:
         index_name = _get_memory_index_name()
         effective_size = min(args.size, 100) if args.size else 10
 
+        # Apply env var defaults when caller doesn't provide explicit values
+        user_id = args.user_id or _get_default_user_id()
+        agent_id = args.agent_id or _get_default_agent_id()
+        session_id = args.session_id
+
         # Build filter clauses
         filters = []
-        if args.user_id:
-            filters.append({'term': {'user_id': args.user_id}})
-        if args.agent_id:
-            filters.append({'term': {'agent_id': args.agent_id}})
-        if args.session_id:
-            filters.append({'term': {'session_id': args.session_id}})
+        if user_id:
+            filters.append({'term': {'user_id': user_id}})
+        if agent_id:
+            filters.append({'term': {'agent_id': agent_id}})
+        if session_id:
+            filters.append({'term': {'session_id': session_id}})
         if args.tags:
             tag_list = [t.strip() for t in args.tags.split(',') if t.strip()]
             for tag in tag_list:
