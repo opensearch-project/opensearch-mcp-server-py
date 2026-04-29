@@ -45,6 +45,7 @@ async def create_mcp_server(
     if mode == 'multi':
         await load_clusters_from_yaml(config_file_path)
 
+    # Server instructions guide the LLM on dynamic connection params (single mode only)
     server = Server('opensearch-mcp-server', instructions=get_server_instructions())
     # Call tool generator
     await generate_tools_from_openapi()

@@ -69,7 +69,10 @@ class TestGetServerInstructions:
     """Tests for get_server_instructions based on configuration state."""
 
     def setup_method(self):
-        """Save and clear OPENSEARCH_URL, OPENSEARCH_DYNAMIC_CONNECTION, and cluster registry."""
+        """Save and clear env vars, set single mode, clear cluster registry."""
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('single')
         self._original = os.environ.get('OPENSEARCH_URL')
         self._original_dynamic = os.environ.get('OPENSEARCH_DYNAMIC_CONNECTION')
         os.environ.pop('OPENSEARCH_URL', None)
@@ -93,12 +96,20 @@ class TestGetServerInstructions:
         cluster_registry.clear()
 
     def test_returns_instructions_when_nothing_configured(self):
-        """When no URL and no clusters, instructions are returned."""
+        """When no URL and no clusters, instructions are returned in single mode."""
         from mcp_server_opensearch.server_instructions import get_server_instructions
 
         result = get_server_instructions()
         assert result is not None
         assert 'opensearch_url' in result
+
+    def test_returns_none_in_multi_mode(self):
+        """In multi mode, instructions are always None regardless of config."""
+        from mcp_server_opensearch.global_state import set_mode
+        from mcp_server_opensearch.server_instructions import get_server_instructions
+
+        set_mode('multi')
+        assert get_server_instructions() is None
 
     def test_returns_none_when_url_configured(self):
         """When OPENSEARCH_URL is set, no instructions needed."""
@@ -357,7 +368,7 @@ class TestConditionalSchemaStripping:
 
     @pytest.mark.asyncio
     async def test_dynamic_mode_marks_opensearch_url_required(self):
-        """In dynamic mode without header auth, opensearch_url is marked required."""
+        """In dynamic mode without header auth or URL fallback, opensearch_url is required."""
         os.environ.pop('OPENSEARCH_URL', None)
         os.environ.pop('OPENSEARCH_HEADER_AUTH', None)
         from tools.tool_filter import get_tools
@@ -371,6 +382,22 @@ class TestConditionalSchemaStripping:
         assert 'opensearch_url' in schema.get('required', [])
 
     @pytest.mark.asyncio
+    async def test_dynamic_mode_with_url_env_var_does_not_mark_required(self):
+        """When OPENSEARCH_DYNAMIC_CONNECTION=true but OPENSEARCH_URL is set,
+        opensearch_url is exposed in schema but NOT required (server has a fallback)."""
+        os.environ['OPENSEARCH_URL'] = 'https://cluster.example.com'
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
+        from tools.tool_filter import get_tools
+
+        with patch('tools.tool_filter.get_opensearch_version', return_value=None):
+            with patch('tools.tool_filter.is_tool_compatible', return_value=True):
+                result = await get_tools(self._make_registry())
+
+        schema = result['ListIndexTool']['input_schema']
+        assert 'opensearch_url' in schema['properties']
+        assert 'opensearch_url' not in schema.get('required', [])
+
+    @pytest.mark.asyncio
     async def test_header_auth_mode_does_not_mark_opensearch_url_required(self):
         """In header auth mode, opensearch_url must NOT be required (URL comes from headers)."""
         os.environ.pop('OPENSEARCH_URL', None)
@@ -382,7 +409,5 @@ class TestConditionalSchemaStripping:
                 result = await get_tools(self._make_registry())
 
         schema = result['ListIndexTool']['input_schema']
-        # opensearch_url still appears in properties (agent can still pass it)
         assert 'opensearch_url' in schema['properties']
-        # but must NOT be in required — the URL comes from HTTP headers
         assert 'opensearch_url' not in schema.get('required', [])

@@ -366,6 +366,10 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     Returns:
         dict: Dictionary of enabled tools with their configurations
     """
+    # Inline import to avoid circular dependency at module load time
+    # (server_instructions imports clusters_information which is loaded after tools)
+    from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS, is_dynamic_mode_enabled
+
     # Get the current mode from global state
     mode = get_mode()
 
@@ -378,8 +382,6 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     # connection params are a single-mode feature. Multi mode uses
     # opensearch_cluster_name to select a pre-configured cluster.
     if mode == 'multi':
-        from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
-
         for name, info in tool_registry.items():
             schema = info['input_schema']
             if 'properties' in schema:
@@ -439,11 +441,6 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         # know it must be provided.
         schema = tool_info['input_schema'].copy()
         if 'properties' in schema:
-            from mcp_server_opensearch.server_instructions import (
-                CONNECTION_OVERRIDE_FIELDS,
-                is_dynamic_mode_enabled,
-            )
-
             dynamic = is_dynamic_mode_enabled()
             _always_hidden = {'opensearch_cluster_name'}
             fields_to_strip = _always_hidden | (
@@ -456,11 +453,17 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
 
             # In dynamic mode, opensearch_url is functionally required at runtime
             # even though baseToolArgs declares it Optional. Mark it required in
-            # the schema so strict MCP clients enforce it — but only when header
-            # auth is not enabled, since in that mode the URL comes from HTTP
-            # request headers rather than tool arguments.
+            # the schema so strict MCP clients enforce it — but only when:
+            # 1. No OPENSEARCH_URL env var is set (no server-side fallback), AND
+            # 2. Header auth is not enabled (URL comes from headers, not tool args).
             use_header_auth = os.getenv('OPENSEARCH_HEADER_AUTH', '').lower() == 'true'
-            if dynamic and not use_header_auth and 'opensearch_url' in schema['properties']:
+            has_url_fallback = bool(os.getenv('OPENSEARCH_URL', '').strip())
+            if (
+                dynamic
+                and not use_header_auth
+                and not has_url_fallback
+                and 'opensearch_url' in schema['properties']
+            ):
                 schema.setdefault('required', [])
                 if 'opensearch_url' not in schema['required']:
                     schema['required'].append('opensearch_url')

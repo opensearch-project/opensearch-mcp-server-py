@@ -33,11 +33,11 @@ async def serve(
     if config_file_path:
         set_config_file_path(config_file_path)
 
-    # Load clusters from YAML file before evaluating server instructions,
-    # so has_preconfigured_connection() sees the populated cluster registry.
+    # Load clusters from YAML file
     if mode == 'multi':
         await load_clusters_from_yaml(config_file_path)
 
+    # Server instructions guide the LLM on dynamic connection params (single mode only)
     server = Server('opensearch-mcp-server', instructions=get_server_instructions())
 
     # Call tool generator

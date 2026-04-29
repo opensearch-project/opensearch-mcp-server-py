@@ -74,6 +74,25 @@ async def zero_config_server(seed_test_index):
 
 
 @pytest_asyncio.fixture(scope='module')
+async def wrong_url_server(seed_test_index):
+    """MCP server started with a deliberately wrong OPENSEARCH_URL.
+
+    Used to verify that per-call opensearch_url overrides the server's
+    pre-configured URL: if the inline param takes precedence the call
+    succeeds; if the server uses its own URL the call fails.
+
+    No auth is configured on the server — auth comes entirely from the
+    inline call params, which also proves per-call auth overrides work.
+    """
+    server = MCPServerProcess(
+        env={'OPENSEARCH_URL': 'http://does-not-exist.invalid:9200'}
+    )
+    await server.start()
+    yield server
+    await server.stop()
+
+
+@pytest_asyncio.fixture(scope='module')
 async def preconfigured_server(seed_test_index):
     """MCP server started with OPENSEARCH_URL set (pre-configured mode).
 
@@ -117,19 +136,15 @@ class TestZeroConfigMode:
             response = assert_tool_success(result)
             assert TEST_INDEX in response
 
-    async def test_inline_params_take_precedence_over_env_vars(self, zero_config_server):
-        """Per-call opensearch_url takes precedence over any server-side env vars.
+    async def test_inline_params_take_precedence_over_server_config(self, wrong_url_server):
+        """Per-call opensearch_url overrides the server's pre-configured URL.
 
-        The zero_config_server starts with no env vars at all. We verify that
-        a tool call succeeds purely from inline params — proving the server
-        uses what the agent passes, not some ambient configuration.
-        If the server ignored inline params and fell back to env vars, the call
-        would fail with a ConfigurationError (no URL configured).
+        The wrong_url_server has OPENSEARCH_URL pointing to a non-existent host.
+        Passing the correct URL inline must override it — if the server used its
+        own URL the call would fail with a connection error.
         """
         call_args = _build_inline_call_args()
-        async with mcp_client(zero_config_server.url) as session:
-            # This would fail with "OPENSEARCH_URL is required" if inline params
-            # were ignored, since the server has no OPENSEARCH_URL set.
+        async with mcp_client(wrong_url_server.url) as session:
             result = await session.call_tool('ClusterHealthTool', arguments=call_args)
             assert_tool_success(result)
 
