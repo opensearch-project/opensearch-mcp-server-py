@@ -456,8 +456,11 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
 
             # In dynamic mode, opensearch_url is functionally required at runtime
             # even though baseToolArgs declares it Optional. Mark it required in
-            # the schema so strict MCP clients enforce it.
-            if dynamic and 'opensearch_url' in schema['properties']:
+            # the schema so strict MCP clients enforce it — but only when header
+            # auth is not enabled, since in that mode the URL comes from HTTP
+            # request headers rather than tool arguments.
+            use_header_auth = os.getenv('OPENSEARCH_HEADER_AUTH', '').lower() == 'true'
+            if dynamic and not use_header_auth and 'opensearch_url' in schema['properties']:
                 schema.setdefault('required', [])
                 if 'opensearch_url' not in schema['required']:
                     schema['required'].append('opensearch_url')
