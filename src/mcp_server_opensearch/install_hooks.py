@@ -28,11 +28,12 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Hook prompt text
+# Prompts are written without apostrophes so plain echo is safe to use.
 # ---------------------------------------------------------------------------
 
 SEARCH_PROMPT = (
-    'Before responding, search memory for any relevant context about the '
-    "topics in the user's message using SearchMemoryTool. This ensures "
+    'Before responding, search memory for relevant context about the '
+    'topics in the current message using SearchMemoryTool. This ensures '
     'continuity across sessions.'
 )
 
@@ -84,48 +85,34 @@ KIRO_SAVE_HOOK = {
 # Schema (verified against https://code.claude.com/docs/en/hooks):
 #   settings.json: { "hooks": { EventName: [ { matcher, hooks: [{type, command}] } ] } }
 #
-# UserPromptSubmit: plain stdout from the command is added as context for Claude.
-#   Using plain text output is simpler and equally effective.
+# UserPromptSubmit: plain stdout is added as context before Claude responds.
 #
-# Stop: supports { "decision": "block", "reason": "..." } — returning this
-#   prevents Claude from stopping and feeds the reason back as Claude's next
-#   instruction. This is the correct way to trigger a save-on-stop flow.
+# Stop: Claude Code sends { "stop_hook_active": true } in the stdin payload when
+#   Claude is already continuing due to a Stop hook. We use this as the loop guard:
+#   - First stop (stop_hook_active=false): emit decision:block with the save prompt
+#   - Second stop (stop_hook_active=true): exit 0 silently — save already happened
 #
-# We use python3 -c to build JSON payloads safely, avoiding bash quoting
-# issues with apostrophes in the prompt text.
+# This is the same pattern recommended in the Claude Code hooks docs and used by
+# tools like claude-mem to prevent infinite Stop hook loops.
 # ---------------------------------------------------------------------------
 
+# No apostrophes in prompts, so plain echo is safe
+CLAUDE_CODE_SEARCH_COMMAND = f"echo '{SEARCH_PROMPT}'"
 
-def _make_python_echo_command(text: str) -> str:
-    """Build a shell command that safely prints text via python3.
-
-    Uses base64 encoding to avoid all bash quoting issues with apostrophes,
-    double quotes, or other special characters in the text.
-    """
-    import base64
-    encoded = base64.b64encode(text.encode()).decode()
-    return (
-        f'python3 -c "import base64,sys; sys.stdout.write(base64.b64decode(\'{encoded}\').decode())"'
-    )
-
-
-def _make_claude_stop_command(reason: str) -> str:
-    """Build a shell command that emits a Claude Code Stop block decision.
-
-    Returns JSON: { "decision": "block", "reason": "<reason>" }
-    This causes Claude to continue with the reason as its next instruction.
-    Uses base64 encoding to avoid bash quoting issues.
-    """
-    import base64
-    payload = json.dumps({'decision': 'block', 'reason': reason})
-    encoded = base64.b64encode(payload.encode()).decode()
-    return (
-        f'python3 -c "import base64,sys; sys.stdout.write(base64.b64decode(\'{encoded}\').decode())"'
-    )
-
-
-CLAUDE_CODE_SEARCH_COMMAND = _make_python_echo_command(SEARCH_PROMPT)
-CLAUDE_CODE_SAVE_COMMAND = _make_claude_stop_command(SAVE_PROMPT)
+# Stop hook script: reads stop_hook_active from stdin, only blocks on first stop.
+# Uses python3 -c to parse stdin JSON — no external dependencies needed.
+# The payload is base64-encoded to avoid quoting issues with the JSON content.
+import base64 as _base64
+_stop_payload = json.dumps({'decision': 'block', 'reason': SAVE_PROMPT})
+_stop_payload_b64 = _base64.b64encode(_stop_payload.encode()).decode()
+CLAUDE_CODE_STOP_COMMAND = (
+    f"python3 -c \""
+    f"import json,sys,base64; "
+    f"data=json.load(sys.stdin); "
+    f"sys.stdout.write('' if data.get('stop_hook_active') "
+    f"else base64.b64decode('{_stop_payload_b64}').decode())"
+    f"\""
+)
 
 # Claude Code settings.json hook map (nested map keyed by event name).
 # Each event maps to a list of matcher groups; each group has an inner hooks list.
@@ -142,13 +129,14 @@ CLAUDE_CODE_HOOKS_CONFIG = {
             ],
         }
     ],
-    # Stop: decision "block" with reason causes Claude to continue and save memories.
+    # Stop: ask Claude to save memories, but only on the first stop.
+    # stop_hook_active=true means we already triggered once — exit silently.
     'Stop': [
         {
             'hooks': [
                 {
                     'type': 'command',
-                    'command': CLAUDE_CODE_SAVE_COMMAND,
+                    'command': CLAUDE_CODE_STOP_COMMAND,
                 }
             ],
         }
@@ -165,38 +153,11 @@ CLAUDE_CODE_HOOKS_CONFIG = {
 # sessionStart: output field "additional_context" injects context at session start.
 # stop: output field "followup_message" auto-submits a follow-up message.
 #
-# We use python3 -c to safely emit JSON without bash quoting issues.
+# Prompts contain no apostrophes, so plain echo is safe.
 # ---------------------------------------------------------------------------
 
-
-def _make_cursor_session_start_command(context: str) -> str:
-    """Build a Cursor sessionStart hook command that injects additional_context.
-
-    Uses base64 encoding to avoid bash quoting issues.
-    """
-    import base64
-    payload = json.dumps({'additional_context': context})
-    encoded = base64.b64encode(payload.encode()).decode()
-    return (
-        f'python3 -c "import base64,sys; sys.stdout.write(base64.b64decode(\'{encoded}\').decode())"'
-    )
-
-
-def _make_cursor_stop_command(followup: str) -> str:
-    """Build a Cursor stop hook command that emits a followup_message.
-
-    Uses base64 encoding to avoid bash quoting issues.
-    """
-    import base64
-    payload = json.dumps({'followup_message': followup})
-    encoded = base64.b64encode(payload.encode()).decode()
-    return (
-        f'python3 -c "import base64,sys; sys.stdout.write(base64.b64decode(\'{encoded}\').decode())"'
-    )
-
-
-CURSOR_SESSION_START_COMMAND = _make_cursor_session_start_command(SEARCH_PROMPT)
-CURSOR_STOP_COMMAND = _make_cursor_stop_command(SAVE_PROMPT)
+CURSOR_SESSION_START_COMMAND = f"echo '{json.dumps({'additional_context': SEARCH_PROMPT})}'"
+CURSOR_STOP_COMMAND = f"echo '{json.dumps({'followup_message': SAVE_PROMPT})}'"
 
 CURSOR_HOOKS_CONFIG = {
     'version': 1,
@@ -279,28 +240,27 @@ def _claude_hooks_already_installed(hooks_map: dict) -> bool:
 
     The hooks map is keyed by event name; each value is a list of matcher
     groups, each of which has an inner ``hooks`` list of {type, command} dicts.
-    Detects both the current base64-encoded format and any legacy plain-text format.
+    Detects both the current plain-echo format and any legacy base64 format.
     """
-    import base64
     for _event, matcher_groups in hooks_map.items():
         for group in matcher_groups:
             for hook in group.get('hooks', []):
                 command = hook.get('command', '')
-                # Check plain-text legacy format
+                # Check for tool names directly in the command string
                 if 'SearchMemoryTool' in command or 'SaveMemoryTool' in command:
                     return True
-                # Check base64-encoded format: decode the b64 payload and inspect
+                # Check legacy base64-encoded format
                 if 'base64' in command:
                     try:
-                        # Extract the base64 token from the command string
+                        import base64
                         import re
                         match = re.search(r"b64decode\('([A-Za-z0-9+/=]+)'\)", command)
                         if match:
                             decoded = base64.b64decode(match.group(1)).decode()
                             if 'SearchMemoryTool' in decoded or 'SaveMemoryTool' in decoded:
                                 return True
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f'Could not decode hook command for idempotency check: {e}')
     return False
 
 
@@ -335,7 +295,7 @@ def _install_claude_code_hooks(scope: str) -> list[str]:
     settings_path.write_text(json.dumps(settings, indent=2) + '\n')
     actions = [
         f'Added UserPromptSubmit memory search hook to {settings_path}',
-        f'Added Stop memory save hook to {settings_path}',
+        f'Added Stop memory save hook (with loop guard) to {settings_path}',
     ]
     logger.info(f'Added Claude Code memory hooks to {settings_path}')
     return actions
@@ -356,9 +316,8 @@ def _get_cursor_hooks_path(scope: str) -> Path:
 def _cursor_hooks_already_installed(hooks_config: dict) -> bool:
     """Check if memory hooks are already present in the Cursor hooks config.
 
-    Detects both the current base64-encoded format and any legacy plain-text format.
+    Detects both the current plain-echo format and any legacy base64 format.
     """
-    import base64, re
     hooks = hooks_config.get('hooks', {})
     for _event, hook_list in hooks.items():
         for hook in hook_list:
@@ -367,13 +326,15 @@ def _cursor_hooks_already_installed(hooks_config: dict) -> bool:
                 return True
             if 'base64' in command:
                 try:
+                    import base64
+                    import re
                     match = re.search(r"b64decode\('([A-Za-z0-9+/=]+)'\)", command)
                     if match:
                         decoded = base64.b64decode(match.group(1)).decode()
                         if 'SearchMemoryTool' in decoded or 'SaveMemoryTool' in decoded:
                             return True
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f'Could not decode hook command for idempotency check: {e}')
     return False
 
 

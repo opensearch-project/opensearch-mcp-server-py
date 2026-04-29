@@ -40,19 +40,28 @@ def parse_unknown_args_to_dict(unknown_args: List[str]) -> Dict[str, str]:
 def _run_memory_install() -> None:
     """Handle the 'memory install' subcommand — interactive memory setup."""
     import sys
+    import os
 
     from .installer import run_install
 
-    # Parse optional --from-git flag
+    # Parse optional --from-git and --from-local flags
     from_git = ''
+    from_local = ''
     args = sys.argv[3:]  # skip 'opensearch-mcp-server-py memory install'
     for i, arg in enumerate(args):
         if arg == '--from-git' and i + 1 < len(args):
             from_git = args[i + 1]
         elif arg.startswith('--from-git='):
             from_git = arg.split('=', 1)[1]
+        elif arg == '--from-local' and i + 1 < len(args):
+            from_local = os.path.abspath(args[i + 1])
+        elif arg.startswith('--from-local='):
+            from_local = os.path.abspath(arg.split('=', 1)[1])
+        elif arg == '--from-local':
+            # --from-local with no value defaults to current directory
+            from_local = os.getcwd()
 
-    run_install(from_git=from_git)
+    run_install(from_git=from_git, from_local=from_local)
 
 
 def _run_install_hooks(argv: list) -> None:

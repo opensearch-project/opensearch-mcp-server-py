@@ -13,7 +13,17 @@ AI agents lose context between sessions. Every new conversation starts from scra
 - **Semantic search** — agents find relevant memories using natural language, not exact keyword matches, powered by OpenSearch automatic semantic enrichment
 - **Recency-aware ranking** — search results blend semantic relevance with recency so recent memories are prioritized while highly relevant older memories still surface
 - **Scoped access** — memories can be scoped by user, agent, or session to control visibility
-- **No LLM dependency** — memory storage and retrieval use OpenSearch directly with no additional LLM calls for embeddings
+- **No embedding setup required** — semantic enrichment runs on the OpenSearch side via automatic semantic enrichment; no external embedding model or LLM calls are needed from the MCP server
+
+## Limitations
+
+### Multi-cluster mode not supported
+
+Agent Memory requires single-cluster mode (`--mode single`, the default). Memory tools are not available when the server is started with `--mode multi`.
+
+In multi mode, each tool call routes to a named cluster via `opensearch_cluster_name`. Memory tools rely on a single `OPENSEARCH_URL` for both the opensearch-py client and the boto3 index-creation path, which is incompatible with the per-call cluster routing that multi mode uses.
+
+If you need memory alongside multi-cluster access, run two separate MCP server instances: one in multi mode for cluster operations, and one in single mode (pointing at your memory cluster) with `MEMORY_TOOLS_ENABLED=true`.
 
 ## Architecture
 

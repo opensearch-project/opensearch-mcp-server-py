@@ -379,8 +379,10 @@ def process_tool_filter(
 async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     """Filter and return available tools based on server mode and OpenSearch version.
 
-    In 'multi' mode, returns all tools without filtering. In 'single' mode, filters tools
-    based on OpenSearch version compatibility and removes base tool arguments from schemas.
+    In 'multi' mode, returns tools without version filtering or schema stripping,
+    but excludes memory tools (which require single-mode OPENSEARCH_URL config).
+    In 'single' mode, filters tools based on OpenSearch version compatibility and
+    removes base tool arguments from schemas.
 
     Args:
         tool_registry (dict): The tool registry to filter.
@@ -404,15 +406,22 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     # In multi mode, always strip connection override fields — dynamic per-call
     # connection params are a single-mode feature. Multi mode uses
     # opensearch_cluster_name to select a pre-configured cluster.
+    # Memory tools are also excluded — they require OPENSEARCH_URL and single-mode
+    # connection setup, and are not supported in multi mode.
     if mode == 'multi':
-        for name, info in tool_registry.items():
+        filtered_registry = {
+            name: info
+            for name, info in tool_registry.items()
+            if not info.get('memory_tool')
+        }
+        for name, info in filtered_registry.items():
             schema = info['input_schema']
             if 'properties' in schema:
                 for field in CONNECTION_OVERRIDE_FIELDS:
                     schema['properties'].pop(field, None)
                     if 'required' in schema and field in schema['required']:
                         schema['required'].remove(field)
-        return tool_registry
+        return filtered_registry
 
     enabled = {}
 

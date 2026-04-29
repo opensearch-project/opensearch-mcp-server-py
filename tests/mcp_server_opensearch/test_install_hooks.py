@@ -122,17 +122,14 @@ class TestInstallClaudeCodeHooks:
         assert 'hooks' in group
         hook = group['hooks'][0]
         assert hook['type'] == 'command'
-        # Command uses base64 encoding — verify it's a valid python3 invocation
-        assert 'python3' in hook['command']
-        assert 'base64' in hook['command']
+        assert 'SearchMemoryTool' in hook['command']
 
-        # Stop: decision block to trigger save
+        # Stop: loop-guarded via stop_hook_active check
         stop_groups = settings['hooks']['Stop']
         assert len(stop_groups) == 1
         stop_hook = stop_groups[0]['hooks'][0]
         assert stop_hook['type'] == 'command'
-        assert 'python3' in stop_hook['command']
-        assert 'base64' in stop_hook['command']
+        assert 'stop_hook_active' in stop_hook['command']
 
     def test_preserves_existing_settings(self, tmp_workspace):
         """Install preserves existing settings and merges hooks into the map."""
@@ -237,15 +234,15 @@ class TestInstallCursorHooks:
         assert 'sessionStart' in config['hooks']
         session_hook = config['hooks']['sessionStart'][0]
         assert 'command' in session_hook
-        assert 'python3' in session_hook['command']
-        assert 'base64' in session_hook['command']
+        # Command uses plain echo — verify it contains the tool name
+        assert 'SearchMemoryTool' in session_hook['command']
 
         # stop hook emits followup_message
         assert 'stop' in config['hooks']
         stop_hook = config['hooks']['stop'][0]
         assert 'command' in stop_hook
-        assert 'python3' in stop_hook['command']
-        assert 'base64' in stop_hook['command']
+        # Command uses plain echo — verify it contains the tool name
+        assert 'SaveMemoryTool' in stop_hook['command']
         # loop_limit prevents infinite save loops
         assert stop_hook.get('loop_limit') == 1
 

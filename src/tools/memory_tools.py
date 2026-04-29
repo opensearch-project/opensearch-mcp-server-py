@@ -193,11 +193,11 @@ def _get_collection_name(aoss_client, collection_id: str) -> str:
     return details[0]['name']
 
 
-def _ensure_aoss_data_access_policy(session, aoss_client, collection_id: str, region: str) -> None:
+def _ensure_aoss_data_access_policy(session, aoss_client, collection_id: str, region: str, index_name: str) -> None:
     """Create or update an AOSS data access policy for the memory index.
 
-    Grants the current caller's IAM role full access to the collection and
-    all indices within it. This is required for ``create_index`` with semantic
+    Grants the current caller's IAM role access to the specific memory index
+    within the collection. This is required for ``create_index`` with semantic
     enrichment, which needs ML connector permissions behind the scenes.
 
     The policy is named ``mcp-memory-access`` and is idempotent — if it
@@ -250,25 +250,40 @@ def _ensure_aoss_data_access_policy(session, aoss_client, collection_id: str, re
             # permissions are actually missing
             return
 
-    # Create new policy
+    # Create new policy scoped to just the memory index
     policy_doc = [
         {
             'Rules': [
                 {
                     'Resource': [f'collection/{collection_name}'],
-                    'Permission': ['aoss:*'],
+                    'Permission': [
+                        'aoss:CreateCollectionItems',
+                        'aoss:DescribeCollectionItems',
+                    ],
                     'ResourceType': 'collection',
                 },
                 {
-                    'Resource': [f'index/{collection_name}/*'],
-                    'Permission': ['aoss:*'],
+                    'Resource': [f'index/{collection_name}/{index_name}'],
+                    'Permission': [
+                        'aoss:CreateIndex',
+                        'aoss:ReadDocument',
+                        'aoss:WriteDocument',
+                        'aoss:UpdateIndex',
+                        'aoss:DescribeIndex',
+                        'aoss:DeleteDocument',
+                    ],
                     'ResourceType': 'index',
                 },
             ],
             'Principal': [principal_arn],
-            'Description': 'Auto-created by OpenSearch MCP server for agentic memory',
+            'Description': 'Auto-created by OpenSearch MCP server for agentic memory index',
         }
     ]
+    logger.warning(
+        f'Creating AOSS data access policy "{policy_name}" granting {principal_arn} '
+        f'access to index {index_name} in collection {collection_name}. '
+        'Review this policy in the AWS console if you have other indices in this collection.'
+    )
 
     try:
         aoss_client.create_access_policy(
@@ -296,7 +311,7 @@ async def _ensure_memory_index(args: baseToolArgs) -> None:
     already exists.
 
     For AOSS, also ensures a data access policy exists that grants the
-    current caller full access to the collection and its indices.
+    current caller access to the memory index.
     """
     index_name = _get_memory_index_name()
 
@@ -314,17 +329,33 @@ async def _ensure_memory_index(args: baseToolArgs) -> None:
             pass
 
     # Index doesn't exist — create it via boto3
-    opensearch_url = os.getenv('OPENSEARCH_URL', '').strip()
+    # Resolve opensearch_url from args (per-call override from PR #231) or env.
+    # getattr with default handles the case where PR #231 is not yet merged and
+    # the override fields don't exist on baseToolArgs yet.
+    opensearch_url = (
+        getattr(args, 'opensearch_url', None)
+        or os.getenv('OPENSEARCH_URL', '')
+    ).strip()
+
+    # Resolve is_serverless from args or env
+    is_serverless_flag = (
+        getattr(args, 'aws_opensearch_serverless', None)
+        or os.getenv('AWS_OPENSEARCH_SERVERLESS', '').lower() == 'true'
+    )
+
+    # Resolve region from args or env
     session = _get_boto3_session()
+    aws_region = getattr(args, 'aws_region', None) or ''
     region = (
-        os.getenv('AWS_REGION', '').strip()
+        aws_region.strip()
+        or os.getenv('AWS_REGION', '').strip()
         or session.region_name
         or 'us-east-1'
     )
 
     schema = MEMORY_INDEX_SCHEMA
 
-    if _is_serverless(opensearch_url):
+    if _is_serverless(opensearch_url) or is_serverless_flag:
         collection_id = _get_collection_id_from_url(opensearch_url)
         if not collection_id:
             raise ValueError(
@@ -335,7 +366,7 @@ async def _ensure_memory_index(args: baseToolArgs) -> None:
         aoss_client = session.client('opensearchserverless', region_name=region)
 
         # Ensure data access policy exists for the current caller
-        _ensure_aoss_data_access_policy(session, aoss_client, collection_id, region)
+        _ensure_aoss_data_access_policy(session, aoss_client, collection_id, region, index_name)
 
         try:
             aoss_client.create_index(
@@ -448,6 +479,20 @@ class SearchMemoryArgs(baseToolArgs):
     size: int = Field(
         default=10,
         description='Maximum number of memories to return (default 10, max 100).',
+    )
+    recency_offset_hours: Optional[float] = Field(
+        default=None,
+        description=(
+            'Memories newer than this many hours receive full relevance score (default 24). '
+            'Increase to widen the full-score window; decrease to prioritize only very recent memories.'
+        ),
+    )
+    recency_half_life_hours: Optional[float] = Field(
+        default=None,
+        description=(
+            'Relevance score halves every this many hours past the offset (default 168 = 7 days). '
+            'Decrease for faster decay (prefer recent); increase to weight older memories more equally.'
+        ),
     )
 
     class Config:
@@ -583,12 +628,23 @@ async def search_memory_tool(args: SearchMemoryArgs) -> list[dict]:
         # then decay to 50% at 7 days. This ensures recent memories are
         # prioritized while highly relevant older memories still surface.
         if not is_list_all:
+            now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+            offset_hours = (
+                args.recency_offset_hours
+                if args.recency_offset_hours is not None
+                else 24.0
+            )
+            half_life_hours = (
+                args.recency_half_life_hours
+                if args.recency_half_life_hours is not None
+                else 168.0
+            )
             recency_script = (
                 'double relevance = _score;'
-                'long now = new Date().getTime();'
+                'long now = params.now_ms;'
                 'long created = doc[\'created_at\'].value.toInstant().toEpochMilli();'
                 'double ageHours = (now - created) / 3600000.0;'
-                'double decay = Math.exp(-0.693 * Math.max(0, ageHours - 24) / 168.0);'
+                'double decay = Math.exp(-0.693 * Math.max(0, ageHours - params.offset_hours) / params.half_life_hours);'
                 'return relevance * decay;'
             )
             query = {
@@ -597,6 +653,11 @@ async def search_memory_tool(args: SearchMemoryArgs) -> list[dict]:
                     'script': {
                         'source': recency_script,
                         'lang': 'painless',
+                        'params': {
+                            'now_ms': now_ms,
+                            'offset_hours': offset_hours,
+                            'half_life_hours': half_life_hours,
+                        },
                     },
                 }
             }
@@ -707,6 +768,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'min_version': '1.0.0',
             'http_methods': 'GET, POST, PUT',
             'bypass_write_filter': True,
+            'memory_tool': True,
         },
         'SearchMemoryTool': {
             'display_name': 'SearchMemoryTool',
@@ -727,6 +789,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'args_model': SearchMemoryArgs,
             'min_version': '1.0.0',
             'http_methods': 'GET',
+            'memory_tool': True,
         },
         'DeleteMemoryTool': {
             'display_name': 'DeleteMemoryTool',
@@ -741,8 +804,14 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'min_version': '1.0.0',
             'http_methods': 'GET, DELETE',
             'bypass_write_filter': True,
+            'memory_tool': True,
         },
     }
     if _is_memory_enabled()
     else {}
 )
+
+
+def get_memory_tools_registry() -> dict:
+    """Return memory tools registry, populated only when MEMORY_TOOLS_ENABLED=true."""
+    return MEMORY_TOOLS_REGISTRY

@@ -35,7 +35,7 @@ IDE_CONFIGS = {
     },
     'claude-code': {
         'name': 'Claude Code',
-        'mcp_path': Path.home() / '.claude' / 'claude.json',
+        'mcp_path': Path.home() / '.claude.json',
     },
     'cursor': {
         'name': 'Cursor',
@@ -64,7 +64,8 @@ def _detect_ides() -> list[str]:
 
 
 def _build_mcp_server_config(
-    opensearch_url: str, aws_region: str, aws_profile: str, from_git: str = ''
+    opensearch_url: str, aws_region: str, aws_profile: str,
+    from_git: str = '', from_local: str = ''
 ) -> dict:
     """Build the MCP server configuration block.
 
@@ -74,6 +75,8 @@ def _build_mcp_server_config(
         aws_profile: AWS profile name, or empty for default credentials.
         from_git: If set, use ``uvx --from "git+<url>"`` instead of the
             PyPI release.  Useful for testing pre-release branches.
+        from_local: If set, use ``uv run --directory <path>`` to run from
+            a local source checkout.  Useful for local development.
     """
     env = {
         'OPENSEARCH_URL': opensearch_url,
@@ -85,7 +88,10 @@ def _build_mcp_server_config(
     if aws_profile:
         env['AWS_PROFILE'] = aws_profile
 
-    if from_git:
+    if from_local:
+        command = 'uv'
+        args = ['run', '--directory', from_local, 'opensearch-mcp-server-py']
+    elif from_git:
         command = 'uvx'
         args = ['--from', f'git+{from_git}', 'opensearch-mcp-server-py']
     else:
@@ -96,11 +102,7 @@ def _build_mcp_server_config(
         'command': command,
         'args': args,
         'env': env,
-        'autoApprove': [
-            'SaveMemoryTool',
-            'SearchMemoryTool',
-            'DeleteMemoryTool',
-        ],
+        # autoApprove is NOT included here — it's Kiro-specific
     }
 
 
@@ -121,18 +123,33 @@ def _configure_kiro_mcp(mcp_config: dict) -> str:
     if server_key in settings['mcpServers']:
         return f'  MCP server already configured in {mcp_path}'
 
-    settings['mcpServers'][server_key] = mcp_config
+    # Add Kiro-specific autoApprove for SearchMemoryTool only
+    # (Save/Delete require explicit approval for security)
+    kiro_config = dict(mcp_config)
+    kiro_config['autoApprove'] = ['SearchMemoryTool']
+    settings['mcpServers'][server_key] = kiro_config
     mcp_path.write_text(json.dumps(settings, indent=2) + '\n')
     return f'  Configured MCP server in {mcp_path}'
 
 
 def _configure_claude_code_mcp(mcp_config: dict) -> str:
-    """Configure MCP server in Claude Code settings. Returns action description."""
+    """Configure MCP server in Claude Code settings. Returns action description.
+
+    Writes to ~/.claude.json, which is Claude Code's user-level MCP config.
+    Merges into the existing file without clobbering other top-level keys
+    (e.g. projects, oauthAccount, numStartups).
+    """
     mcp_path = IDE_CONFIGS['claude-code']['mcp_path']
-    mcp_path.parent.mkdir(parents=True, exist_ok=True)
+    # ~/.claude.json lives directly in home — no subdirectory to create
+    if mcp_path.parent != Path.home():
+        mcp_path.parent.mkdir(parents=True, exist_ok=True)
 
     if mcp_path.exists():
-        settings = json.loads(mcp_path.read_text())
+        try:
+            settings = json.loads(mcp_path.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f'Could not read {mcp_path}: {e}. Skipping Claude Code MCP config.')
+            return f'  Skipped {mcp_path} (could not parse existing file)'
     else:
         settings = {}
 
@@ -259,11 +276,12 @@ def _prompt_yes_no(message: str, default: bool = True) -> bool:
     return response in ('y', 'yes')
 
 
-def run_install(from_git: str = '') -> None:
+def run_install(from_git: str = '', from_local: str = '') -> None:
     """Run the interactive installer.
 
     Args:
         from_git: Git URL to install from (e.g. a fork/branch) instead of PyPI.
+        from_local: Local source path to run from (e.g. current workspace).
     """
     print()
     print('OpenSearch MCP Server — Memory Setup')
@@ -312,7 +330,7 @@ def run_install(from_git: str = '') -> None:
     print('Step 3: Configuration')
     print('-' * 30)
 
-    mcp_config = _build_mcp_server_config(opensearch_url, aws_region, aws_profile, from_git)
+    mcp_config = _build_mcp_server_config(opensearch_url, aws_region, aws_profile, from_git, from_local)
     actions = []
 
     for ide_id in detected:
