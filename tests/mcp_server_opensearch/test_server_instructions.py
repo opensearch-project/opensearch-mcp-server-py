@@ -236,7 +236,9 @@ class TestConditionalSchemaStripping:
         set_mode('single')
         self._original = os.environ.get('OPENSEARCH_URL')
         self._original_dynamic = os.environ.get('OPENSEARCH_DYNAMIC_CONNECTION')
+        self._original_header_auth = os.environ.get('OPENSEARCH_HEADER_AUTH')
         os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        os.environ.pop('OPENSEARCH_HEADER_AUTH', None)
         from mcp_server_opensearch.clusters_information import cluster_registry
 
         cluster_registry.clear()
@@ -251,6 +253,10 @@ class TestConditionalSchemaStripping:
             os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = self._original_dynamic
         else:
             os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        if self._original_header_auth is not None:
+            os.environ['OPENSEARCH_HEADER_AUTH'] = self._original_header_auth
+        else:
+            os.environ.pop('OPENSEARCH_HEADER_AUTH', None)
         from mcp_server_opensearch.clusters_information import cluster_registry
 
         cluster_registry.clear()
@@ -348,3 +354,35 @@ class TestConditionalSchemaStripping:
         assert 'aws_region' not in props
         # opensearch_cluster_name should be kept in multi mode
         assert 'opensearch_cluster_name' in props
+
+    @pytest.mark.asyncio
+    async def test_dynamic_mode_marks_opensearch_url_required(self):
+        """In dynamic mode without header auth, opensearch_url is marked required."""
+        os.environ.pop('OPENSEARCH_URL', None)
+        os.environ.pop('OPENSEARCH_HEADER_AUTH', None)
+        from tools.tool_filter import get_tools
+
+        with patch('tools.tool_filter.get_opensearch_version', return_value=None):
+            with patch('tools.tool_filter.is_tool_compatible', return_value=True):
+                result = await get_tools(self._make_registry())
+
+        schema = result['ListIndexTool']['input_schema']
+        assert 'opensearch_url' in schema['properties']
+        assert 'opensearch_url' in schema.get('required', [])
+
+    @pytest.mark.asyncio
+    async def test_header_auth_mode_does_not_mark_opensearch_url_required(self):
+        """In header auth mode, opensearch_url must NOT be required (URL comes from headers)."""
+        os.environ.pop('OPENSEARCH_URL', None)
+        os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
+        from tools.tool_filter import get_tools
+
+        with patch('tools.tool_filter.get_opensearch_version', return_value=None):
+            with patch('tools.tool_filter.is_tool_compatible', return_value=True):
+                result = await get_tools(self._make_registry())
+
+        schema = result['ListIndexTool']['input_schema']
+        # opensearch_url still appears in properties (agent can still pass it)
+        assert 'opensearch_url' in schema['properties']
+        # but must NOT be in required — the URL comes from HTTP headers
+        assert 'opensearch_url' not in schema.get('required', [])
