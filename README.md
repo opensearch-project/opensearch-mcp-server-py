@@ -141,7 +141,7 @@ All tools accept the following **optional connection parameters** that override 
 | `opensearch_ssl_verify` | boolean | SSL certificate verification. Overrides `OPENSEARCH_SSL_VERIFY`. |
 | `opensearch_timeout` | integer | Connection timeout in seconds. Overrides `OPENSEARCH_TIMEOUT`. |
 
-This allows agents to dynamically target different clusters per tool call without reconfiguring the server. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) in the User Guide for details and examples.
+This allows agents to dynamically target different clusters per tool call without reconfiguring the server (single mode only). See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) in the User Guide for details and examples.
 
 In addition to the common connection parameters above, each tool accepts its own specific parameters:
 

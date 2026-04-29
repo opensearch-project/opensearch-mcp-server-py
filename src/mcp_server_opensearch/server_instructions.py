@@ -10,19 +10,16 @@ understand how to use connection parameters efficiently.
 import os
 
 
-# Connection override fields that appear in tool schemas when no URL is pre-configured
-CONNECTION_OVERRIDE_FIELDS = {
-    'opensearch_url',
-    'opensearch_username',
-    'opensearch_password',
-    'opensearch_no_auth',
-    'aws_region',
-    'aws_iam_arn',
-    'aws_profile',
-    'aws_opensearch_serverless',
-    'opensearch_ssl_verify',
-    'opensearch_timeout',
-}
+# Connection override fields that appear in tool schemas when no URL is pre-configured.
+# Derived from baseToolArgs to avoid drift when new fields are added.
+def _build_connection_override_fields() -> frozenset:
+    from tools.tool_params import baseToolArgs
+
+    _non_override = {'opensearch_cluster_name'}
+    return frozenset(baseToolArgs.model_fields.keys()) - _non_override
+
+
+CONNECTION_OVERRIDE_FIELDS = _build_connection_override_fields()
 
 _DYNAMIC_CONNECTION_INSTRUCTIONS = """\
 This OpenSearch MCP server has no pre-configured endpoint. \

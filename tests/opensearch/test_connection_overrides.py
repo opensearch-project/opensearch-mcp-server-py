@@ -405,39 +405,19 @@ class TestConnectionOverrideSchema:
 
     def test_override_fields_present_in_base_schema(self):
         """All connection override fields exist in baseToolArgs schema."""
+        from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
+
         schema = baseToolArgs.model_json_schema()
-        expected_fields = [
-            'opensearch_url',
-            'opensearch_username',
-            'opensearch_password',
-            'opensearch_no_auth',
-            'aws_region',
-            'aws_iam_arn',
-            'aws_profile',
-            'aws_opensearch_serverless',
-            'opensearch_ssl_verify',
-            'opensearch_timeout',
-        ]
-        for field in expected_fields:
+        for field in CONNECTION_OVERRIDE_FIELDS:
             assert field in schema['properties'], f'{field} missing from schema'
 
     def test_override_fields_are_optional(self):
         """Connection override fields are not in the required list."""
+        from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
+
         schema = baseToolArgs.model_json_schema()
         required = schema.get('required', [])
-        override_fields = [
-            'opensearch_url',
-            'opensearch_username',
-            'opensearch_password',
-            'opensearch_no_auth',
-            'aws_region',
-            'aws_iam_arn',
-            'aws_profile',
-            'aws_opensearch_serverless',
-            'opensearch_ssl_verify',
-            'opensearch_timeout',
-        ]
-        for field in override_fields:
+        for field in CONNECTION_OVERRIDE_FIELDS:
             assert field not in required, f'{field} should not be required'
 
     def test_override_fields_default_to_none(self):
@@ -490,29 +470,19 @@ class TestConnectionOverrideSchema:
 
     def test_single_mode_schema_strips_override_fields_when_url_configured(self):
         """In single mode with OPENSEARCH_URL set, get_tools strips overrides."""
+        from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
+
         schema = ListIndicesArgs.model_json_schema()
         props = schema['properties']
 
         # Simulate what get_tools does when OPENSEARCH_URL is pre-configured
         _always_hidden = {'opensearch_cluster_name'}
-        _connection_override_fields = {
-            'opensearch_url',
-            'opensearch_username',
-            'opensearch_password',
-            'opensearch_no_auth',
-            'aws_region',
-            'aws_iam_arn',
-            'aws_profile',
-            'aws_opensearch_serverless',
-            'opensearch_ssl_verify',
-            'opensearch_timeout',
-        }
-        for field in _always_hidden | _connection_override_fields:
+        for field in _always_hidden | CONNECTION_OVERRIDE_FIELDS:
             props.pop(field, None)
 
         # Override fields should be gone
-        assert 'opensearch_url' not in props
-        assert 'opensearch_username' not in props
+        for field in CONNECTION_OVERRIDE_FIELDS:
+            assert field not in props
         # Tool-specific fields should still be present
         assert 'index' in props
         assert 'include_detail' in props

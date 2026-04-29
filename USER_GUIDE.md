@@ -230,24 +230,18 @@ When a tool is called, any connection parameter provided in the tool input takes
 
 ### Schema Exposure Rules
 
+Dynamic connection parameters are a **single mode** feature. In multi mode, override fields are always hidden — use `opensearch_cluster_name` to select a pre-configured cluster instead.
+
+In single mode:
+
 | Server configuration | Override fields in schema |
 |---|---|
 | No `OPENSEARCH_URL`, no YAML config (zero-config mode) | Exposed — agent must supply `opensearch_url` |
 | `OPENSEARCH_URL` set | Hidden — URL already configured |
-| YAML cluster config loaded (multi mode) | Hidden — clusters already configured |
 | `OPENSEARCH_DYNAMIC_CONNECTION=true` | Exposed — forced on regardless of other config |
 | `OPENSEARCH_DYNAMIC_CONNECTION=false` | Hidden — forced off regardless of other config |
 
-`OPENSEARCH_DYNAMIC_CONNECTION` takes precedence over auto-detection. Use it to explicitly enable dynamic mode when you want agents to override a pre-configured URL, or to explicitly disable it in zero-config deployments where you don't want the override fields exposed.
-
-### How It Works
-
-When a tool is called, any connection parameter provided in the tool input takes precedence over the corresponding environment variable. Parameters that are omitted (or set to `null`) fall back to the server's existing configuration.
-
-**Priority order (highest to lowest):**
-1. Tool input parameters (per-call overrides)
-2. Header-based authentication values (when `OPENSEARCH_HEADER_AUTH=true`)
-3. Environment variables / cluster YAML config
+`OPENSEARCH_DYNAMIC_CONNECTION` takes precedence over auto-detection in single mode. Use it to explicitly enable dynamic mode when you want agents to override a pre-configured URL, or to explicitly disable it in zero-config deployments where you don't want the override fields exposed.
 
 ### Available Connection Parameters
 
@@ -317,11 +311,9 @@ In this example, `opensearch_username` and `opensearch_password` are not provide
 
 ### Notes
 
-- Dynamic connection parameters are available in **single mode**. In multi mode, use `opensearch_cluster_name` to select a pre-configured cluster.
-- Connection override parameters are **conditionally exposed** in tool schemas:
-  - When `OPENSEARCH_URL` is **not set** (zero-config mode): override fields appear in every tool's schema, and the server provides instructions to the LLM explaining how to use them.
-  - When `OPENSEARCH_URL` **is set**: override fields are hidden from tool schemas to reduce token usage. The parameters still work if passed explicitly, but the LLM won't see them in the schema.
-- These parameters are optional on every tool. Omitting them preserves the existing behavior (environment variables are used).
+- Dynamic connection parameters are available in **single mode only**. In multi mode, override fields are always hidden from schemas — use `opensearch_cluster_name` to select a pre-configured cluster instead.
+- In single mode, override fields are **conditionally exposed** based on whether a connection is pre-configured (see Schema Exposure Rules above).
+- These parameters are optional on every tool. Omitting them falls back to the server's environment variable configuration.
 - Each tool call creates a fresh client connection using the resolved parameters, so there is no cross-contamination between calls with different overrides.
 
 ## Authentication

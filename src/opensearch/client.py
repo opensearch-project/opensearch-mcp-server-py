@@ -260,8 +260,10 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
             if args.opensearch_url is not None:
                 opensearch_url = args.opensearch_url.strip()
             if args.opensearch_username is not None:
-                opensearch_username = args.opensearch_username
+                opensearch_username = args.opensearch_username.strip()
             if args.opensearch_password is not None:
+                # Intentionally not stripped: leading/trailing whitespace in
+                # passwords is valid and must be preserved exactly as provided.
                 opensearch_password = args.opensearch_password
             if args.opensearch_no_auth is not None:
                 opensearch_no_auth = args.opensearch_no_auth

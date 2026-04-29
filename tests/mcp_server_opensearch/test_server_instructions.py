@@ -329,23 +329,22 @@ class TestConditionalSchemaStripping:
         assert 'opensearch_cluster_name' in props
 
     @pytest.mark.asyncio
-    async def test_multi_mode_no_clusters_keeps_overrides(self):
-        """Multi mode with no clusters loaded keeps override fields."""
+    async def test_multi_mode_no_clusters_strips_overrides(self):
+        """Multi mode always strips override fields — dynamic params are single-mode only."""
         from mcp_server_opensearch.clusters_information import cluster_registry
         from mcp_server_opensearch.global_state import set_mode
-        from mcp_server_opensearch.server_instructions import has_preconfigured_connection
         from tools.tool_filter import get_tools
 
         set_mode('multi')
-        # Ensure clean state: no clusters, no OPENSEARCH_URL
         os.environ.pop('OPENSEARCH_URL', None)
         cluster_registry.clear()
-        assert not has_preconfigured_connection(), 'Expected no preconfigured connection'
 
         result = await get_tools(self._make_registry())
 
         props = result['ListIndexTool']['input_schema']['properties']
         assert 'index' in props
-        assert 'opensearch_url' in props
-        assert 'aws_region' in props
+        # Override fields are always stripped in multi mode
+        assert 'opensearch_url' not in props
+        assert 'aws_region' not in props
+        # opensearch_cluster_name should be kept in multi mode
         assert 'opensearch_cluster_name' in props

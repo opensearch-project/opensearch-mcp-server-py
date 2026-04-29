@@ -118,13 +118,18 @@ class TestZeroConfigMode:
             assert TEST_INDEX in response
 
     async def test_inline_params_take_precedence_over_env_vars(self, zero_config_server):
-        """Per-call opensearch_url must override any env var that might be set.
+        """Per-call opensearch_url takes precedence over any server-side env vars.
 
-        The zero_config_server has no env vars set, so the only way this
-        succeeds is if the per-call params are actually used.
+        The zero_config_server starts with no env vars at all. We verify that
+        a tool call succeeds purely from inline params — proving the server
+        uses what the agent passes, not some ambient configuration.
+        If the server ignored inline params and fell back to env vars, the call
+        would fail with a ConfigurationError (no URL configured).
         """
         call_args = _build_inline_call_args()
         async with mcp_client(zero_config_server.url) as session:
+            # This would fail with "OPENSEARCH_URL is required" if inline params
+            # were ignored, since the server has no OPENSEARCH_URL set.
             result = await session.call_tool('ClusterHealthTool', arguments=call_args)
             assert_tool_success(result)
 

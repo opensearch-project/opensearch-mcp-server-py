@@ -374,21 +374,19 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     resolved_allow_write = _resolve_allow_write_setting(config_file_path)
     set_allow_write_setting(resolved_allow_write)
 
-    # In multi mode, return all tools but conditionally strip override fields
+    # In multi mode, always strip connection override fields — dynamic per-call
+    # connection params are a single-mode feature. Multi mode uses
+    # opensearch_cluster_name to select a pre-configured cluster.
     if mode == 'multi':
-        from mcp_server_opensearch.server_instructions import (
-            CONNECTION_OVERRIDE_FIELDS,
-            is_dynamic_mode_enabled,
-        )
+        from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
 
-        if not is_dynamic_mode_enabled():
-            for name, info in tool_registry.items():
-                schema = info['input_schema']
-                if 'properties' in schema:
-                    for field in CONNECTION_OVERRIDE_FIELDS:
-                        schema['properties'].pop(field, None)
-                        if 'required' in schema and field in schema['required']:
-                            schema['required'].remove(field)
+        for name, info in tool_registry.items():
+            schema = info['input_schema']
+            if 'properties' in schema:
+                for field in CONNECTION_OVERRIDE_FIELDS:
+                    schema['properties'].pop(field, None)
+                    if 'required' in schema and field in schema['required']:
+                        schema['required'].remove(field)
         return tool_registry
 
     enabled = {}
@@ -434,10 +432,11 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
 
         # Remove baseToolArgs fields from input schema for single mode.
         # Always strip opensearch_cluster_name (mode-specific).
-        # Strip connection override fields when a connection is pre-configured
-        # (OPENSEARCH_URL set or clusters loaded from YAML), since the agent
-        # doesn't need to provide them. When nothing is configured (zero-config
-        # / multi-tenant mode), keep them so agents can pass endpoints dynamically.
+        # Strip connection override fields when dynamic mode is off (i.e. a
+        # connection is pre-configured), since the agent doesn't need to supply
+        # them. When dynamic mode is on (zero-config / OPENSEARCH_DYNAMIC_CONNECTION=true),
+        # keep them and mark opensearch_url as required so strict MCP clients
+        # know it must be provided.
         schema = tool_info['input_schema'].copy()
         if 'properties' in schema:
             from mcp_server_opensearch.server_instructions import (
@@ -445,15 +444,23 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
                 is_dynamic_mode_enabled,
             )
 
+            dynamic = is_dynamic_mode_enabled()
             _always_hidden = {'opensearch_cluster_name'}
             fields_to_strip = _always_hidden | (
-                set() if is_dynamic_mode_enabled() else CONNECTION_OVERRIDE_FIELDS
+                set() if dynamic else CONNECTION_OVERRIDE_FIELDS
             )
             for field in fields_to_strip:
                 schema['properties'].pop(field, None)
-                # Also remove from required array if present
                 if 'required' in schema and field in schema['required']:
                     schema['required'].remove(field)
+
+            # In dynamic mode, opensearch_url is functionally required at runtime
+            # even though baseToolArgs declares it Optional. Mark it required in
+            # the schema so strict MCP clients enforce it.
+            if dynamic and 'opensearch_url' in schema['properties']:
+                schema.setdefault('required', [])
+                if 'opensearch_url' not in schema['required']:
+                    schema['required'].append('opensearch_url')
         tool_info['input_schema'] = schema
 
         enabled[tool_name] = tool_info
