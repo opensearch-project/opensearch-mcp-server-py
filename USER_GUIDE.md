@@ -531,7 +531,8 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OPENSEARCH_MEMORY_CONTAINER_ID` | No | `''` | Memory container ID for agentic memory tools. When set, agentic memory tools are automatically enabled and `memory_container_id` is pre-filled in all tool calls. Config file `agentic_memory.memory_container_id` takes precedence over this variable. |
+| `OPENSEARCH_MEMORY_CONTAINER_ID` | No | `''` | Memory container ID for agentic memory tools. When set, `memory_container_id` is pre-filled in all tool calls. Enable the tools via the `agentic_memory` category (see below). Config file `agentic_memory.memory_container_id` takes precedence over this variable. |
+
 ### Logging & Monitoring Variables
 
 | Variable | Required | Default | Description |
@@ -766,7 +767,7 @@ Create a memory container using the [OpenSearch Create Container API](https://do
 
 ### Enabling Agentic Memory Tools
 
-Agentic memory tools are **disabled by default**. They are automatically enabled when a `memory_container_id` is configured. There are two ways to configure it:
+Agentic memory tools are grouped under the `agentic_memory` category and are **disabled by default**. To enable them, add `agentic_memory` to `enabled_categories` (via `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory` or `enabled_categories: [agentic_memory]` in config). You also need to configure the `memory_container_id` so it is pre-filled in all tool calls:
 
 #### Option 1: Config File (Recommended)
 

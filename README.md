@@ -64,7 +64,7 @@ The following tools are available but disabled by default. To enable them, see t
 - [GetLongRunningTasksTool](https://docs.opensearch.org/latest/api-reference/cat/cat-tasks/): Gets information about long-running tasks in the cluster, sorted by running time in descending order.
 
 ### Agentic Memory Tools (Disabled by Default)
-The following tools provide AI agents with persistent memory capabilities using the [OpenSearch Agentic Memory API](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/). These tools require OpenSearch **3.3.0 or later** and are **disabled by default**. They are automatically enabled when a `memory_container_id` is configured via the `agentic_memory` section in the config file or the `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable. See [Agentic Memory Usage](USER_GUIDE.md#agentic-memory-usage) in the User Guide for setup instructions.
+The following tools provide AI agents with persistent memory capabilities using the [OpenSearch Agentic Memory API](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/). These tools require OpenSearch **3.3.0 or later** and are grouped under the `agentic_memory` category. They can be enabled using `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory` or by adding `enabled_categories: [agentic_memory]` to the config file. When `memory_container_id` is configured via the `agentic_memory` config section or the `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable, it is automatically pre-filled in all tool calls. See [Agentic Memory Usage](USER_GUIDE.md#agentic-memory-usage) in the User Guide for setup instructions.
 
 **Note:** Container creation is an infrastructure setup operation that requires careful configuration of embedding models, LLM connectors, strategies, and index settings. Create your memory container using the [OpenSearch API](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/create-memory-container/) or dashboard before configuring the MCP server.
 
@@ -75,6 +75,7 @@ The following tools provide AI agents with persistent memory capabilities using 
 - [UpdateAgenticMemoryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/update-memory/): Updates an existing memory (supports specific fields based on memory type).
 - [DeleteAgenticMemoryByIDTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes a specific memory by its ID.
 - [DeleteAgenticMemoryByQueryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes multiple memories matching a query criteria.
+
 ### Search Relevance Workbench Tools (Disabled by Default)
 Search Relevance Workbench tools are grouped under the `search_relevance` category and can be enabled at once using `OPENSEARCH_ENABLED_CATEGORIES=search_relevance` or by adding `enabled_categories: [search_relevance]` or explicitly adding individual tools to their config file. See the [Tool Filter](USER_GUIDE.md#tool-filter) section in the User Guide for additional information about how to filter tools.
 

@@ -74,7 +74,6 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Fix search index tool time format issue. ([#159](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/159))
 
 ### Removed
-- Remove `CreateAgenticMemoryContainerTool` - container creation is an infrastructure setup operation that should be done via the OpenSearch API or dashboard, not at agent runtime ([#138](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/138))
 
 ## [Released 0.6.1]
 ### Added
