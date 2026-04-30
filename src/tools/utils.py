@@ -6,9 +6,6 @@ import logging
 import yaml
 from semver import Version
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
 
 def format_json(data) -> str:
     """Format data as compact JSON with non-ASCII character preservation.

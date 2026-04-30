@@ -8,21 +8,6 @@ from tools.tool_params import baseToolArgs
 from typing import Any, Dict, List, Literal, Optional, Set
 
 
-class EmbeddingModelType(str, Enum):
-    """Specifies the type of embedding model used."""
-
-    text_embedding = 'TEXT_EMBEDDING'
-    sparse_encoding = 'SPARSE_ENCODING'
-
-
-class StrategyType(str, Enum):
-    """Specifies the type of agentic memory processing strategy."""
-
-    semantic = 'SEMANTIC'
-    user_preference = 'USER_PREFERENCE'
-    summary = 'SUMMARY'
-
-
 class MemoryType(str, Enum):
     """Specifies the different types of agentic memory."""
 
@@ -373,9 +358,9 @@ class UpdateAgenticMemoryArgs(BaseAgenticMemoryContainerArgs):
         default=None,
         description='Updated structured data content (for data memory payloads).',
     )
-    binary_data: Optional[Dict[str, Any]] = Field(
+    binary_data: Optional[str] = Field(
         default=None,
-        description='Updated binary data content (for data memory payloads).',
+        description='Updated binary data content encoded as a Base64 string (for data memory payloads).',
     )
     tags: Optional[Dict[str, Any]] = Field(
         default=None, description='Updated tags for categorization.'
