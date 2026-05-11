@@ -83,9 +83,14 @@ The following tools are available but disabled by default. To enable them, see t
 - [GetLongRunningTasksTool](https://docs.opensearch.org/latest/api-reference/cat/cat-tasks/): Gets information about long-running tasks in the cluster, sorted by running time in descending order.
 
 ### Agentic Memory Tools (Disabled by Default)
-The following tools provide AI agents with persistent memory capabilities using the [OpenSearch Agentic Memory API](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/). These tools require OpenSearch **3.3.0 or later** and are grouped under the `agentic_memory` category. They can be enabled using `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory` or by adding `enabled_categories: [agentic_memory]` to the config file. When `memory_container_id` is configured via the `agentic_memory` config section or the `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable, it is automatically pre-filled in all tool calls. See [Agentic Memory Usage](USER_GUIDE.md#agentic-memory-usage) in the User Guide for setup instructions.
 
-**Note:** Container creation is an infrastructure setup operation that requires careful configuration of embedding models, LLM connectors, strategies, and index settings. Create your memory container using the [OpenSearch API](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/create-memory-container/) or dashboard before configuring the MCP server.
+The following tools expose the [OpenSearch Agentic Memory API](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/) — a server-side memory system built into OpenSearch itself. The OpenSearch cluster manages memory containers, sessions, and inference (LLM-based extraction of facts from conversations). These tools require OpenSearch **3.3.0 or later**.
+
+**When to use:** You want OpenSearch to own the full memory lifecycle — including LLM-based inference to extract facts from raw conversations, structured memory types (sessions, working, long-term, history), and server-managed namespacing. Best for production agentic pipelines where memory management should be centralized and not depend on the MCP client.
+
+**Setup:** You must create a memory container in OpenSearch before using these tools (one-time admin operation requiring LLM connector and embedding model configuration). See [Agentic Memory Tools](MEMORY.md#agentic-memory-tools) in the Agent Memory Guide.
+
+Enable with `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory`. When `memory_container_id` is configured via the `agentic_memory` config section or `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable, it is automatically pre-filled in all tool calls.
 
 - [CreateAgenticMemorySessionTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/create-session/): Creates a new session within a memory container.
 - [AddAgenticMemoriesTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/add-memory/): Adds conversational or structured data memories to a container.
@@ -127,7 +132,9 @@ Skills tools are grouped under the `skills` category and can be enabled at once 
 
 ### Memory Tools (Opt-in)
 
-Memory tools give agents persistent, cross-session memory backed by OpenSearch. Enable with `MEMORY_TOOLS_ENABLED=true`. See the [Agent Memory Guide](MEMORY.md) for full setup instructions.
+Memory tools give the MCP agent itself persistent, cross-session memory backed by OpenSearch. The agent decides what to save as plain-text statements; OpenSearch stores and semantically indexes them. Enable with `MEMORY_TOOLS_ENABLED=true`. See the [Agent Memory Guide](MEMORY.md) for full setup instructions.
+
+**When to use:** You want a lightweight, agent-driven memory layer that works with any MCP-compatible IDE (Kiro, Claude Code, Cursor). The agent controls what gets remembered — no LLM connectors or embedding models to configure on the OpenSearch side. Requires Amazon OpenSearch Service (managed domain 2.19+ or Serverless) for automatic semantic enrichment. See the [Agent Memory Guide](MEMORY.md#memory-tools) for full setup instructions.
 
 - **SaveMemoryTool**: Saves facts, decisions, and preferences to persistent storage with automatic semantic enrichment.
 - **SearchMemoryTool**: Searches memories using natural language with recency-aware ranking.
@@ -344,11 +351,23 @@ For detailed usage instructions, configuration options, and examples, please see
 
 ## Agent Memory
 
-The OpenSearch MCP server includes optional memory tools that give AI agents persistent, cross-session memory. Agents can save and recall facts, decisions, and preferences using natural language search powered by OpenSearch automatic semantic enrichment.
+The OpenSearch MCP server includes two distinct memory systems. Both use OpenSearch as the storage backend but differ in who controls the memory lifecycle and what infrastructure they require.
 
-Because memory is stored in OpenSearch, it can be shared across multiple agents (Kiro, Claude Code, Cursor) and across customer-managed agents — any MCP-compatible client connected to the same cluster shares the same memory store.
+### Choosing the right approach
 
-For full setup instructions, tool reference, and architecture details, see the [Agent Memory Guide](MEMORY.md).
+| | Memory Tools (`MEMORY_TOOLS_ENABLED`) | Agentic Memory Tools (`agentic_memory` category) |
+|---|---|---|
+| **Who stores memories** | The MCP agent decides what to save as plain-text statements | OpenSearch processes raw conversations and extracts facts via LLM inference |
+| **Setup complexity** | Low — index is auto-created on first use | High — requires creating a memory container with LLM connector and embedding model |
+| **OpenSearch version** | Amazon OpenSearch Service 2.19+ or Serverless | OpenSearch 3.3.0+ |
+| **Semantic search** | Yes, via AWS automatic semantic enrichment | Yes, via configured embedding model |
+| **Memory structure** | Flat — each memory is a plain-text statement | Structured — sessions, working, long-term, and history types |
+| **LLM inference** | No — agent writes exactly what it wants to remember | Optional (`infer: true`) — OpenSearch uses an LLM to extract facts from conversations |
+| **Best for** | IDE agents (Kiro, Claude Code, Cursor) that need quick setup and cross-session continuity | Production agentic pipelines where memory management should be centralized and server-owned |
+
+**Use Memory Tools** when you want a lightweight, agent-driven memory layer that works out of the box with any MCP-compatible IDE. The agent controls what gets remembered. See the [Agent Memory Guide](MEMORY.md#memory-tools) for setup.
+
+**Use Agentic Memory Tools** when you want OpenSearch to own the full memory lifecycle — including LLM-based extraction of facts from raw conversations, structured memory types, and server-managed namespacing. See the [Agent Memory Guide](MEMORY.md#agentic-memory-tools) for setup.
 
 ## Contributing
 

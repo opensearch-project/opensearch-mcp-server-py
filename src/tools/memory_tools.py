@@ -84,12 +84,21 @@ def _is_serverless(opensearch_url: str) -> bool:
     return 'aoss.' in (opensearch_url or '')
 
 
-def _get_boto3_session():
-    """Create a boto3 session using the same logic as the rest of the MCP server."""
+def _get_boto3_session(profile_override: Optional[str] = None):
+    """Create a boto3 session using the same logic as the rest of the MCP server.
+
+    Args:
+        profile_override: Per-call AWS profile from tool args. Takes precedence over
+            the global CLI profile and AWS_PROFILE env var.
+    """
     import boto3
     from mcp_server_opensearch.global_state import get_profile
 
-    profile = get_profile() or os.getenv('AWS_PROFILE', '').strip()
+    profile = (
+        profile_override
+        or get_profile()
+        or os.getenv('AWS_PROFILE', '').strip()
+    )
     try:
         return boto3.Session(profile_name=profile) if profile else boto3.Session()
     except Exception:
@@ -343,8 +352,9 @@ async def _ensure_memory_index(args: baseToolArgs) -> None:
         or os.getenv('AWS_OPENSEARCH_SERVERLESS', '').lower() == 'true'
     )
 
-    # Resolve region from args or env
-    session = _get_boto3_session()
+    # Resolve region and profile from args or env
+    profile_override = getattr(args, 'aws_profile', None) or None
+    session = _get_boto3_session(profile_override)
     aws_region = getattr(args, 'aws_region', None) or ''
     region = (
         aws_region.strip()
