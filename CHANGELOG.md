@@ -13,6 +13,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Add OpenSearch mTLS support for single-cluster and multi-cluster configurations, including CA bundle, client certificate, and client key settings
 
 ### Fixed
+- Fix SigV4 auth callable invoked with wrong positional arguments in `BufferedAsyncHttpConnection`, causing 403 signature mismatch on every GET request with query parameters and silent fallback on every POST/PUT/DELETE ([#237](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/237))
 - Switch CI from `pull_request` to `pull_request_target` so integration tests run on fork PRs ([#219](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/219))
 - Fix multi-mode IT failing for `ListClustersTool` which has no `opensearch_cluster_name` parameter ([#220](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/220))
 - Fix non-ASCII characters (e.g. Chinese, Japanese, accented characters) being escaped to Unicode sequences in all tool JSON responses ([#164](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/164))
