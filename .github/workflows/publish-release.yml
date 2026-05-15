@@ -1,4 +1,4 @@
-name: Publish Release to GitHub
+name: Release Workflow
 
 on:
   push:
@@ -6,42 +6,34 @@ on:
       - "*"
 
 jobs:
-  publish-release:
+  release-to-pypi:
+    environment: release-approval
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: write
-      issues: write
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
-      - id: get_approvers
-        run: |
-          echo "approvers=$(cat .github/CODEOWNERS | grep @ | tr -d '* ' | sed 's/@/,/g' | sed 's/,//1')" >> $GITHUB_OUTPUT
-      - uses: trstringer/manual-approval@v1
-        with:
-          secret: ${{ github.TOKEN }}
-          approvers: ${{ steps.get_approvers.outputs.approvers }}
-          minimum-approvals: 1
-          issue-title: 'Release opensearch-mcp-server-py'
-          issue-body: "Please approve or deny the release of opensearch-mcp-server-py. **Tag**: ${{ github.ref_name }}  **Commit**: ${{ github.sha }}"
-          exclude-workflow-initiator-as-approver: true
+        uses: actions/checkout@v6
+
       - name: Set up Python 3
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v6
         with:
           python-version: '3.x'
+
       - name: Install build tools
         run: |
           python -m pip install --upgrade build twine
+
       - name: Build project for distribution
         run: |
           python -m build
-          tar zcvf artifacts.tar.gz dist
+
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-      - name: Publish release
-        uses: softprops/action-gh-release@v1
+
+      - name: Release on Github
+        uses: softprops/action-gh-release@v2
         with:
-          draft: true
+          draft: false
           generate_release_notes: true
-          files: artifacts.tar.gz
