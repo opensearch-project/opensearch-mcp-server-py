@@ -25,3 +25,16 @@ def pytest_collection_modifyitems(config, items):
         for item in items:
             if item.get_closest_marker('eval'):
                 item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _clear_version_cache():
+    """Reset the OpenSearch version cache between tests.
+
+    The version cache is module-level state that persists across tests.
+    Clearing it before each test prevents stale cached values from leaking
+    between test cases that mock client.info() at different version levels.
+    """
+    from opensearch.helper import clear_version_cache
+
+    clear_version_cache()
