@@ -12,7 +12,7 @@
 - [Running the Server](#running-the-server)
 - [Tool Filter](#tool-filter)
 - [Tool Customization](#tool-customization)
-- [Agentic Memory Usage](#agentic-memory-usage)
+- [Agent Memory](MEMORY.md)
 - [Structured Logging](#structured-logging)
 - [LangChain Integration](#langchain-integration)
 
@@ -636,7 +636,7 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `OPENSEARCH_MEMORY_CONTAINER_ID` | No | `''` | Memory container ID for agentic memory tools. When set, `memory_container_id` is pre-filled in all tool calls. Enable the tools via the `agentic_memory` category (see below). Config file `agentic_memory.memory_container_id` takes precedence over this variable. |
+| `OPENSEARCH_MEMORY_CONTAINER_ID` | No | `''` | Memory container ID for agentic memory tools. When set, `memory_container_id` is pre-filled in all tool calls. Enable the tools via the `agentic_memory` category. See [Agentic Memory Tools](MEMORY.md#agentic-memory-tools) for setup. Config file `agentic_memory.memory_container_id` takes precedence over this variable. |
 
 ### Logging & Monitoring Variables
 
@@ -859,148 +859,10 @@ When the response size limit is exceeded, you'll see an error like:
 Response size exceeded limit of 10485760 bytes. Stopped reading at 15728640 bytes to prevent memory exhaustion. Consider increasing max_response_size or refining your query to return less data.
 ```
 
-## Agentic Memory Usage
+## Agent Memory
 
-The Agentic Memory tools allow AI agents to maintain state and long-term memory using [OpenSearch Agentic Memory](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/).
-**Note:** These tools require OpenSearch version **3.3.0 or later**.
+For documentation on both memory systems — Memory Tools (`MEMORY_TOOLS_ENABLED=true`) and Agentic Memory Tools (`agentic_memory` category) — including setup, tool reference, and a side-by-side comparison, see the [Agent Memory Guide](MEMORY.md).
 
-### Prerequisites
-
-Before using the agentic memory tools, you must create a memory container in OpenSearch. Container creation is an infrastructure setup operation that requires careful configuration of embedding models, LLM connectors, strategies, and index settings. This is typically a one-time admin operation, not something agents should do at runtime.
-
-Create a memory container using the [OpenSearch Create Container API](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/create-container/) or the OpenSearch dashboard. Note the `memory_container_id` returned — you will need it for configuration.
-
-### Enabling Agentic Memory Tools
-
-Agentic memory tools are grouped under the `agentic_memory` category and are **disabled by default**. To enable them, add `agentic_memory` to `enabled_categories` (via `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory` or `enabled_categories: [agentic_memory]` in config). You also need to configure the `memory_container_id` so it is pre-filled in all tool calls:
-
-#### Option 1: Config File (Recommended)
-
-Add an `agentic_memory` section to your YAML config file:
-
-```yaml
-agentic_memory:
-  memory_container_id: "your-container-id-here"
-```
-
-Then start the server with the config file:
-```bash
-python -m mcp_server_opensearch --config path/to/config.yml
-```
-
-#### Option 2: Environment Variable
-
-Set the `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable:
-
-```bash
-export OPENSEARCH_MEMORY_CONTAINER_ID="your-container-id-here"
-```
-
-**Priority:** Config file setting takes precedence over the environment variable.
-
-When configured, the `memory_container_id` is **automatically populated** into all agentic memory tool calls — agents do not need to pass it manually with every request.
-
-### Workflow
-
-The typical workflow involves establishing a session and then reading/writing memories.
-
-#### 1. Create a Session
-Start a new planning session for a summer trip.
-
-**Tool:** `CreateAgenticMemorySessionTool`
-```json
-{
-  "session_id": "summer-trip-2025",
-  "namespace": {
-    "traveler_id": "adventurous_alice"
-  },
-  "metadata": {
-    "vibe": "relaxing but fun",
-    "budget": "medium"
-  }
-}
-```
-
-#### 2. Add Memories
-Store the initial context. Alice shares her first ideas for the trip - quiet museum days and culinary experiences. The agent stores these conversational messages and runs inference (due to `infer: true`) to extract facts and preferences for future recommendations.
-
-**Tool:** `AddAgenticMemoriesTool`
-```json
-{
-  "payload_type": "conversational",
-  "namespace": {
-    "traveler_id": "adventurous_alice",
-    "session_id": "summer-trip-2025"
-  },
-  "messages": [
-    {
-      "role": "user",
-      "content": [{"type": "text", "text": "I'm thinking about Italy! I absolutely love gelato. I was also thinking about spending my days walking through quiet museums and art galleries."}]
-    },
-    {
-      "role": "assistant",
-      "content": [{"type": "text", "text": "Sounds lovely! Florence would be perfect for art galleries and authentic gelato."}]
-    }
-  ],
-  "infer": true
-}
-```
-
-#### 3. Search Memories
-Later, the agent needs to make a restaurant recommendation. It searches the working memory to retrieve Alice's specific food preferences (like her love for gelato) to ensure the suggestion matches her taste.
-
-**Tool:** `SearchAgenticMemoryTool`
-```json
-{
-  "type": "working",
-  "query": {
-    "match": {
-      "text": "food preferences"
-    }
-  },
-  "sort": [
-    {
-      "created_time": {
-        "order": "desc"
-      }
-    }
-  ]
-}
-```
-
-#### 4. Update & Delete
-Alice changes her mind.
-
-1. We update the session summary to reflect the new goal (clubs and grappa).
-
-2. We delete memories related to "museums". Since Alice decided to ditch the cultural tour for partying, removing the old "museum" context ensures the agent won't mix up the vibe and suggest art exhibitions when she wants bars.
-
-**Tool:** `UpdateAgenticMemoryTool`
-```json
-{
-  "type": "sessions",
-  "id": "<session_id>",
-  "summary": "Planning a trip to Italy focused on nightlife, clubs, and drinking grappa, while retaining the interest in gelato.",
-  "metadata": {
-    "vibe": "nightlife & party",
-    "budget": "medium"
-  }
-}
-```
-
-**Tool:** `DeleteAgenticMemoryByQueryTool`
-```json
-{
-  "type": "working",
-  "query": {
-    "match": {
-      "text": "museums art galleries"
-    }
-  }
-}
-```
-
-> **Note:** The `memory_container_id` field is omitted from the examples above because it is automatically populated from your configuration. If you need to override it for a specific call, you can still pass it explicitly.
 ## Structured Logging
 
 The OpenSearch MCP server supports structured JSON logging for monitoring and metrics. When enabled, every log line is a JSON object with fields that can be directly targeted by metric filters in log aggregation platforms such as Amazon CloudWatch, Datadog, Splunk, Grafana Loki, or the ELK stack.

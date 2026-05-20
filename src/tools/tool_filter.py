@@ -101,8 +101,14 @@ def _resolve_allow_write_setting(config_file_path: str = None) -> bool:
 
 
 def apply_write_filter(registry):
-    """Apply allow_write filters to the registry."""
+    """Apply allow_write filters to the registry.
+
+    Removes tools that only have write HTTP methods, unless the tool
+    has ``bypass_write_filter`` set to True (e.g. memory tools).
+    """
     for tool_name in list(registry.keys()):
+        if registry[tool_name].get('bypass_write_filter'):
+            continue
         http_methods = registry[tool_name].get('http_methods', [])
         if 'GET' not in http_methods:
             registry.pop(tool_name, None)
@@ -182,6 +188,23 @@ def process_tool_filter(
 
         # Add core_tools as a built-in category using display name
         category_to_tools['core_tools'] = core_tools_display_name
+
+        # Initialize memory tool names (opt-in via MEMORY_TOOLS_ENABLED)
+        memory_tools = [
+            'SaveMemoryTool',
+            'SearchMemoryTool',
+            'DeleteMemoryTool',
+        ]
+        memory_tools_display_names = []
+        for tool_name in memory_tools:
+            if tool_name in tool_registry:
+                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
+                memory_tools_display_names.append(tool_display_name)
+        category_to_tools['memory'] = memory_tools_display_names
+
+        # Auto-enable memory category when memory tools are registered
+        if memory_tools_display_names:
+            enabled_category_list.append('memory')
 
         # Initialize search_relevance tool names
         search_relevance_tools = [
@@ -356,8 +379,10 @@ def process_tool_filter(
 async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     """Filter and return available tools based on server mode and OpenSearch version.
 
-    In 'multi' mode, returns all tools without filtering. In 'single' mode, filters tools
-    based on OpenSearch version compatibility and removes base tool arguments from schemas.
+    In 'multi' mode, returns tools without version filtering or schema stripping,
+    but excludes memory tools (which require single-mode OPENSEARCH_URL config).
+    In 'single' mode, filters tools based on OpenSearch version compatibility and
+    removes base tool arguments from schemas.
 
     Args:
         tool_registry (dict): The tool registry to filter.
@@ -381,15 +406,22 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     # In multi mode, always strip connection override fields — dynamic per-call
     # connection params are a single-mode feature. Multi mode uses
     # opensearch_cluster_name to select a pre-configured cluster.
+    # Memory tools are also excluded — they require OPENSEARCH_URL and single-mode
+    # connection setup, and are not supported in multi mode.
     if mode == 'multi':
-        for name, info in tool_registry.items():
+        filtered_registry = {
+            name: info
+            for name, info in tool_registry.items()
+            if not info.get('memory_tool')
+        }
+        for name, info in filtered_registry.items():
             schema = info['input_schema']
             if 'properties' in schema:
                 for field in CONNECTION_OVERRIDE_FIELDS:
                     schema['properties'].pop(field, None)
                     if 'required' in schema and field in schema['required']:
                         schema['required'].remove(field)
-        return tool_registry
+        return filtered_registry
 
     enabled = {}
 

@@ -6,6 +6,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 - Add configurable server-side query timeout via `OPENSEARCH_QUERY_TIMEOUT` environment variable, passed as `cancel_after_time_interval` to OpenSearch search requests ([#228](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/228))
 - Add dynamic per-call connection parameters for multi-tenant support, allowing agents to target different OpenSearch clusters without server reconfiguration ([#230](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/230))
+- Add agent memory tools (`SaveMemoryTool`, `SearchMemoryTool`, `DeleteMemoryTool`) with persistent cross-session memory backed by OpenSearch (automatic semantic enrichment, recency-aware ranking, shared memory across agents), `MEMORY.md` documentation, `install-hooks` CLI for Kiro, Claude Code, and Cursor, and `memory install` interactive setup command
 - Add `User-Agent` header (`opensearch-mcp-server-py/<version>`) to all OpenSearch requests for MCP traffic identification in cluster logs ([#207](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/207))
 - Add new toolset for the OpenSearch Agentic Memory API: `CreateAgenticMemorySessionTool`, `AddAgenticMemoriesTool`, `GetAgenticMemoryTool`, `UpdateAgenticMemoryTool`, `DeleteAgenticMemoryByIDTool`, `DeleteAgenticMemoryByQueryTool`, and `SearchAgenticMemoryTool`. Agentic memory tools are in the `agentic_memory` category and can be enabled via `enabled_categories: ["agentic_memory"]`. The `memory_container_id` is automatically pre-filled in all tool calls when configured via the `agentic_memory` config section or `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable. ([#138](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/138))
 - Add `AGENTS.md` and rewrite `DEVELOPER_GUIDE.md` "Adding Custom Tools" section with detailed 4-piece tool anatomy, error handling contracts, and tool category documentation ([#214](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/214))
@@ -14,6 +15,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Fixed
 - Fix SigV4 auth callable invoked with wrong positional arguments in `BufferedAsyncHttpConnection`, causing 403 signature mismatch on every GET request with query parameters and silent fallback on every POST/PUT/DELETE ([#237](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/237))
+- Add `requires_ml_tool` pytest marker to skip skills integration tests when ML tools are not registered on the cluster
 - Switch CI from `pull_request` to `pull_request_target` so integration tests run on fork PRs ([#219](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/219))
 - Fix multi-mode IT failing for `ListClustersTool` which has no `opensearch_cluster_name` parameter ([#220](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/220))
 - Fix non-ASCII characters (e.g. Chinese, Japanese, accented characters) being escaped to Unicode sequences in all tool JSON responses ([#164](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/164))

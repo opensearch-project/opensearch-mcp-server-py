@@ -7,6 +7,7 @@ from integration_tests.framework.constants import TEST_INDEX
 
 
 @pytest.mark.tools
+@pytest.mark.requires_ml_tool('LogPatternAnalysisTool')
 class TestLogPatternAnalysisTool:
     """Tests for LogPatternAnalysisTool (ML skills, requires OpenSearch 3.3+)."""
 

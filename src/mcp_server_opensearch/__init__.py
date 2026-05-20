@@ -37,11 +37,74 @@ def parse_unknown_args_to_dict(unknown_args: List[str]) -> Dict[str, str]:
         return {}
 
 
+def _run_memory_install() -> None:
+    """Handle the 'memory install' subcommand — interactive memory setup."""
+    import sys
+    import os
+
+    from .installer import run_install
+
+    # Parse optional --from-git and --from-local flags
+    from_git = ''
+    from_local = ''
+    args = sys.argv[3:]  # skip 'opensearch-mcp-server-py memory install'
+    for i, arg in enumerate(args):
+        if arg == '--from-git' and i + 1 < len(args):
+            from_git = args[i + 1]
+        elif arg.startswith('--from-git='):
+            from_git = arg.split('=', 1)[1]
+        elif arg == '--from-local' and i + 1 < len(args):
+            from_local = os.path.abspath(args[i + 1])
+        elif arg.startswith('--from-local='):
+            from_local = os.path.abspath(arg.split('=', 1)[1])
+        elif arg == '--from-local':
+            # --from-local with no value defaults to current directory
+            from_local = os.getcwd()
+
+    run_install(from_git=from_git, from_local=from_local)
+
+
+def _run_install_hooks(argv: list) -> None:
+    """Handle the install-hooks subcommand."""
+    parser = argparse.ArgumentParser(
+        prog='opensearch-mcp-server-py install-hooks',
+        description='Install memory lifecycle hooks for AI coding assistants.',
+    )
+    parser.add_argument(
+        '--client',
+        required=True,
+        choices=['kiro', 'claude-code', 'cursor'],
+        help='AI client to install hooks for.',
+    )
+    parser.add_argument(
+        '--scope',
+        choices=['workspace', 'user'],
+        default='workspace',
+        help='Install scope: workspace (project-level, default) or user (global).',
+    )
+    args = parser.parse_args(argv)
+
+    from .install_hooks import install_hooks
+
+    install_hooks(client=args.client, scope=args.scope)
+
+
 def main() -> None:
     """
     Main entry point for the OpenSearch MCP Server.
     Handles command line arguments and starts the appropriate server based on transport type.
     """
+    # Check for subcommands before full arg parsing
+    import sys
+
+    if len(sys.argv) > 2 and sys.argv[1] == 'memory' and sys.argv[2] == 'install':
+        _run_memory_install()
+        return
+
+    if len(sys.argv) > 1 and sys.argv[1] == 'install-hooks':
+        _run_install_hooks(sys.argv[2:])
+        return
+
     # Set up command line argument parser
     parser = argparse.ArgumentParser(description='OpenSearch MCP Server')
     parser.add_argument(
