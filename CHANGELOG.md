@@ -36,6 +36,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Released 0.9.0]
 ### Added
 
+- Add lossless prompt compression formats (`compressed`) to SearchIndexTool using field-level dictionary-encoding ([#238](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/238))
 - Add Search Relevance Workbench tools for query set management (add, get, delete) ([#187](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/187))
 - Add Search Relevance Workbench tools for judgment list management (create, get, delete) ([#190](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/190))
 - Add Search Relevance Workbench tools for experiment management (create, get, delete) ([#192](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/192))

@@ -3,6 +3,7 @@
 
 import json
 from .agentic_memory.actions import AGENTIC_MEMORY_TOOLS_REGISTRY
+from .compressor import compress_tsv_docs
 from .generic_api_tool import GenericOpenSearchApiArgs, generic_opensearch_api_tool
 from .memory_tools import MEMORY_TOOLS_REGISTRY
 from .skills_tools import SKILLS_TOOLS_REGISTRY
@@ -169,13 +170,122 @@ async def get_index_mapping_tool(args: GetIndexMappingArgs) -> list[dict]:
         return log_tool_error('IndexMappingTool', e, 'getting mapping', index=args.index)
 
 
+_NUMERIC_TYPES = {
+    'integer',
+    'long',
+    'short',
+    'byte',
+    'double',
+    'float',
+    'half_float',
+    'scaled_float',
+}
+_SKIP_TYPES = _NUMERIC_TYPES | {'date', 'date_nanos'}
+
+
+def _extract_field_types_from_mapping(mapping: dict) -> tuple[set[str], set[str]]:
+    """Extract text and skip field names from an OpenSearch index mapping.
+
+    Returns (text_fields, skip_fields) where skip_fields includes numeric
+    and date types that the LLM needs to reason about directly.
+    """
+    text_fields: set[str] = set()
+    skip_fields: set[str] = set()
+    if 'mappings' not in mapping:
+        for idx_data in mapping.values():
+            if isinstance(idx_data, dict) and 'mappings' in idx_data:
+                mapping = idx_data['mappings']
+                break
+    else:
+        mapping = mapping['mappings']
+    for field_name, field_def in mapping.get('properties', {}).items():
+        if not isinstance(field_def, dict):
+            continue
+        field_type = field_def.get('type', '')
+        if field_type == 'text':
+            has_keyword = 'keyword' in field_def.get('fields', {})
+            if not has_keyword:
+                text_fields.add(field_name)
+        elif field_type in _SKIP_TYPES:
+            skip_fields.add(field_name)
+    return text_fields, skip_fields
+
+
+async def _compress_search_results(
+    result: dict, search_args: SearchIndexArgs, fmt: str
+) -> list[dict]:
+    """Compress search results using field-level dictionary-encoding."""
+    index = search_args.index
+    hits = result.get('hits', {}).get('hits', [])
+    if not hits:
+        if 'aggregations' in result:
+            agg_text = json.dumps(result['aggregations'], separators=(',', ':'))
+            return [
+                {
+                    'type': 'text',
+                    'text': f'Search results from {index} (aggregation only):\n\nAGGREGATIONS:\n{agg_text}',
+                }
+            ]
+        return [{'type': 'text', 'text': f'Search results from {index}: No documents found'}]
+
+    sources = [hit['_source'] for hit in hits if '_source' in hit]
+    if not sources:
+        return [{'type': 'text', 'text': f'Search results from {index}: No _source fields found'}]
+
+    text_fields: set[str] = set()
+    skip_fields: set[str] = set()
+    try:
+        base_fields = {
+            k: v
+            for k, v in search_args.dict().items()
+            if k in baseToolArgs.model_fields and v is not None
+        }
+        mapping_args = GetIndexMappingArgs(index=index, **base_fields)
+        mapping = await get_index_mapping(mapping_args)
+        text_fields, skip_fields = _extract_field_types_from_mapping(mapping)
+    except Exception:
+        pass
+
+    cr = compress_tsv_docs(sources, f_min=2, text_fields=text_fields, skip_fields=skip_fields)
+
+    if not cr.dictionary:
+        return [
+            {
+                'type': 'text',
+                'text': f'Search results from {index} (TSV format, no compression gains):\n{cr.compressed_text}',
+            }
+        ]
+
+    label = 'compressed'
+    dict_section = cr.format_dictionary()
+    agg_section = ''
+    if 'aggregations' in result:
+        agg_section = (
+            f'\n\nAGGREGATIONS:\n{json.dumps(result["aggregations"], separators=(",", ":"))}'
+        )
+
+    return [
+        {
+            'type': 'text',
+            'text': (
+                f'Search results from {index} ({label}, {cr.compression_ratio:.0%} reduction):\n\n'
+                f'Dictionary (replace each <M#> with its value when interpreting):\n'
+                f'{dict_section}\n\n'
+                f'Data:\n{cr.compressed_text}'
+                f'{agg_section}'
+            ),
+        }
+    ]
+
+
 async def search_index_tool(args: SearchIndexArgs) -> list[dict]:
     """Search an index using query DSL."""
     try:
         await check_tool_compatibility('SearchIndexTool', args)
         result = await search_index(args)
+        fmt = args.format.lower()
 
-        if args.format.lower() == 'csv':
+        if fmt == 'csv':
             csv_result = convert_search_results_to_csv(result)
             return [
                 {
@@ -183,6 +293,8 @@ async def search_index_tool(args: SearchIndexArgs) -> list[dict]:
                     'text': f'Search results from {args.index} (CSV format):\n{csv_result}',
                 }
             ]
+        elif fmt == 'compressed':
+            return await _compress_search_results(result, args, fmt)
         else:
             formatted_result = format_json(result)
             return [
@@ -974,7 +1086,7 @@ TOOL_REGISTRY = {
     },
     'SearchIndexTool': {
         'display_name': 'SearchIndexTool',
-        'description': 'Searches an index using a query written in query domain-specific language (DSL) in OpenSearch. PREREQUISITE: You need to know the mappings of the index before constructing queries.',
+        'description': 'Searches an index using a query written in query domain-specific language (DSL) in OpenSearch. PREREQUISITE: You need to know the mappings of the index before constructing queries. Use format="compressed" for log indices when size > 10 to reduce token usage.',
         'input_schema': SearchIndexArgs.model_json_schema(),
         'function': search_index_tool,
         'args_model': SearchIndexArgs,

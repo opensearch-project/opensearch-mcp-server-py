@@ -65,6 +65,63 @@ class TestSearchIndexTool:
         data = assert_contains_json(result)
         assert data['hits']['total']['value'] == 0
 
+    async def test_compressed_format(self, default_client):
+        result = await default_client.call_tool(
+            'SearchIndexTool',
+            arguments={
+                'index': TEST_INDEX,
+                'query_dsl': '{"query": {"match_all": {}}}',
+                'format': 'compressed',
+            },
+        )
+        text = assert_tool_success(result, f'Search results from {TEST_INDEX}')
+        lines = text.split('\n')
+        header_line = None
+        for line in lines:
+            if 'title' in line and 'category' in line:
+                header_line = line
+                break
+        assert header_line is not None, f'No TSV header found in compressed output: {text[:500]}'
+        assert '\t' in header_line
+
+    async def test_compressed_contains_all_documents(self, default_client):
+        result = await default_client.call_tool(
+            'SearchIndexTool',
+            arguments={
+                'index': TEST_INDEX,
+                'query_dsl': '{"query": {"match_all": {}}}',
+                'format': 'compressed',
+                'size': 3,
+            },
+        )
+        text = assert_tool_success(result, f'Search results from {TEST_INDEX}')
+        assert 'Test document 1' in text
+        assert 'Test document 2' in text
+        assert 'Test document 3' in text
+
+    async def test_compressed_aggregation_only(self, default_client):
+        result = await default_client.call_tool(
+            'SearchIndexTool',
+            arguments={
+                'index': TEST_INDEX,
+                'query_dsl': '{"query": {"match_all": {}}, "size": 0, "aggs": {"categories": {"terms": {"field": "category"}}}}',
+                'format': 'compressed',
+            },
+        )
+        text = assert_tool_success(result, f'Search results from {TEST_INDEX}')
+        assert 'categories' in text
+
+    async def test_compressed_empty_results(self, default_client):
+        result = await default_client.call_tool(
+            'SearchIndexTool',
+            arguments={
+                'index': TEST_INDEX,
+                'query_dsl': '{"query": {"match": {"title": "xyznonexistent"}}}',
+                'format': 'compressed',
+            },
+        )
+        assert_tool_success(result, 'No documents found')
+
     # -- Bad paths --
 
     async def test_nonexistent_index_returns_error(self, default_client):

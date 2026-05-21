@@ -116,6 +116,20 @@ async def search_index(args: SearchIndexArgs) -> json:
         max_size_limit = tool_info.get('max_size_limit', 100)  # Default to 100 if not configured
 
         effective_size = min(args.size, max_size_limit) if args.size is not None else 10
+
+        # Limit size: 200 for compressed formats, otherwise configurable (default 100)
+        tool_info = TOOL_REGISTRY.get('SearchIndexTool', {})
+        fmt = getattr(args, 'format', 'json').lower()
+        if fmt == 'compressed':
+            max_size_limit = tool_info.get('max_size_limit', 200)
+        else:
+            max_size_limit = tool_info.get('max_size_limit', 100)
+
+        # Respect size=0 in query DSL for aggregation-only queries
+        if query.get('size') == 0:
+            effective_size = 0
+        else:
+            effective_size = min(args.size, max_size_limit) if args.size is not None else 10
         query['size'] = effective_size
 
         search_params = {'index': args.index, 'body': query}

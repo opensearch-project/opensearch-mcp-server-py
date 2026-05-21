@@ -1,0 +1,719 @@
+{
+  "took": 2,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 10000,
+      "relation": "gte"
+    },
+    "max_score": 1,
+    "hits": [
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "50yPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297803.817,
+          "container_name": "ts-preserve-mongo",
+          "message": "{\"t\":{\"$date\":\"2024-01-24T10:14:57.803+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1706091297:803640][1:0x7abda5dab700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 179, snapshot max: 179 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "6EyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297803.9478,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.803  INFO 1 --- [io-18898-exec-2] seat.service.SeatServiceImpl             : Seat request To String: Seat{travelDate=Wed Jan 24 00:00:00 GMT 2024, trainNumber='G1234', startStation='suzhou', destStation='shanghai', seatType=2}",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "6UyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297803.985,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.803  INFO 1 --- [io-18898-exec-2] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] TrainNumber start with G|D G1234",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "6kyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297806.298,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.806  INFO 1 --- [io-12346-exec-9] travel.controller.TravelController       : [Get Route By Trip ID] TripId: G1234",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "6E6PopsBsLeM_VPn2jUp",
+        "_score": 1,
+        "_source": {
+          "time": "10:16",
+          "timestamp": 1706091368724.688,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:16:08.724  INFO 1 --- [o-18898-exec-13] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The result of getRouteResult is Response(status=1, msg=[Get Route By Trip ID] Success, data=Route(id=0b23bd3e-876a-4af3-b920-c50a90c90b04, stations=[shanghai, nanjing, shijiazhuang, taiyuan], distances=[0, 350, 1000, 1300], startStationId=shanghai, terminalStationId=taiyuan))",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "7UyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297810.886,
+          "container_name": "ts-basic-service",
+          "message": "2024-01-24 10:14:57.810  INFO 1 --- [o-15680-exec-11] f.microservice.service.BasicServiceImpl  : [Basic Information Service][Query For Station Id] Station Id: Shang Hai",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "6k6PopsBsLeM_VPn2jUp",
+        "_score": 1,
+        "_source": {
+          "time": "10:16",
+          "timestamp": 1706091368729.3135,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:16:08.729  INFO 1 --- [io-18898-exec-4] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The result of getTrainTypeResult is Response(status=1, msg=Success query Train by trip id, data=TrainType(id=ZhiDa, economyClass=2147483647, confortClass=2147483647, averageSpeed=120))",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "8EyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297814.3872,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.814  INFO 1 --- [io-18898-exec-2] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The result of getRouteResult is Success",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "7E6PopsBsLeM_VPn2jUp",
+        "_score": 1,
+        "_source": {
+          "time": "10:16",
+          "timestamp": 1706091368734.0525,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:16:08.733  INFO 1 --- [io-18898-exec-4] seat.service.SeatServiceImpl             : Configs is : Config(name=DirectTicketAllocationProportion, value=0.5, description=Allocation Proportion Of The Direct Ticket - From Start To End)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "7U6PopsBsLeM_VPn2jUp",
+        "_score": 1,
+        "_source": {
+          "time": "10:16",
+          "timestamp": 1706091368735.4014,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:16:08.735  INFO 1 --- [o-16346-exec-25] travel2.service.Travel2ServiceImpl       : Get Rest tickets num is: Response(status=1, msg=Get Left Ticket of Internal Success, data=1073741823)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "9kyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297821.338,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.821  INFO 1 --- [io-18898-exec-2] seat.service.SeatServiceImpl             : Get Order tickets result is : <200,Response(status=0, msg=Order is Null., data=null),{x-application-context=[ts-order-service:12031], x-content-type-options=[nosniff], x-xss-protection=[1; mode=block], cache-control=[no-cache, no-store, max-age=0, must-revalidate], pragma=[no-cache], expires=[0], x-frame-options=[DENY], content-type=[application/json;charset=UTF-8], date=[Wed, 24 Jan 2024 10:14:57 GMT], x-envoy-upstream-service-time=[5], server=[envoy], transfer-encoding=[chunked]}>",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "90yPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297822.668,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.822  INFO 1 --- [io-16346-exec-9] travel2.controller.Travel2Controller     : [Get Route By Trip ID] TripId: Z1236",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "-EyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297824.0376,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.823  INFO 1 --- [io-16346-exec-9] travel2.service.Travel2ServiceImpl       : [Travel Service][Get Route By Id] Route ID：d693a2c5-ef87-4a3c-bef8-600b43f62c68",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "-UyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297826.3022,
+          "container_name": "ts-route-service",
+          "message": "2024-01-24 10:14:57.826  INFO 1 --- [io-11178-exec-7] route.controller.RouteController         : Route id: d693a2c5-ef87-4a3c-bef8-600b43f62c68",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "-kyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297828.9854,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.828  INFO 1 --- [io-16346-exec-9] travel2.service.Travel2ServiceImpl       : [Travel Other Service][Get Route By Id] Success.",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "-0yPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297829.4353,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.829  INFO 1 --- [io-16346-exec-9] travel2.service.Travel2ServiceImpl       : [Get Route By Trip ID] Success",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "_EyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297830.7925,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.830  INFO 1 --- [io-18898-exec-1] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The result of getRouteResult is Response(status=1, msg=[Get Route By Trip ID] Success, data=Route(id=d693a2c5-ef87-4a3c-bef8-600b43f62c68, stations=[taiyuan, shijiazhuang, nanjing, shanghai], distances=[0, 300, 950, 1300], startStationId=taiyuan, terminalStationId=shanghai))",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "_UyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297832.1252,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.831  INFO 1 --- [io-18898-exec-2] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The result of getTrainTypeResult is Response(status=1, msg=Success, data=TrainType(id=GaoTieOne, economyClass=2147483647, confortClass=2147483647, averageSpeed=250))",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "_kyPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297832.1455,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.832  INFO 1 --- [io-18898-exec-2] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The request seat type is confortClass and the total num is 2147483647",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "_0yPopsBttYjDR7S1F80",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297834.631,
+          "container_name": "ts-order-other-service",
+          "message": "2024-01-24 10:14:57.834  INFO 1 --- [o-12032-exec-11] other.controller.OrderOtherController    : [Order Other Service][Get Sold Ticket] Date: Wed Jan 24 00:00:00 GMT 2024",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "AEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297837.678,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.837  INFO 1 --- [io-18898-exec-2] seat.service.SeatServiceImpl             : Configs is : Config(name=DirectTicketAllocationProportion, value=0.5, description=Allocation Proportion Of The Direct Ticket - From Start To End)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "AUyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297838.1443,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.838  INFO 1 --- [io-18898-exec-1] seat.service.SeatServiceImpl             : Get Order tickets result is : <200,Response(status=0, msg=Seat is Null., data=null),{x-application-context=[ts-order-other-service:12032], x-content-type-options=[nosniff], x-xss-protection=[1; mode=block], cache-control=[no-cache, no-store, max-age=0, must-revalidate], pragma=[no-cache], expires=[0], x-frame-options=[DENY], content-type=[application/json;charset=UTF-8], date=[Wed, 24 Jan 2024 10:14:57 GMT], x-envoy-upstream-service-time=[4], server=[envoy], transfer-encoding=[chunked]}>",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "AkyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297838.8652,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.838  INFO 1 --- [io-12346-exec-2] travel.service.TravelServiceImpl         : Get Rest tickets num is: Response(status=1, msg=Get Left Ticket of Internal Success, data=1073741823)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "A0yPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297844.8428,
+          "container_name": "ts-basic-service",
+          "message": "2024-01-24 10:14:57.844  INFO 1 --- [io-15680-exec-5] f.microservice.service.BasicServiceImpl  : [Basic Information Service][Query For Station Id] Station Id: Su Zhou",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "BEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297851.358,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.851  INFO 1 --- [io-18898-exec-1] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The result of getTrainTypeResult is Response(status=1, msg=Success query Train by trip id, data=TrainType(id=ZhiDa, economyClass=2147483647, confortClass=2147483647, averageSpeed=120))",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "BUyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297851.5276,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.851  INFO 1 --- [io-18898-exec-1] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The request seat type is confortClass and the total num is 2147483647",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "BkyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297852.0835,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.851  INFO 1 --- [io-12346-exec-2] travel.service.TravelServiceImpl         : Query for Station id is: Response(status=1, msg=Success, data=suzhou)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "B0yPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297856.0322,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.855  INFO 1 --- [io-18898-exec-1] seat.service.SeatServiceImpl             : Configs is : Config(name=DirectTicketAllocationProportion, value=0.5, description=Allocation Proportion Of The Direct Ticket - From Start To End)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "CEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297856.7827,
+          "container_name": "ts-basic-service",
+          "message": "2024-01-24 10:14:57.856  INFO 1 --- [io-15680-exec-6] f.microservice.service.BasicServiceImpl  : [Basic Information Service][Query For Station Id] Station Id: Shang Hai",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "CUyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297857.4062,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.857  INFO 1 --- [io-16346-exec-1] travel2.service.Travel2ServiceImpl       : Get Rest tickets num is: Response(status=1, msg=Get Left Ticket of Internal Success, data=1073741823)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "CkyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297861.9187,
+          "container_name": "ts-basic-service",
+          "message": "2024-01-24 10:14:57.861  INFO 1 --- [io-15680-exec-3] f.microservice.service.BasicServiceImpl  : [Basic Information Service][Query For Station Id] Station Id: Nan Jing",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "C0yPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297863.6475,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.863  INFO 1 --- [io-12346-exec-2] travel.service.TravelServiceImpl         : Query for Station id is: Response(status=1, msg=Success, data=shanghai)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "DEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297863.6753,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.863  INFO 1 --- [io-12346-exec-2] travel.service.TravelServiceImpl         : Seat request To String: Seat{travelDate=Wed Jan 24 00:00:00 GMT 2024, trainNumber='G1234', startStation='suzhou', destStation='shanghai', seatType=3}",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "706PopsBsLeM_VPn2jUp",
+        "_score": 1,
+        "_source": {
+          "time": "10:16",
+          "timestamp": 1706091368736.4443,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:16:08.735  INFO 1 --- [o-16346-exec-25] travel2.service.Travel2ServiceImpl       : [TravelService][getTickets] route: d693a2c5-ef87-4a3c-bef8-600b43f62c68  station: [taiyuan, shijiazhuang, nanjing, shanghai]",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "EEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297870.8345,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.870  INFO 1 --- [io-12346-exec-8] travel.service.TravelServiceImpl         : [Travel Service][Get Route By Id] Route ID：92708982-77af-4318-be25-57ccb0ff69ad",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "EUyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297873.2505,
+          "container_name": "ts-basic-service",
+          "message": "2024-01-24 10:14:57.873  INFO 1 --- [o-15680-exec-12] f.microservice.service.BasicServiceImpl  : [Basic Information Service][Query For Station Id] Station Id: Shang Hai",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "EkyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297873.252,
+          "container_name": "ts-route-service",
+          "message": "2024-01-24 10:14:57.873  INFO 1 --- [io-11178-exec-5] route.controller.RouteController         : Route id: 92708982-77af-4318-be25-57ccb0ff69ad",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "E0yPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297875.8179,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.875  INFO 1 --- [io-12346-exec-8] travel.service.TravelServiceImpl         : Routes Response is : Response(status=1, msg=Success, data={id=92708982-77af-4318-be25-57ccb0ff69ad, stations=[nanjing, zhenjiang, wuxi, suzhou, shanghai], distances=[0, 100, 150, 200, 250], startStationId=nanjing, terminalStationId=shanghai})",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "FEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297876.1506,
+          "container_name": "ts-travel-service",
+          "message": "2024-01-24 10:14:57.876  INFO 1 --- [io-12346-exec-8] travel.service.TravelServiceImpl         : Route is: Route{id='92708982-77af-4318-be25-57ccb0ff69ad', stations=[nanjing, zhenjiang, wuxi, suzhou, shanghai], distances=[0, 100, 150, 200, 250], startStationId='nanjing', terminalStationId='shanghai'}",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "FUyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297877.5588,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.877  INFO 1 --- [o-18898-exec-15] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] The result of getRouteResult is Success",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "FkyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297879.47,
+          "container_name": "ts-station-mongo",
+          "message": "{\"t\":{\"$date\":\"2024-01-24T10:14:57.879+00:00\"},\"s\":\"I\",  \"c\":\"STORAGE\",  \"id\":22430,   \"ctx\":\"Checkpointer\",\"msg\":\"WiredTiger message\",\"attr\":{\"message\":\"[1706091297:879222][1:0x79dc26090700], WT_SESSION.checkpoint: [WT_VERB_CHECKPOINT_PROGRESS] saving checkpoint snapshot min: 200, snapshot max: 200 snapshot count: 0, oldest timestamp: (0, 0) , meta checkpoint timestamp: (0, 0) base write gen: 1\"}}",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "F0yPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297880.559,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.880  INFO 1 --- [io-16346-exec-1] travel2.service.Travel2ServiceImpl       : Seat request To String: Seat(travelDate=Wed Jan 24 00:00:00 GMT 2024, trainNumber=Z1236, startStation=nanjing, destStation=shanghai, seatType=3)",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "GEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297881.1338,
+          "container_name": "ts-order-service",
+          "message": "2024-01-24 10:14:57.880  INFO 1 --- [io-12031-exec-4] order.controller.OrderController         : [Order Service][Get Sold Ticket] Date: Wed Jan 24 00:00:00 GMT 2024",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "GUyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297882.8728,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.882  INFO 1 --- [io-18898-exec-8] seat.service.SeatServiceImpl             : Seat request To String: Seat{travelDate=Wed Jan 24 00:00:00 GMT 2024, trainNumber='Z1236', startStation='nanjing', destStation='shanghai', seatType=3}",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "GkyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297882.9373,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.882  INFO 1 --- [io-18898-exec-8] seat.service.SeatServiceImpl             : [SeatService getLeftTicketOfInterval] TrainNumber start with other capital",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "G0yPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297883.0117,
+          "container_name": "ts-order-service",
+          "message": "2024-01-24 10:14:57.882  INFO 1 --- [io-12031-exec-4] order.service.OrderServiceImpl           : Left ticket info is empty",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "HEyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297884.2776,
+          "container_name": "ts-seat-service",
+          "message": "2024-01-24 10:14:57.884  INFO 1 --- [o-18898-exec-15] seat.service.SeatServiceImpl             : Get Order tickets result is : <200,Response(status=0, msg=Order is Null., data=null),{x-application-context=[ts-order-service:12031], x-content-type-options=[nosniff], x-xss-protection=[1; mode=block], cache-control=[no-cache, no-store, max-age=0, must-revalidate], pragma=[no-cache], expires=[0], x-frame-options=[DENY], content-type=[application/json;charset=UTF-8], date=[Wed, 24 Jan 2024 10:14:57 GMT], x-envoy-upstream-service-time=[4], server=[envoy], transfer-encoding=[chunked]}>",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "HUyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297885.2002,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.885  INFO 1 --- [o-16346-exec-16] travel2.controller.Travel2Controller     : [Get Route By Trip ID] TripId: Z1236",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "HkyPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297886.567,
+          "container_name": "ts-travel2-service",
+          "message": "2024-01-24 10:14:57.886  INFO 1 --- [o-16346-exec-16] travel2.service.Travel2ServiceImpl       : [Travel Service][Get Route By Id] Route ID：d693a2c5-ef87-4a3c-bef8-600b43f62c68",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      },
+      {
+        "_index": "train-ticket-logs-41",
+        "_id": "H0yPopsBttYjDR7S1GA0",
+        "_score": 1,
+        "_source": {
+          "time": "10:14",
+          "timestamp": 1706091297888.4885,
+          "container_name": "ts-route-service",
+          "message": "2024-01-24 10:14:57.888  INFO 1 --- [io-11178-exec-9] route.controller.RouteController         : Route id: d693a2c5-ef87-4a3c-bef8-600b43f62c68",
+          "level": "",
+          "req_path": "",
+          "error": ""
+        }
+      }
+    ]
+  }
+}

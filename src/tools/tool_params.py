@@ -139,10 +139,24 @@ class SearchIndexArgs(baseToolArgs):
     query_dsl: Any = Field(
         description='The search query in OpenSearch query DSL format. For keyword-type fields (mapping shows "type": "keyword"), use field name DIRECTLY - do NOT add .keyword suffix. For text-type fields with .keyword subfields, use the .keyword suffix for exact matches. For date/time range queries, MUST include "format" parameter (commonly "format": "strict_date_optional_time||epoch_millis"), e.g. {"range": {"timestamp": {"gte": "2025-12-29T17:15:12Z", "lte": "2025-12-30T08:15:12Z", "format": "strict_date_optional_time||epoch_millis"}}}; if using non-ISO formats, adjust "format" accordingly.'
     )
-    format: str = Field(default='json', description='Output format: "json" or "csv"')
     size: int = Field(
         default=10,
         description='Number of search results to return. The maximum allowed value is 100, unless overridden by configuration.',
+    )
+    format: str = Field(
+        default='json',
+        description='Output format: "json", "csv", or "compressed". '
+        '- "json": Default. Best for small result sets (size ≤ 10) or when exact field structure matters. '
+        '- "csv": Tabular view without compression. Good for flat documents. '
+        '- "compressed" (RECOMMENDED for log data with size > 10): '
+        'TSV layout with field-level dictionary-encoding. Best for logs with repeated field values (level, service, host, etc). '
+        'Lossless — meta-tokens (<M1>, <M2>, ...) map to original values via an included dictionary. '
+        'Numeric fields are never compressed — their values are preserved as-is. '
+        'AVOID for: traces, metrics, or any data with deeply nested arrays or wide numeric schemas.',
+    )
+    size: int = Field(
+        default=10,
+        description='Number of search results to return. Maximum 100 for json/csv, up to 200 for compressed format.',
     )
 
 
