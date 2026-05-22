@@ -10,8 +10,8 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Add `User-Agent` header (`opensearch-mcp-server-py/<version>`) to all OpenSearch requests for MCP traffic identification in cluster logs ([#207](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/207))
 - Add new toolset for the OpenSearch Agentic Memory API: `CreateAgenticMemorySessionTool`, `AddAgenticMemoriesTool`, `GetAgenticMemoryTool`, `UpdateAgenticMemoryTool`, `DeleteAgenticMemoryByIDTool`, `DeleteAgenticMemoryByQueryTool`, and `SearchAgenticMemoryTool`. Agentic memory tools are in the `agentic_memory` category and can be enabled via `enabled_categories: ["agentic_memory"]`. The `memory_container_id` is automatically pre-filled in all tool calls when configured via the `agentic_memory` config section or `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable. ([#138](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/138))
 - Add `AGENTS.md` and rewrite `DEVELOPER_GUIDE.md` "Adding Custom Tools" section with detailed 4-piece tool anatomy, error handling contracts, and tool category documentation ([#214](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/214))
-
-- Add OpenSearch mTLS support for single-cluster and multi-cluster configurations, including CA bundle, client certificate, and client key settings
+- Add OpenSearch mTLS support for single-cluster and multi-cluster configurations, including CA bundle, client certificate, and client key settings ([#204](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/204))
+- Add per-category write permissions ([#256](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/256))
 
 ### Changed
 - Default `--host` for the `stream` transport from `0.0.0.0` to `127.0.0.1` so the streamable HTTP listener binds to loopback by default. Operators who need to expose the listener on other interfaces opt in explicitly with `--host 0.0.0.0` ([#253](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/253))
@@ -26,7 +26,6 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Switch CI from `pull_request` to `pull_request_target` so integration tests run on fork PRs ([#219](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/219))
 - Fix multi-mode IT failing for `ListClustersTool` which has no `opensearch_cluster_name` parameter ([#220](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/220))
 - Fix non-ASCII characters (e.g. Chinese, Japanese, accented characters) being escaped to Unicode sequences in all tool JSON responses ([#164](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/164))
-
 - Fix `SearchIndexTool` ignoring `size=0`, causing aggregation-only queries to always return 10 hits ([#217](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/217))
 - Infer default TCP port from URL scheme (`http` → 80, `https` → 443) when no port is specified, instead of relying on implicit 9200 behavior ([#170](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/170))
 - Move skills tools to disabled-by-default category([#225](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/225/))

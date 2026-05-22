@@ -758,6 +758,190 @@ class TestProcessToolFilter:
         assert 'IndicesCreateTool' not in registry
 
 
+class TestAllowWriteCategories:
+    """Test cases for allow_write_categories setting."""
+
+    def test_allow_write_false_removes_write_only_tools(self):
+        """When allow_write is false, write-only tools are removed."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SearchIndexTool': {'display_name': 'SearchIndexTool', 'http_methods': 'GET, POST'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
+            'GenericOpenSearchApiTool': {
+                'display_name': 'GenericOpenSearchApiTool',
+                'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=False)
+
+        assert 'ListIndexTool' in registry
+        assert 'SearchIndexTool' in registry
+        assert 'GenericOpenSearchApiTool' in registry  # has GET, so survives
+        assert 'CreateQuerySetTool' not in registry  # PUT only, removed
+        assert 'DeleteQuerySetTool' not in registry  # DELETE only, removed
+
+    def test_allow_write_categories_exempts_category_from_write_filter(self):
+        """Tools in allow_write_categories survive the write filter even with allow_write=false."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SearchIndexTool': {'display_name': 'SearchIndexTool', 'http_methods': 'GET, POST'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
+            'GetQuerySetTool': {'display_name': 'GetQuerySetTool', 'http_methods': 'GET'},
+            'GenericOpenSearchApiTool': {
+                'display_name': 'GenericOpenSearchApiTool',
+                'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+            },
+            'IndicesCreateTool': {'display_name': 'IndicesCreateTool', 'http_methods': 'PUT'},
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=False,
+            allow_write_categories=['search_relevance'],
+            enabled_categories='core_tools,search_relevance',
+        )
+
+        # search_relevance write tools survive because of allow_write_categories
+        assert 'CreateQuerySetTool' in registry
+        assert 'DeleteQuerySetTool' in registry
+        assert 'GetQuerySetTool' in registry
+
+        # core_tools with GET survive normally
+        assert 'ListIndexTool' in registry
+        assert 'SearchIndexTool' in registry
+        assert 'GenericOpenSearchApiTool' in registry  # has GET
+
+        # Non-exempted write-only tool is removed
+        assert 'IndicesCreateTool' not in registry
+
+    def test_allow_write_categories_does_not_affect_generic_api_runtime(self):
+        """GenericOpenSearchApiTool still blocked at runtime when allow_write=false."""
+        from tools.tool_filter import get_allow_write_setting, set_allow_write_setting
+
+        set_allow_write_setting(False)
+        assert get_allow_write_setting() is False
+
+    def test_allow_write_categories_multiple_categories(self):
+        """Multiple categories can be specified in allow_write_categories."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'DataDistributionTool': {
+                'display_name': 'DataDistributionTool',
+                'http_methods': 'POST',
+            },
+            'IndicesCreateTool': {'display_name': 'IndicesCreateTool', 'http_methods': 'PUT'},
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=False,
+            allow_write_categories=['search_relevance', 'skills'],
+            enabled_categories='core_tools,search_relevance,skills',
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'CreateQuerySetTool' in registry  # search_relevance, exempted
+        assert 'DataDistributionTool' in registry  # skills, exempted
+        assert 'IndicesCreateTool' not in registry  # not in any exempted category
+
+    def test_allow_write_categories_empty_has_no_effect(self):
+        """Empty allow_write_categories doesn't exempt any tools."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=False,
+            allow_write_categories=[],
+            enabled_categories='core_tools,search_relevance',
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'CreateQuerySetTool' not in registry  # no exemption
+
+    def test_allow_write_categories_with_allow_write_true_is_noop(self):
+        """When allow_write=true, allow_write_categories has no effect (write filter not applied)."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'GenericOpenSearchApiTool': {
+                'display_name': 'GenericOpenSearchApiTool',
+                'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+            },
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=True,
+            allow_write_categories=['search_relevance'],
+            enabled_categories='core_tools,search_relevance',
+        )
+
+        # All tools in enabled categories survive when allow_write=true
+        assert 'ListIndexTool' in registry
+        assert 'CreateQuerySetTool' in registry
+        assert 'GenericOpenSearchApiTool' in registry
+
+    @patch.dict(
+        'os.environ',
+        {'OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES': 'search_relevance,agentic_memory'},
+    )
+    def test_get_allow_write_categories_from_env(self):
+        """get_allow_write_categories reads from environment variable."""
+        from tools.tool_filter import get_allow_write_categories, set_allow_write_categories
+
+        # Reset the global to force env fallback
+        set_allow_write_categories(None)
+        result = get_allow_write_categories()
+        assert result == ['search_relevance', 'agentic_memory']
+
+    def test_get_allow_write_categories_returns_empty_by_default(self):
+        """get_allow_write_categories returns empty list when nothing is configured."""
+        from tools.tool_filter import get_allow_write_categories, set_allow_write_categories
+
+        set_allow_write_categories(None)
+        result = get_allow_write_categories()
+        assert result == []
+
+    @patch('tools.tool_filter.load_yaml_config')
+    @patch('os.path.exists')
+    def test_resolve_allow_write_categories_from_config(self, mock_exists, mock_load_yaml):
+        """_resolve_allow_write_categories reads from config file."""
+        from tools.tool_filter import _resolve_allow_write_categories
+
+        mock_exists.return_value = True
+        mock_load_yaml.return_value = {
+            'tool_filters': {
+                'settings': {'allow_write_categories': ['search_relevance', 'agentic_memory']}
+            }
+        }
+
+        result = _resolve_allow_write_categories('/path/to/config.yml')
+        assert result == ['search_relevance', 'agentic_memory']
+
+    @patch('tools.tool_filter.load_yaml_config')
+    @patch('os.path.exists')
+    def test_resolve_allow_write_categories_config_overrides_env(
+        self, mock_exists, mock_load_yaml
+    ):
+        """Config file allow_write_categories overrides environment variable."""
+        import os
+        from tools.tool_filter import _resolve_allow_write_categories
+
+        os.environ['OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES'] = 'skills'
+        mock_exists.return_value = True
+        mock_load_yaml.return_value = {
+            'tool_filters': {'settings': {'allow_write_categories': ['search_relevance']}}
+        }
+
+        result = _resolve_allow_write_categories('/path/to/config.yml')
+        assert result == ['search_relevance']
+
+        # Cleanup
+        del os.environ['OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES']
+
+
 class TestAllowWriteSettings:
     """Test cases for the allow_write setting functionality."""
 

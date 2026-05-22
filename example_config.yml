@@ -99,7 +99,10 @@ tools:
 #   disabled_tools_regex:
 #     - "debug.*"  # Example: disable all tools starting with debug
 #   settings:
-#     allow_write: true  # Enable/disable write operations
+#     allow_write: true  # Enable/disable write operations globally
+#     allow_write_categories:  # Categories that allow write operations
+#       - search_relevance
+#       - agentic_memory
 
 
 # Example configurations for different authentication methods:
