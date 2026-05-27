@@ -38,10 +38,12 @@ class ClusteringHelper:
 
         # Choose clustering approach based on dataset size
         if len(log_vectors) > 1000:
+            # k-means + hac
             final_centroids = self._process_two_phase_clustering_for_large_dataset(
                 vectors, index_trace_id_map
             )
         else:
+            # hac
             final_centroids = self._perform_clustering(vectors, index_trace_id_map)
 
         logger.debug(

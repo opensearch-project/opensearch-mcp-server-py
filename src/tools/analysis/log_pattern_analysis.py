@@ -149,7 +149,9 @@ def _vectorize_pattern(pattern_count_map: Dict[str, Set[str]], total_trace_count
     pattern_values: Dict[str, float] = {}
     for pattern, trace_ids in pattern_count_map.items():
         if trace_ids:
+            # calculate IDF
             idf = math.log(total_trace_count / len(trace_ids))
+            # sigmoid value = 1.0 / 1.0 + (len(trace_ids) / total_trace_count)
             value = 1.0 / (1.0 + math.exp(-idf))
             pattern_values[pattern] = value
         else:
@@ -208,7 +210,7 @@ def _build_vector_map(
     is_selection: bool = False,
     base_pattern_count_map: Optional[Dict[str, Set[str]]] = None,
     selection_pattern_count_map: Optional[Dict[str, Set[str]]] = None,
-) -> Dict[str, List[float]]:
+) -> Dict[str, List[float]]: # <traceid, vector>
     """Build a weighted vector per trace. Selection vectors get extra weight for novel patterns."""
     dimension = len(pattern_index_map)
     vector_map: Dict[str, List[float]] = {}
@@ -220,6 +222,7 @@ def _build_vector_map(
             if index is not None:
                 base_value = 0.5 * pattern_weights.get(pattern, 0.0)
                 if is_selection and base_pattern_count_map is not None and selection_pattern_count_map is not None:
+                    # pattern in selection and not in baseline
                     existence_weight = 0 if pattern in base_pattern_count_map else 1
                     vector[index] = base_value + 0.5 * existence_weight
                 else:
@@ -253,6 +256,7 @@ def _filter_selection_centroids(
                     break
 
         if is_exceptional:
+            # far from all base_centroid
             selection_centroids.append(candidate)
 
     return selection_centroids
@@ -459,6 +463,7 @@ def _merge_similar_patterns(pattern_map: Dict[str, float]):
 def _calculate_pattern_differences(
     base_patterns: Dict[str, float], selection_patterns: Dict[str, float]
 ) -> List[Dict]:
+    """calculate lift"""
     differences = []
     selection_total = sum(selection_patterns.values())
     base_total = sum(base_patterns.values())
