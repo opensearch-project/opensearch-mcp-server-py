@@ -36,6 +36,7 @@ from .tool_params import (
     GetShardsArgs,
     ListClustersArgs,
     ListIndicesArgs,
+    PplQueryArgs,
     SampleQuerySetArgs,
     SearchExperimentsArgs,
     SearchIndexArgs,
@@ -77,6 +78,7 @@ from opensearch.helper import (
     get_segments,
     get_shards,
     list_indices,
+    ppl_query,
     sample_query_set,
     search_experiments,
     search_index,
@@ -950,6 +952,20 @@ async def search_experiments_tool(args: SearchExperimentsArgs) -> list[dict]:
         return log_tool_error('SearchExperimentsTool', e, 'searching experiments')
 
 
+async def ppl_query_tool(args: PplQueryArgs) -> list[dict]:
+    """Execute a PPL query."""
+    try:
+        await check_tool_compatibility('PPLQueryTool', args)
+        result = await ppl_query(args)
+        if isinstance(result, str):
+            formatted_result = result
+        else:
+            formatted_result = format_json(result)
+        return [{'type': 'text', 'text': f'PPL query results:\n{formatted_result}'}]
+    except Exception as e:
+        return log_tool_error('PPLQueryTool', e, 'executing PPL query')
+
+
 # Registry of available OpenSearch tools with their metadata
 TOOL_REGISTRY = {
     **SKILLS_TOOLS_REGISTRY,
@@ -1284,6 +1300,18 @@ TOOL_REGISTRY = {
         'args_model': CreateLLMJudgmentListArgs,
         'min_version': '3.1.0',
         'http_methods': 'PUT',
+    },
+    'PPLQueryTool': {
+        'display_name': 'PPLQueryTool',
+        'description': 'Executes a PPL (Piped Processing Language) query against OpenSearch. '
+        'PPL provides a pipe-based syntax for querying data: source=<index> | <command> | <command>. '
+        'Supports filtering (where), aggregation (stats), sorting (sort), deduplication (dedup), '
+        'field selection (fields), and more. Useful for log analytics and exploratory data analysis.',
+        'input_schema': PplQueryArgs.model_json_schema(),
+        'function': ppl_query_tool,
+        'args_model': PplQueryArgs,
+        'min_version': '2.0.0',
+        'http_methods': 'POST',
     },
     'ListClustersTool': {
         'display_name': 'ListClustersTool',

@@ -1288,3 +1288,30 @@ def normalize_scientific_notation(body):
     else:
         # Treat as Python object (dict / list / etc.)
         return _convert_value(body)
+
+
+async def ppl_query(args) -> json:
+    """Execute a PPL query via /_plugins/_ppl endpoint."""
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        body = {'query': args.query}
+        fmt = args.format if args.format else 'jdbc'
+        params = {}
+        if fmt != 'jdbc':
+            params['format'] = fmt
+
+        try:
+            response = await client.transport.perform_request(
+                method='POST',
+                url='/_plugins/_ppl',
+                body=json.dumps(body),
+                params=params,
+            )
+            return response
+        except Exception as e:
+            # For text formats (csv/raw), the transport may fail to parse JSON
+            # but the raw text is available in the exception args
+            if fmt in ('csv', 'raw') and e.args and isinstance(e.args[0], str):
+                return e.args[0]
+            raise
