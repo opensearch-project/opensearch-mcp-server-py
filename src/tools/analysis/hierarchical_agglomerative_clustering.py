@@ -107,9 +107,7 @@ class HierarchicalAgglomerativeClustering:
             for j in range(i + 1, len(active_clusters)):
                 id_i = active_clusters[i].id
                 id_j = active_clusters[j].id
-                d = self._compute_cluster_distance(
-                    active_clusters[i], active_clusters[j], linkage
-                )
+                d = self._compute_cluster_distance(active_clusters[i], active_clusters[j], linkage)
                 dist_cache[(id_i, id_j)] = d
 
         next_cluster_id = self.n_samples
