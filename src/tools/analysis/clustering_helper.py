@@ -90,9 +90,7 @@ class ClusteringHelper:
                 final_centroids.extend(cluster_centroids)
             return final_centroids
         except Exception as e:
-            logger.warning(
-                f'K-means failed, falling back to hierarchical clustering: {e}'
-            )
+            logger.warning(f'K-means failed, falling back to hierarchical clustering: {e}')
             return self._perform_clustering(vectors, index_trace_id_map)
 
     def _perform_kmeans_clustering(
@@ -116,9 +114,7 @@ class ClusteringHelper:
         for _ in range(1, num_clusters):
             distances = []
             for v in vectors:
-                min_dist = min(
-                    1.0 - calculate_cosine_similarity(v, c) for c in centroids
-                )
+                min_dist = min(1.0 - calculate_cosine_similarity(v, c) for c in centroids)
                 distances.append(min_dist * min_dist)
             total = sum(distances)
             if total == 0:
@@ -188,7 +184,9 @@ class ClusteringHelper:
             )
 
         cluster_vectors = [vectors[i] for i in k_means_cluster]
-        cluster_index_map = {j: index_trace_id_map[k_means_cluster[j]] for j in range(len(k_means_cluster))}
+        cluster_index_map = {
+            j: index_trace_id_map[k_means_cluster[j]] for j in range(len(k_means_cluster))
+        }
         return self._perform_clustering(cluster_vectors, cluster_index_map)
 
     def _perform_clustering(
@@ -276,6 +274,4 @@ class ClusteringHelper:
                 if similarity > self.log_vectors_clustering_threshold:
                     to_remove.add(j)
 
-        return [
-            index2_trace[i] for i in range(len(vector_res)) if i not in to_remove
-        ]
+        return [index2_trace[i] for i in range(len(vector_res)) if i not in to_remove]

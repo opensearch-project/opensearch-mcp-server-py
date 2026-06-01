@@ -20,8 +20,17 @@ from .data_fetching_helper import (
 logger = logging.getLogger(__name__)
 
 USEFUL_FIELD_TYPES = {
-    'keyword', 'boolean', 'text', 'byte', 'short', 'integer',
-    'long', 'float', 'double', 'half_float', 'scaled_float',
+    'keyword',
+    'boolean',
+    'text',
+    'byte',
+    'short',
+    'integer',
+    'long',
+    'float',
+    'double',
+    'half_float',
+    'scaled_float',
 }
 DEFAULT_COMPARISON_RESULT_LIMIT = 10
 DEFAULT_SINGLE_ANALYSIS_RESULT_LIMIT = 30
@@ -37,7 +46,7 @@ TOP_CHANGES_LIMIT = 10
 
 async def execute_data_distribution(client, params: AnalysisParameters) -> dict:
     """Main entry point for data distribution analysis."""
-    logger.debug("Starting data distribution analysis with parameters: index=%s", params.index)
+    logger.debug('Starting data distribution analysis with parameters: index=%s', params.index)
     if params.query_type == QUERY_TYPE_PPL:
         return await _execute_ppl_analysis(client, params)
     else:
@@ -57,7 +66,9 @@ async def _execute_dsl_analysis(client, params: AnalysisParameters) -> dict:
             raise RuntimeError('No data found for selection time range')
         if not baseline_data:
             raise RuntimeError('No data found for baseline time range')
-        result = await _get_comparison_distribution(client, selection_data, baseline_data, params.index)
+        result = await _get_comparison_distribution(
+            client, selection_data, baseline_data, params.index
+        )
         return {'comparisonAnalysis': result}
     else:
         selection_data = await fetch_index_data_dsl(
@@ -73,14 +84,20 @@ async def _execute_ppl_analysis(client, params: AnalysisParameters) -> dict:
     """Fetch data via PPL queries and perform distribution analysis."""
     if params.has_baseline_time_range():
         selection_query = _build_ppl_query(
-            params.index, params.time_field,
-            params.selection_time_range_start, params.selection_time_range_end,
-            params.size, params.ppl,
+            params.index,
+            params.time_field,
+            params.selection_time_range_start,
+            params.selection_time_range_end,
+            params.size,
+            params.ppl,
         )
         baseline_query = _build_ppl_query(
-            params.index, params.time_field,
-            params.baseline_time_range_start, params.baseline_time_range_end,
-            params.size, params.ppl,
+            params.index,
+            params.time_field,
+            params.baseline_time_range_start,
+            params.baseline_time_range_end,
+            params.size,
+            params.ppl,
         )
         selection_data = await execute_ppl_and_parse_docs(client, selection_query)
         baseline_data = await execute_ppl_and_parse_docs(client, baseline_query)
@@ -88,13 +105,18 @@ async def _execute_ppl_analysis(client, params: AnalysisParameters) -> dict:
             raise RuntimeError('No data found for selection time range')
         if not baseline_data:
             raise RuntimeError('No data found for baseline time range')
-        result = await _get_comparison_distribution(client, selection_data, baseline_data, params.index)
+        result = await _get_comparison_distribution(
+            client, selection_data, baseline_data, params.index
+        )
         return {'comparisonAnalysis': result}
     else:
         selection_query = _build_ppl_query(
-            params.index, params.time_field,
-            params.selection_time_range_start, params.selection_time_range_end,
-            params.size, params.ppl,
+            params.index,
+            params.time_field,
+            params.selection_time_range_start,
+            params.selection_time_range_end,
+            params.size,
+            params.ppl,
         )
         selection_data = await execute_ppl_and_parse_docs(client, selection_query)
         if not selection_data:
@@ -117,6 +139,7 @@ def _build_ppl_query(
 
 def _format_time_for_ppl(time_string: str) -> str:
     from datetime import datetime as dt
+
     # Normalize trailing 'Z' to '+00:00' for fromisoformat (Python 3.10 compat)
     normalized = time_string.replace('Z', '+00:00') if time_string.endswith('Z') else time_string
     try:
@@ -172,20 +195,20 @@ async def _get_comparison_distribution(
             selection_dist, baseline_dist = _group_numeric_keys(selection_dist, baseline_dist)
 
         divergence = _calculate_max_difference(selection_dist, baseline_dist)
-        analyses.append({
-            'field': field,
-            'divergence': divergence,
-            'selection_dist': selection_dist,
-            'baseline_dist': baseline_dist,
-        })
+        analyses.append(
+            {
+                'field': field,
+                'divergence': divergence,
+                'selection_dist': selection_dist,
+                'baseline_dist': baseline_dist,
+            }
+        )
 
     analyses.sort(key=lambda a: a['divergence'], reverse=True)
     return _format_comparison_summary(analyses, DEFAULT_COMPARISON_RESULT_LIMIT)
 
 
-async def _analyze_single_dataset(
-    client, data: List[Dict], index: str
-) -> List[Dict]:
+async def _analyze_single_dataset(client, data: List[Dict], index: str) -> List[Dict]:
     """Analyze field distributions within a single dataset, ranked by divergence."""
     field_types = await get_field_types(client, index)
     useful_fields = _get_useful_fields(data, field_types)
@@ -200,12 +223,14 @@ async def _analyze_single_dataset(
             selection_dist, _ = _group_numeric_keys(selection_dist, baseline_dist)
 
         divergence = _calculate_max_difference(selection_dist, baseline_dist)
-        analyses.append({
-            'field': field,
-            'divergence': divergence,
-            'selection_dist': selection_dist,
-            'baseline_dist': baseline_dist,
-        })
+        analyses.append(
+            {
+                'field': field,
+                'divergence': divergence,
+                'selection_dist': selection_dist,
+                'baseline_dist': baseline_dist,
+            }
+        )
 
     analyses.sort(key=lambda a: a['divergence'], reverse=True)
     return _format_comparison_summary(analyses, DEFAULT_SINGLE_ANALYSIS_RESULT_LIMIT)
@@ -214,7 +239,7 @@ async def _analyze_single_dataset(
 def _get_useful_fields(data: List[Dict], field_types: Dict[str, str]) -> List[str]:
     """Filter fields suitable for distribution analysis based on type and cardinality."""
     if not field_types:
-        logger.warning("No field types available, using data-based field detection")
+        logger.warning('No field types available, using data-based field detection')
         return _get_fields_from_data(data)
 
     keyword_fields: Set[str] = set()
@@ -277,7 +302,8 @@ def _get_fields_from_data(data: List[Dict]) -> List[str]:
             if value is not None:
                 values.add(str(value))
         cardinality = len(values)
-        if 0 < cardinality <= max(DATA_FIELD_MAX_CARDINALITY, len(data) // DATA_FIELD_CARDINALITY_DIVISOR):
+        threshold = max(DATA_FIELD_MAX_CARDINALITY, len(data) // DATA_FIELD_CARDINALITY_DIVISOR)
+        if 0 < cardinality <= threshold:
             result.append(field)
     return result
 
@@ -304,10 +330,7 @@ def _calculate_max_difference(
     all_keys = set(selection_dist.keys()) | set(baseline_dist.keys())
     if not all_keys:
         return float('-inf')
-    return max(
-        abs(selection_dist.get(key, 0.0) - baseline_dist.get(key, 0.0))
-        for key in all_keys
-    )
+    return max(abs(selection_dist.get(key, 0.0) - baseline_dist.get(key, 0.0)) for key in all_keys)
 
 
 def _group_numeric_keys(
@@ -337,9 +360,13 @@ def _group_numeric_keys(
     group_size = range_val / num_groups
 
     def get_group_label(num_key: float) -> str:
-        group_index = num_groups - 1 if num_key == max_val else int((num_key - min_val) / group_size)
+        group_index = (
+            num_groups - 1 if num_key == max_val else int((num_key - min_val) / group_size)
+        )
         lower_bound = min_val + group_index * group_size
-        upper_bound = max_val if group_index == num_groups - 1 else min_val + (group_index + 1) * group_size
+        upper_bound = (
+            max_val if group_index == num_groups - 1 else min_val + (group_index + 1) * group_size
+        )
         return f'{lower_bound:.1f}-{upper_bound:.1f}'
 
     grouped_selection: Dict[str, float] = {}
@@ -348,8 +375,12 @@ def _group_numeric_keys(
     for num_key in numeric_keys:
         label = get_group_label(num_key)
         str_key = str(num_key)
-        grouped_selection[label] = grouped_selection.get(label, 0.0) + selection_dist.get(str_key, 0.0)
-        grouped_baseline[label] = grouped_baseline.get(label, 0.0) + baseline_dist.get(str_key, 0.0)
+        grouped_selection[label] = grouped_selection.get(label, 0.0) + selection_dist.get(
+            str_key, 0.0
+        )
+        grouped_baseline[label] = grouped_baseline.get(label, 0.0) + baseline_dist.get(
+            str_key, 0.0
+        )
 
     all_groups = set(grouped_selection.keys()) | set(grouped_baseline.keys())
     for group in all_groups:
@@ -375,16 +406,23 @@ def _format_comparison_summary(analyses: List[Dict], max_results: int) -> List[D
         all_keys = set(selection_dist.keys()) | set(baseline_dist.keys())
         changes = []
         for value in all_keys:
-            sel_pct = round(selection_dist.get(value, 0.0) * PERCENTAGE_MULTIPLIER) / PERCENTAGE_MULTIPLIER
-            base_pct = (
-                round(baseline_dist.get(value, 0.0) * PERCENTAGE_MULTIPLIER) / PERCENTAGE_MULTIPLIER
-                if has_baseline else None
+            sel_pct = (
+                round(selection_dist.get(value, 0.0) * PERCENTAGE_MULTIPLIER)
+                / PERCENTAGE_MULTIPLIER
             )
-            changes.append({
-                'value': value,
-                'selectionPercentage': sel_pct,
-                'baselinePercentage': base_pct,
-            })
+            base_pct = (
+                round(baseline_dist.get(value, 0.0) * PERCENTAGE_MULTIPLIER)
+                / PERCENTAGE_MULTIPLIER
+                if has_baseline
+                else None
+            )
+            changes.append(
+                {
+                    'value': value,
+                    'selectionPercentage': sel_pct,
+                    'baselinePercentage': base_pct,
+                }
+            )
 
         if has_baseline:
             changes.sort(
@@ -395,9 +433,11 @@ def _format_comparison_summary(analyses: List[Dict], max_results: int) -> List[D
             changes.sort(key=lambda c: c['selectionPercentage'], reverse=True)
 
         top_changes = changes[:TOP_CHANGES_LIMIT]
-        result.append({
-            'field': diff['field'],
-            'divergence': diff['divergence'],
-            'topChanges': top_changes,
-        })
+        result.append(
+            {
+                'field': diff['field'],
+                'divergence': diff['divergence'],
+                'topChanges': top_changes,
+            }
+        )
     return result

@@ -119,9 +119,7 @@ class HierarchicalAgglomerativeClustering:
 
         return (best_i, best_j) if best_i != -1 else None
 
-    def _compute_cluster_distance(
-        self, c1: ClusterNode, c2: ClusterNode, linkage: str
-    ) -> float:
+    def _compute_cluster_distance(self, c1: ClusterNode, c2: ClusterNode, linkage: str) -> float:
         if linkage == LinkageMethod.SINGLE:
             return self._single_linkage(c1, c2)
         elif linkage == LinkageMethod.COMPLETE:

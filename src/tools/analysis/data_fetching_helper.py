@@ -18,7 +18,14 @@ DEFAULT_SIZE = 1000
 MAX_SIZE_LIMIT = 10000
 
 NUMBER_FIELD_TYPES = {
-    'byte', 'short', 'integer', 'long', 'float', 'double', 'half_float', 'scaled_float'
+    'byte',
+    'short',
+    'integer',
+    'long',
+    'float',
+    'double',
+    'half_float',
+    'scaled_float',
 }
 
 
@@ -123,9 +130,7 @@ async def get_field_types(client: AsyncOpenSearch, index: str) -> Dict[str, str]
     return field_types
 
 
-def _extract_field_types(
-    properties: Dict[str, Any], prefix: str, field_types: Dict[str, str]
-):
+def _extract_field_types(properties: Dict[str, Any], prefix: str, field_types: Dict[str, str]):
     for field_name, field_props in properties.items():
         full_name = f'{prefix}.{field_name}' if prefix else field_name
 
@@ -177,9 +182,7 @@ async def fetch_index_data_dsl(
     return data
 
 
-async def execute_ppl_query(
-    client: AsyncOpenSearch, ppl: str
-) -> Dict[str, Any]:
+async def execute_ppl_query(client: AsyncOpenSearch, ppl: str) -> Dict[str, Any]:
     """Execute a PPL query and return the raw response."""
     response = await client.transport.perform_request(
         'POST',
@@ -190,9 +193,7 @@ async def execute_ppl_query(
     return response
 
 
-async def execute_ppl_and_parse_docs(
-    client: AsyncOpenSearch, ppl: str
-) -> List[Dict[str, Any]]:
+async def execute_ppl_and_parse_docs(client: AsyncOpenSearch, ppl: str) -> List[Dict[str, Any]]:
     """Execute PPL query and parse result into list of documents."""
     response = await execute_ppl_query(client, ppl)
 
@@ -221,9 +222,7 @@ async def execute_ppl_and_parse_docs(
     return documents
 
 
-async def execute_ppl_and_parse_datarows(
-    client: AsyncOpenSearch, ppl: str
-) -> List[List[Any]]:
+async def execute_ppl_and_parse_datarows(client: AsyncOpenSearch, ppl: str) -> List[List[Any]]:
     """Execute PPL query and return raw datarows."""
     response = await execute_ppl_query(client, ppl)
 

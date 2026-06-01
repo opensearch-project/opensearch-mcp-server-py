@@ -24,13 +24,15 @@ async def execute_metric_change_analysis(
     client, params: AnalysisParameters, top_n: int = DEFAULT_TOP_N
 ) -> dict:
     """Compare percentile distributions (P50, P90) of numeric fields between two time ranges."""
-    logger.debug("Starting metric change analysis with parameters: index=%s", params.index)
+    logger.debug('Starting metric change analysis with parameters: index=%s', params.index)
 
     field_types = await get_field_types(client, params.index)
     number_fields = get_number_fields(field_types)
 
     if not number_fields:
-        raise RuntimeError("No numeric fields found in index. Percentile analysis requires numeric fields.")
+        raise RuntimeError(
+            'No numeric fields found in index. Percentile analysis requires numeric fields.'
+        )
 
     selection_data = await fetch_index_data_dsl(
         client, params.selection_time_range_start, params.selection_time_range_end, params
@@ -68,12 +70,14 @@ def _calculate_metric_change_analysis(
         baseline_stats = _calculate_percentiles(baseline_values)
         variance = _calculate_percentile_variance(selection_stats, baseline_stats)
 
-        analyses.append({
-            'field': field,
-            'variance': variance,
-            'selection_stats': selection_stats,
-            'baseline_stats': baseline_stats,
-        })
+        analyses.append(
+            {
+                'field': field,
+                'variance': variance,
+                'selection_stats': selection_stats,
+                'baseline_stats': baseline_stats,
+            }
+        )
 
     analyses.sort(key=lambda a: a['variance'], reverse=True)
     return analyses
@@ -136,8 +140,9 @@ def _calculate_percentile_variance(
     if not p50_valid and not p90_valid:
         return 0.0
     if p50_valid and p90_valid:
-        return 0.5 * _safe_log_ratio(selection_stats['p50'], baseline_stats['p50']) + \
-               0.5 * _safe_log_ratio(selection_stats['p90'], baseline_stats['p90'])
+        return 0.5 * _safe_log_ratio(
+            selection_stats['p50'], baseline_stats['p50']
+        ) + 0.5 * _safe_log_ratio(selection_stats['p90'], baseline_stats['p90'])
     if p50_valid:
         return _safe_log_ratio(selection_stats['p50'], baseline_stats['p50'])
     return _safe_log_ratio(selection_stats['p90'], baseline_stats['p90'])
@@ -161,14 +166,16 @@ def _format_results(analyses: List[Dict], top_n: int) -> List[Dict]:
     for analysis in analyses[:top_n]:
         sel = analysis['selection_stats']
         base = analysis['baseline_stats']
-        results.append({
-            'field': analysis['field'],
-            'changeScore': analysis['variance'],
-            'selectionPercentiles': {'p50': sel['p50'], 'p90': sel['p90']},
-            'baselinePercentiles': {'p50': base['p50'], 'p90': base['p90']},
-            'logRatios': {
-                'p50': _safe_log_ratio(sel['p50'], base['p50']),
-                'p90': _safe_log_ratio(sel['p90'], base['p90']),
-            },
-        })
+        results.append(
+            {
+                'field': analysis['field'],
+                'changeScore': analysis['variance'],
+                'selectionPercentiles': {'p50': sel['p50'], 'p90': sel['p90']},
+                'baselinePercentiles': {'p50': base['p50'], 'p90': base['p90']},
+                'logRatios': {
+                    'p50': _safe_log_ratio(sel['p50'], base['p50']),
+                    'p90': _safe_log_ratio(sel['p90'], base['p90']),
+                },
+            }
+        )
     return results

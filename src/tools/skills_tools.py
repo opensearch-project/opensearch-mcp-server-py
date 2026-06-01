@@ -35,15 +35,21 @@ class DataDistributionToolArgs(baseToolArgs):
         default='', description='Additional DSL filter clauses as JSON array of strings'
     )
     dsl: str = Field(default='', description='Complete DSL query as JSON string')
-    ppl: str = Field(default='', description='PPL query without time filtering (added automatically)')
+    ppl: str = Field(
+        default='', description='PPL query without time filtering (added automatically)'
+    )
 
 
 class MetricChangeAnalysisToolArgs(baseToolArgs):
     """Arguments for the MetricChangeAnalysisTool."""
 
     index: str = Field(description='Target OpenSearch index name')
-    selectionTimeRangeStart: str = Field(description='Start of target period (format: yyyy-MM-dd HH:mm:ss)')
-    selectionTimeRangeEnd: str = Field(description='End of target period (format: yyyy-MM-dd HH:mm:ss)')
+    selectionTimeRangeStart: str = Field(
+        description='Start of target period (format: yyyy-MM-dd HH:mm:ss)'
+    )
+    selectionTimeRangeEnd: str = Field(
+        description='End of target period (format: yyyy-MM-dd HH:mm:ss)'
+    )
     timeField: str = Field(description='Date/time field for filtering')
     baselineTimeRangeStart: str = Field(
         description='Start of baseline period (format: yyyy-MM-dd HH:mm:ss)'
@@ -51,14 +57,22 @@ class MetricChangeAnalysisToolArgs(baseToolArgs):
     baselineTimeRangeEnd: str = Field(
         description='End of baseline period (format: yyyy-MM-dd HH:mm:ss). Should be at or before selectionTimeRangeStart'
     )
-    size: int = Field(default=1000, description='Maximum number of documents to analyze (default: 1000, max: 10000)')
-    topN: int = Field(default=10, description='Number of top fields to return, ranked by change score (default: 10)')
-    queryType: str = Field(default='dsl', description="Query type: 'ppl' or 'dsl' (default: 'dsl')")
-    filter: str = Field(
-        default='', description='Additional DSL query conditions (optional)'
+    size: int = Field(
+        default=1000,
+        description='Maximum number of documents to analyze (default: 1000, max: 10000)',
     )
+    topN: int = Field(
+        default=10,
+        description='Number of top fields to return, ranked by change score (default: 10)',
+    )
+    queryType: str = Field(
+        default='dsl', description="Query type: 'ppl' or 'dsl' (default: 'dsl')"
+    )
+    filter: str = Field(default='', description='Additional DSL query conditions (optional)')
     dsl: str = Field(default='', description='Complete raw DSL query as JSON string (optional)')
-    ppl: str = Field(default='', description='Complete PPL statement without time information (optional)')
+    ppl: str = Field(
+        default='', description='Complete PPL statement without time information (optional)'
+    )
 
 
 class LogPatternAnalysisToolArgs(baseToolArgs):
@@ -80,26 +94,28 @@ class LogPatternAnalysisToolArgs(baseToolArgs):
     )
     filter: str = Field(
         default='',
-        description="PPL boolean expression to filter logs (e.g. serviceName='ts-auth-service')"
+        description="PPL boolean expression to filter logs (e.g. serviceName='ts-auth-service')",
     )
 
 
 async def data_distribution_tool(args: DataDistributionToolArgs) -> list[dict]:
     """Analyze data distribution over time ranges."""
     try:
-        params = AnalysisParameters({
-            'index': args.index,
-            'timeField': args.timeField,
-            'selectionTimeRangeStart': args.selectionTimeRangeStart,
-            'selectionTimeRangeEnd': args.selectionTimeRangeEnd,
-            'baselineTimeRangeStart': args.baselineTimeRangeStart,
-            'baselineTimeRangeEnd': args.baselineTimeRangeEnd,
-            'size': str(args.size),
-            'queryType': args.queryType,
-            'filter': args.filter,
-            'dsl': args.dsl,
-            'ppl': args.ppl,
-        })
+        params = AnalysisParameters(
+            {
+                'index': args.index,
+                'timeField': args.timeField,
+                'selectionTimeRangeStart': args.selectionTimeRangeStart,
+                'selectionTimeRangeEnd': args.selectionTimeRangeEnd,
+                'baselineTimeRangeStart': args.baselineTimeRangeStart,
+                'baselineTimeRangeEnd': args.baselineTimeRangeEnd,
+                'size': str(args.size),
+                'queryType': args.queryType,
+                'filter': args.filter,
+                'dsl': args.dsl,
+                'ppl': args.ppl,
+            }
+        )
         params.validate()
 
         async with get_opensearch_client(args) as client:
@@ -124,19 +140,21 @@ async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> lis
                 'Missing required parameters: baselineTimeRangeStart, baselineTimeRangeEnd'
             )
 
-        params = AnalysisParameters({
-            'index': args.index,
-            'timeField': args.timeField,
-            'selectionTimeRangeStart': args.selectionTimeRangeStart,
-            'selectionTimeRangeEnd': args.selectionTimeRangeEnd,
-            'baselineTimeRangeStart': args.baselineTimeRangeStart,
-            'baselineTimeRangeEnd': args.baselineTimeRangeEnd,
-            'size': str(args.size),
-            'queryType': args.queryType,
-            'filter': args.filter,
-            'dsl': args.dsl,
-            'ppl': args.ppl,
-        })
+        params = AnalysisParameters(
+            {
+                'index': args.index,
+                'timeField': args.timeField,
+                'selectionTimeRangeStart': args.selectionTimeRangeStart,
+                'selectionTimeRangeEnd': args.selectionTimeRangeEnd,
+                'baselineTimeRangeStart': args.baselineTimeRangeStart,
+                'baselineTimeRangeEnd': args.baselineTimeRangeEnd,
+                'size': str(args.size),
+                'queryType': args.queryType,
+                'filter': args.filter,
+                'dsl': args.dsl,
+                'ppl': args.ppl,
+            }
+        )
         params.validate()
 
         top_n = args.topN if args.topN > 0 else 10
@@ -154,7 +172,12 @@ async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> lis
 async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[dict]:
     """Analyze log patterns in the specified index."""
     try:
-        if not args.index or not args.logFieldName or not args.selectionTimeRangeStart or not args.selectionTimeRangeEnd:
+        if (
+            not args.index
+            or not args.logFieldName
+            or not args.selectionTimeRangeStart
+            or not args.selectionTimeRangeEnd
+        ):
             raise ValueError(
                 'Missing required parameters: index, logFieldName, selectionTimeRangeStart, selectionTimeRangeEnd'
             )

@@ -21,13 +21,47 @@ MAX_LOG_SAMPLE_SIZE = 10000
 REPEATED_WILDCARDS_PATTERN = re.compile(r'(<\*>)(\s+<\*>)+')
 
 ERROR_KEYWORDS = {
-    'error', 'err', 'exception', 'failed', 'failure', 'timeout', 'panic',
-    'fatal', 'critical', 'severe', 'abort', 'aborted', 'aborting', 'crash',
-    'crashed', 'broken', 'corrupt', 'corrupted', 'invalid', 'malformed',
-    'unprocessable', 'denied', 'forbidden', 'unauthorized', 'conflict',
-    'deadlock', 'overflow', 'underflow', 'throttled', 'disk_full',
-    'insufficient', 'retrying', 'backpressure', 'degraded', 'unexpected',
-    'unusual', 'missing', 'stale', 'expired', 'mismatch', 'violation',
+    'error',
+    'err',
+    'exception',
+    'failed',
+    'failure',
+    'timeout',
+    'panic',
+    'fatal',
+    'critical',
+    'severe',
+    'abort',
+    'aborted',
+    'aborting',
+    'crash',
+    'crashed',
+    'broken',
+    'corrupt',
+    'corrupted',
+    'invalid',
+    'malformed',
+    'unprocessable',
+    'denied',
+    'forbidden',
+    'unauthorized',
+    'conflict',
+    'deadlock',
+    'overflow',
+    'underflow',
+    'throttled',
+    'disk_full',
+    'insufficient',
+    'retrying',
+    'backpressure',
+    'degraded',
+    'unexpected',
+    'unusual',
+    'missing',
+    'stale',
+    'expired',
+    'mismatch',
+    'violation',
 }
 
 
@@ -44,31 +78,48 @@ async def execute_log_pattern_analysis(
     filter_expr: str,
 ) -> dict:
     """Main entry point: dispatches to sequence analysis, pattern diff, or log insight."""
-    logger.debug("Starting log pattern analysis with parameters: index=%s", index)
+    logger.debug('Starting log pattern analysis with parameters: index=%s', index)
     has_base_time = bool(base_time_range_start) and bool(base_time_range_end)
     has_trace_field = bool(trace_field_name)
 
     if has_trace_field and has_base_time:
         if filter_expr:
-            logger.warning("Filter parameter is ignored for sequence analysis mode as it requires all logs within a trace")
-        logger.debug("Performing log sequence analysis for index: %s", index)
+            logger.warning(
+                'Filter parameter is ignored for sequence analysis mode as it requires all logs within a trace'
+            )
+        logger.debug('Performing log sequence analysis for index: %s', index)
         return await _log_sequence_analysis(
-            client, index, time_field, log_field_name, trace_field_name,
-            base_time_range_start, base_time_range_end,
-            selection_time_range_start, selection_time_range_end,
+            client,
+            index,
+            time_field,
+            log_field_name,
+            trace_field_name,
+            base_time_range_start,
+            base_time_range_end,
+            selection_time_range_start,
+            selection_time_range_end,
         )
     elif has_base_time:
-        logger.debug("Performing log pattern analysis for index: %s", index)
+        logger.debug('Performing log pattern analysis for index: %s', index)
         return await _log_pattern_diff_analysis(
-            client, index, time_field, log_field_name,
-            base_time_range_start, base_time_range_end,
-            selection_time_range_start, selection_time_range_end,
+            client,
+            index,
+            time_field,
+            log_field_name,
+            base_time_range_start,
+            base_time_range_end,
+            selection_time_range_start,
+            selection_time_range_end,
             filter_expr,
         )
     else:
         return await _log_insight(
-            client, index, time_field, log_field_name,
-            selection_time_range_start, selection_time_range_end,
+            client,
+            index,
+            time_field,
+            log_field_name,
+            selection_time_range_start,
+            selection_time_range_end,
             filter_expr,
         )
 
@@ -77,18 +128,31 @@ async def execute_log_pattern_analysis(
 # Sequence Analysis
 # ==============================================================================
 
+
 async def _log_sequence_analysis(
-    client, index: str, time_field: str, log_field_name: str, trace_field_name: str,
-    base_start: str, base_end: str, selection_start: str, selection_end: str,
+    client,
+    index: str,
+    time_field: str,
+    log_field_name: str,
+    trace_field_name: str,
+    base_start: str,
+    base_end: str,
+    selection_start: str,
+    selection_end: str,
 ) -> dict:
     """Identify exceptional trace sequences by comparing selection vs baseline."""
     selection_ppl = _build_log_pattern_ppl_with_trace(
-        index, time_field, log_field_name, trace_field_name,
-        selection_start, selection_end, '',
+        index,
+        time_field,
+        log_field_name,
+        trace_field_name,
+        selection_start,
+        selection_end,
+        '',
     )
     selection_result = await _execute_sequence_ppl(client, selection_ppl)
     logger.debug(
-        "Selection time range analysis completed, found %d traces",
+        'Selection time range analysis completed, found %d traces',
         len(selection_result['trace_pattern_map']),
     )
 
@@ -96,12 +160,17 @@ async def _log_sequence_analysis(
         return {'BASE': {}, 'EXCEPTIONAL': {}}
 
     base_ppl = _build_log_pattern_ppl_with_trace(
-        index, time_field, log_field_name, trace_field_name,
-        base_start, base_end, '',
+        index,
+        time_field,
+        log_field_name,
+        trace_field_name,
+        base_start,
+        base_end,
+        '',
     )
     base_result = await _execute_sequence_ppl(client, base_ppl)
     logger.debug(
-        "Base time range analysis completed, found %d traces",
+        'Base time range analysis completed, found %d traces',
         len(base_result['trace_pattern_map']),
     )
 
@@ -144,7 +213,9 @@ async def _execute_sequence_ppl(client, ppl: str) -> dict:
     }
 
 
-def _vectorize_pattern(pattern_count_map: Dict[str, Set[str]], total_trace_count: int) -> Dict[str, float]:
+def _vectorize_pattern(
+    pattern_count_map: Dict[str, Set[str]], total_trace_count: int
+) -> Dict[str, float]:
     """Compute IDF-based weights: weight = sigmoid(log(total_traces / doc_freq))."""
     pattern_values: Dict[str, float] = {}
     for pattern, trace_ids in pattern_count_map.items():
@@ -161,10 +232,12 @@ def _vectorize_pattern(pattern_count_map: Dict[str, Set[str]], total_trace_count
 
 def _generate_sequence_comparison_result(base_result: dict, selection_result: dict) -> dict:
     """Build vectors, cluster, and filter to find exceptional selection traces."""
-    all_patterns = set(base_result['pattern_count_map'].keys()) | set(selection_result['pattern_count_map'].keys())
+    all_patterns = set(base_result['pattern_count_map'].keys()) | set(
+        selection_result['pattern_count_map'].keys()
+    )
     sorted_patterns = sorted(all_patterns)
     pattern_index_map = {p: i for i, p in enumerate(sorted_patterns)}
-    logger.debug("vector dimension is %d", len(sorted_patterns))
+    logger.debug('vector dimension is %d', len(sorted_patterns))
 
     base_vector_map = _build_vector_map(
         base_result['trace_pattern_map'],
@@ -174,7 +247,9 @@ def _generate_sequence_comparison_result(base_result: dict, selection_result: di
     )
 
     clustering_helper = ClusteringHelper(LOG_VECTORS_CLUSTERING_THRESHOLD)
-    base_representative = clustering_helper.cluster_log_vectors_and_get_representative(base_vector_map)
+    base_representative = clustering_helper.cluster_log_vectors_and_get_representative(
+        base_vector_map
+    )
 
     selection_vector_map = _build_vector_map(
         selection_result['trace_pattern_map'],
@@ -193,13 +268,16 @@ def _generate_sequence_comparison_result(base_result: dict, selection_result: di
         base_representative, selection_representative, base_vector_map, selection_vector_map
     )
     logger.info(
-        "Identified %d traceNeedToExamine centroids from %d candidates",
-        len(trace_need_to_examine), len(selection_representative),
+        'Identified %d traceNeedToExamine centroids from %d candidates',
+        len(trace_need_to_examine),
+        len(selection_representative),
     )
 
     return _build_final_result(
-        base_representative, trace_need_to_examine,
-        base_result['trace_pattern_map'], selection_result['trace_pattern_map'],
+        base_representative,
+        trace_need_to_examine,
+        base_result['trace_pattern_map'],
+        selection_result['trace_pattern_map'],
     )
 
 
@@ -210,7 +288,7 @@ def _build_vector_map(
     is_selection: bool = False,
     base_pattern_count_map: Optional[Dict[str, Set[str]]] = None,
     selection_pattern_count_map: Optional[Dict[str, Set[str]]] = None,
-) -> Dict[str, List[float]]: # <traceid, vector>
+) -> Dict[str, List[float]]:  # <traceid, vector>
     """Build a weighted vector per trace. Selection vectors get extra weight for novel patterns."""
     dimension = len(pattern_index_map)
     vector_map: Dict[str, List[float]] = {}
@@ -221,7 +299,11 @@ def _build_vector_map(
             index = pattern_index_map.get(pattern)
             if index is not None:
                 base_value = 0.5 * pattern_weights.get(pattern, 0.0)
-                if is_selection and base_pattern_count_map is not None and selection_pattern_count_map is not None:
+                if (
+                    is_selection
+                    and base_pattern_count_map is not None
+                    and selection_pattern_count_map is not None
+                ):
                     # pattern in selection and not in baseline
                     existence_weight = 0 if pattern in base_pattern_count_map else 1
                     vector[index] = base_value + 0.5 * existence_weight
@@ -243,7 +325,7 @@ def _filter_selection_centroids(
     for candidate in selection_candidates:
         candidate_vector = selection_vector_map.get(candidate)
         if candidate_vector is None:
-            logger.warning("No vector found for selection candidate: %s", candidate)
+            logger.warning('No vector found for selection candidate: %s', candidate)
             continue
 
         is_exceptional = True
@@ -288,16 +370,23 @@ def _build_final_result(
 # Pattern Diff Analysis
 # ==============================================================================
 
+
 async def _log_pattern_diff_analysis(
-    client, index: str, time_field: str, log_field_name: str,
-    base_start: str, base_end: str, selection_start: str, selection_end: str,
+    client,
+    index: str,
+    time_field: str,
+    log_field_name: str,
+    base_start: str,
+    base_end: str,
+    selection_start: str,
+    selection_end: str,
     filter_expr: str,
 ) -> dict:
     """Compare pattern frequencies between baseline and selection, return top by lift."""
     base_ppl = _build_log_pattern_ppl_aggregation(
         index, time_field, log_field_name, base_start, base_end, filter_expr
     )
-    logger.debug("Executing base time range pattern PPL: %s", base_ppl)
+    logger.debug('Executing base time range pattern PPL: %s', base_ppl)
     base_datarows = await execute_ppl_and_parse_datarows(client, base_ppl)
     base_patterns: Dict[str, float] = {}
     for row in base_datarows:
@@ -306,12 +395,12 @@ async def _log_pattern_diff_analysis(
             count = float(row[0])
             base_patterns[pattern] = count
     _merge_similar_patterns(base_patterns)
-    logger.debug("Base patterns processed: %d patterns", len(base_patterns))
+    logger.debug('Base patterns processed: %d patterns', len(base_patterns))
 
     selection_ppl = _build_log_pattern_ppl_aggregation(
         index, time_field, log_field_name, selection_start, selection_end, filter_expr
     )
-    logger.debug("Executing selection time range pattern PPL: %s", selection_ppl)
+    logger.debug('Executing selection time range pattern PPL: %s', selection_ppl)
     selection_datarows = await execute_ppl_and_parse_datarows(client, selection_ppl)
     selection_patterns: Dict[str, float] = {}
     for row in selection_datarows:
@@ -320,10 +409,10 @@ async def _log_pattern_diff_analysis(
             count = float(row[0])
             selection_patterns[pattern] = count
     _merge_similar_patterns(selection_patterns)
-    logger.debug("Selection patterns processed: %d patterns", len(selection_patterns))
+    logger.debug('Selection patterns processed: %d patterns', len(selection_patterns))
 
     differences = _calculate_pattern_differences(base_patterns, selection_patterns)
-    logger.debug("Pattern analysis completed: %d differences found", len(differences))
+    logger.debug('Pattern analysis completed: %d differences found', len(differences))
 
     with_lift = sorted(
         [d for d in differences if d['lift'] is not None],
@@ -343,32 +432,40 @@ async def _log_pattern_diff_analysis(
 # Log Insight
 # ==============================================================================
 
+
 async def _log_insight(
-    client, index: str, time_field: str, log_field_name: str,
-    selection_start: str, selection_end: str, filter_expr: str,
+    client,
+    index: str,
+    time_field: str,
+    log_field_name: str,
+    selection_start: str,
+    selection_end: str,
+    filter_expr: str,
 ) -> dict:
     """Find top error/warning patterns with sample logs in the selection time range."""
-    filter_clause = f" | where {filter_expr}" if filter_expr else ''
+    filter_clause = f' | where {filter_expr}' if filter_expr else ''
     error_keywords_str = ' '.join(ERROR_KEYWORDS)
 
     ppl = (
         f"source={index} | where {time_field}>'{selection_start}' and {time_field}<'{selection_end}'"
-        f"{filter_clause}"
+        f'{filter_clause}'
         f" | where match({log_field_name}, '{error_keywords_str}') | head {MAX_LOG_SAMPLE_SIZE}"
-        f" | fields {log_field_name} | patterns {log_field_name} method=brain"
-        f" mode=aggregation max_sample_count=5 variable_count_threshold=3"
-        f" | fields patterns_field, pattern_count, sample_logs | sort -pattern_count | head 5"
+        f' | fields {log_field_name} | patterns {log_field_name} method=brain'
+        f' mode=aggregation max_sample_count=5 variable_count_threshold=3'
+        f' | fields patterns_field, pattern_count, sample_logs | sort -pattern_count | head 5'
     )
 
     datarows = await execute_ppl_and_parse_datarows(client, ppl)
     log_insights = []
     for row in datarows:
         if len(row) == 3:
-            log_insights.append({
-                'pattern': row[0],
-                'count': row[1],
-                'sampleLogs': row[2],
-            })
+            log_insights.append(
+                {
+                    'pattern': row[0],
+                    'count': row[1],
+                    'sampleLogs': row[2],
+                }
+            )
 
     return {'logInsights': log_insights}
 
@@ -377,31 +474,41 @@ async def _log_insight(
 # Helpers
 # ==============================================================================
 
+
 def _build_log_pattern_ppl_with_trace(
-    index: str, time_field: str, log_field_name: str, trace_field_name: str,
-    start_time: str, end_time: str, filter_expr: str,
+    index: str,
+    time_field: str,
+    log_field_name: str,
+    trace_field_name: str,
+    start_time: str,
+    end_time: str,
+    filter_expr: str,
 ) -> str:
     """Build PPL for sequence analysis: patterns grouped by trace, sorted by time."""
-    filter_clause = f" | where {filter_expr}" if filter_expr else ''
+    filter_clause = f' | where {filter_expr}' if filter_expr else ''
     return (
         f"source={index} | where {trace_field_name}!='' "
         f"| where {time_field}>'{start_time}' and {time_field}<'{end_time}'{filter_clause} "
-        f"| fields {trace_field_name}, {log_field_name}, {time_field} "
-        f"| patterns {log_field_name} method=brain variable_count_threshold=3 "
-        f"| fields {trace_field_name}, patterns_field, {time_field} | sort {time_field}"
+        f'| fields {trace_field_name}, {log_field_name}, {time_field} '
+        f'| patterns {log_field_name} method=brain variable_count_threshold=3 '
+        f'| fields {trace_field_name}, patterns_field, {time_field} | sort {time_field}'
     )
 
 
 def _build_log_pattern_ppl_aggregation(
-    index: str, time_field: str, log_field_name: str,
-    start_time: str, end_time: str, filter_expr: str,
+    index: str,
+    time_field: str,
+    log_field_name: str,
+    start_time: str,
+    end_time: str,
+    filter_expr: str,
 ) -> str:
     """Build PPL for pattern diff: aggregate patterns with counts."""
-    filter_clause = f" | where {filter_expr}" if filter_expr else ''
+    filter_clause = f' | where {filter_expr}' if filter_expr else ''
     return (
         f"source={index} | where {time_field}>'{start_time}' and {time_field}<'{end_time}'{filter_clause} "
-        f"| fields {log_field_name} | patterns {log_field_name} method=brain mode=aggregation variable_count_threshold=3 "
-        f"| fields pattern_count, patterns_field"
+        f'| fields {log_field_name} | patterns {log_field_name} method=brain mode=aggregation variable_count_threshold=3 '
+        f'| fields pattern_count, patterns_field'
     )
 
 
@@ -457,7 +564,7 @@ def _merge_similar_patterns(pattern_map: Dict[str, float]):
         count = pattern_map.pop(original)
         pattern_map[processed] = pattern_map.get(processed, 0.0) + count
 
-    logger.debug("Pattern merging completed: %d patterns remaining", len(pattern_map))
+    logger.debug('Pattern merging completed: %d patterns remaining', len(pattern_map))
 
 
 def _calculate_pattern_differences(
@@ -480,19 +587,25 @@ def _calculate_pattern_differences(
             if lift < 1:
                 lift = 1.0 / lift
             if lift > LOG_PATTERN_LIFT:
-                differences.append({
-                    'pattern': pattern,
-                    'base': base_count / base_total,
-                    'selection': selection_count / selection_total,
-                    'lift': lift,
-                })
+                differences.append(
+                    {
+                        'pattern': pattern,
+                        'base': base_count / base_total,
+                        'selection': selection_count / selection_total,
+                        'lift': lift,
+                    }
+                )
         else:
-            differences.append({
-                'pattern': pattern,
-                'base': 0.0,
-                'selection': selection_count / selection_total,
-                'lift': None,
-            })
-            logger.debug("New selection pattern detected: %s (count: %s)", pattern, selection_count)
+            differences.append(
+                {
+                    'pattern': pattern,
+                    'base': 0.0,
+                    'selection': selection_count / selection_total,
+                    'lift': None,
+                }
+            )
+            logger.debug(
+                'New selection pattern detected: %s (count: %s)', pattern, selection_count
+            )
 
     return differences

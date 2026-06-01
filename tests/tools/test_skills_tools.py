@@ -50,29 +50,33 @@ class TestSkillsTools:
     async def test_data_distribution_tool_single_analysis(self):
         """Test data_distribution_tool single dataset analysis (no baseline)."""
         # Mock search response
-        self.mock_client.search = AsyncMock(return_value={
-            'hits': {
-                'hits': [
-                    {'_source': {'status': 'error', 'level': 'high'}},
-                    {'_source': {'status': 'ok', 'level': 'low'}},
-                    {'_source': {'status': 'error', 'level': 'high'}},
-                    {'_source': {'status': 'ok', 'level': 'medium'}},
-                ]
+        self.mock_client.search = AsyncMock(
+            return_value={
+                'hits': {
+                    'hits': [
+                        {'_source': {'status': 'error', 'level': 'high'}},
+                        {'_source': {'status': 'ok', 'level': 'low'}},
+                        {'_source': {'status': 'error', 'level': 'high'}},
+                        {'_source': {'status': 'ok', 'level': 'medium'}},
+                    ]
+                }
             }
-        })
+        )
         # Mock mappings response
         self.mock_client.indices = Mock()
-        self.mock_client.indices.get_mapping = AsyncMock(return_value={
-            'test-index': {
-                'mappings': {
-                    'properties': {
-                        'status': {'type': 'keyword'},
-                        'level': {'type': 'keyword'},
-                        '@timestamp': {'type': 'date'},
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'status': {'type': 'keyword'},
+                            'level': {'type': 'keyword'},
+                            '@timestamp': {'type': 'date'},
+                        }
                     }
                 }
             }
-        })
+        )
 
         args = self.DataDistributionToolArgs(
             index='test-index',
@@ -119,16 +123,18 @@ class TestSkillsTools:
 
         self.mock_client.search = AsyncMock(side_effect=mock_search)
         self.mock_client.indices = Mock()
-        self.mock_client.indices.get_mapping = AsyncMock(return_value={
-            'test-index': {
-                'mappings': {
-                    'properties': {
-                        'status': {'type': 'keyword'},
-                        '@timestamp': {'type': 'date'},
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'status': {'type': 'keyword'},
+                            '@timestamp': {'type': 'date'},
+                        }
                     }
                 }
             }
-        })
+        )
 
         args = self.DataDistributionToolArgs(
             index='test-index',
@@ -171,17 +177,19 @@ class TestSkillsTools:
     async def test_log_pattern_analysis_tool_insight_mode(self):
         """Test log_pattern_analysis_tool in insight mode (no baseline)."""
         self.mock_client.transport = Mock()
-        self.mock_client.transport.perform_request = AsyncMock(return_value={
-            'schema': [
-                {'name': 'patterns_field'},
-                {'name': 'pattern_count'},
-                {'name': 'sample_logs'},
-            ],
-            'datarows': [
-                ['ERROR <*> failed', 5, ['ERROR connection failed', 'ERROR auth failed']],
-                ['WARN <*> timeout', 3, ['WARN request timeout']],
-            ],
-        })
+        self.mock_client.transport.perform_request = AsyncMock(
+            return_value={
+                'schema': [
+                    {'name': 'patterns_field'},
+                    {'name': 'pattern_count'},
+                    {'name': 'sample_logs'},
+                ],
+                'datarows': [
+                    ['ERROR <*> failed', 5, ['ERROR connection failed', 'ERROR auth failed']],
+                    ['WARN <*> timeout', 3, ['WARN request timeout']],
+                ],
+            }
+        )
 
         args = self.LogPatternAnalysisToolArgs(
             index='logs-index',
@@ -245,7 +253,11 @@ class TestSkillsTools:
             if call_count[0] == 1:
                 # Selection result
                 return {
-                    'schema': [{'name': 'traceId'}, {'name': 'patterns_field'}, {'name': '@timestamp'}],
+                    'schema': [
+                        {'name': 'traceId'},
+                        {'name': 'patterns_field'},
+                        {'name': '@timestamp'},
+                    ],
                     'datarows': [
                         ['trace-1', 'GET <*> /api', '2023-01-01 01:00:00'],
                         ['trace-1', 'ERROR <*> timeout', '2023-01-01 01:01:00'],
@@ -255,7 +267,11 @@ class TestSkillsTools:
             else:
                 # Base result
                 return {
-                    'schema': [{'name': 'traceId'}, {'name': 'patterns_field'}, {'name': '@timestamp'}],
+                    'schema': [
+                        {'name': 'traceId'},
+                        {'name': 'patterns_field'},
+                        {'name': '@timestamp'},
+                    ],
                     'datarows': [
                         ['trace-3', 'GET <*> /api', '2022-12-01 01:00:00'],
                         ['trace-3', 'OK <*> response', '2022-12-01 01:01:00'],
@@ -345,17 +361,19 @@ class TestSkillsTools:
 
         self.mock_client.search = AsyncMock(side_effect=mock_search)
         self.mock_client.indices = Mock()
-        self.mock_client.indices.get_mapping = AsyncMock(return_value={
-            'test-index': {
-                'mappings': {
-                    'properties': {
-                        'responseTime': {'type': 'long'},
-                        'cpuUsage': {'type': 'float'},
-                        '@timestamp': {'type': 'date'},
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'responseTime': {'type': 'long'},
+                            'cpuUsage': {'type': 'float'},
+                            '@timestamp': {'type': 'date'},
+                        }
                     }
                 }
             }
-        })
+        )
 
         args = self.MetricChangeAnalysisToolArgs(
             index='test-index',
@@ -377,23 +395,25 @@ class TestSkillsTools:
         assert 'selectionPercentiles' in result[0]['text']
         assert 'baselinePercentiles' in result[0]['text']
         assert 'logRatios' in result[0]['text']
-        print("\n=== MetricChangeAnalysisTool basic result ===")
+        print('\n=== MetricChangeAnalysisTool basic result ===')
         print(result[0]['text'])
 
     @pytest.mark.asyncio
     async def test_metric_change_analysis_tool_no_numeric_fields(self):
         """Test metric_change_analysis_tool when no numeric fields exist."""
         self.mock_client.indices = Mock()
-        self.mock_client.indices.get_mapping = AsyncMock(return_value={
-            'test-index': {
-                'mappings': {
-                    'properties': {
-                        'status': {'type': 'keyword'},
-                        '@timestamp': {'type': 'date'},
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'status': {'type': 'keyword'},
+                            '@timestamp': {'type': 'date'},
+                        }
                     }
                 }
             }
-        })
+        )
 
         args = self.MetricChangeAnalysisToolArgs(
             index='test-index',
@@ -410,7 +430,7 @@ class TestSkillsTools:
         assert len(result) == 1
         assert 'Error' in result[0]['text']
         assert 'numeric fields' in result[0]['text']
-        print("\n=== MetricChangeAnalysisTool no numeric fields ===")
+        print('\n=== MetricChangeAnalysisTool no numeric fields ===')
         print(result[0]['text'])
 
     @pytest.mark.asyncio
@@ -418,16 +438,18 @@ class TestSkillsTools:
         """Test metric_change_analysis_tool when no data found."""
         self.mock_client.search = AsyncMock(return_value={'hits': {'hits': []}})
         self.mock_client.indices = Mock()
-        self.mock_client.indices.get_mapping = AsyncMock(return_value={
-            'test-index': {
-                'mappings': {
-                    'properties': {
-                        'responseTime': {'type': 'long'},
-                        '@timestamp': {'type': 'date'},
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'responseTime': {'type': 'long'},
+                            '@timestamp': {'type': 'date'},
+                        }
                     }
                 }
             }
-        })
+        )
 
         args = self.MetricChangeAnalysisToolArgs(
             index='test-index',
@@ -444,7 +466,7 @@ class TestSkillsTools:
         assert len(result) == 1
         assert 'Error' in result[0]['text']
         assert 'No data found' in result[0]['text']
-        print("\n=== MetricChangeAnalysisTool no data ===")
+        print('\n=== MetricChangeAnalysisTool no data ===')
         print(result[0]['text'])
 
     @pytest.mark.asyncio
@@ -477,18 +499,20 @@ class TestSkillsTools:
 
         self.mock_client.search = AsyncMock(side_effect=mock_search)
         self.mock_client.indices = Mock()
-        self.mock_client.indices.get_mapping = AsyncMock(return_value={
-            'test-index': {
-                'mappings': {
-                    'properties': {
-                        'fieldA': {'type': 'long'},
-                        'fieldB': {'type': 'float'},
-                        'fieldC': {'type': 'integer'},
-                        '@timestamp': {'type': 'date'},
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'fieldA': {'type': 'long'},
+                            'fieldB': {'type': 'float'},
+                            'fieldC': {'type': 'integer'},
+                            '@timestamp': {'type': 'date'},
+                        }
                     }
                 }
             }
-        })
+        )
 
         args = self.MetricChangeAnalysisToolArgs(
             index='test-index',
@@ -505,7 +529,7 @@ class TestSkillsTools:
 
         assert len(result) == 1
         assert 'percentileAnalysis' in result[0]['text']
-        print("\n=== MetricChangeAnalysisTool with topN=2 ===")
+        print('\n=== MetricChangeAnalysisTool with topN=2 ===')
         print(result[0]['text'])
 
     def test_skills_tools_registry(self):
@@ -624,10 +648,12 @@ class TestMetricChangeAnalysisLogic:
 
     def test_safe_log_ratio_doubled(self):
         import math
+
         assert self._safe_log_ratio(200.0, 100.0) == pytest.approx(math.log(2.0))
 
     def test_safe_log_ratio_halved(self):
         import math
+
         assert self._safe_log_ratio(50.0, 100.0) == pytest.approx(math.log(2.0))
 
     def test_safe_log_ratio_baseline_zero(self):
@@ -642,6 +668,7 @@ class TestMetricChangeAnalysisLogic:
 
     def test_variance_large_change(self):
         import math
+
         selection = {'p50': 5000.0, 'p90': 7000.0}
         baseline = {'p50': 100.0, 'p90': 150.0}
         variance = self._calculate_percentile_variance(selection, baseline)
@@ -661,9 +688,24 @@ class TestMetricChangeAnalysisLogic:
 
     def test_format_results_respects_top_n(self):
         analyses = [
-            {'field': 'a', 'variance': 3.0, 'selection_stats': {'p50': 1.0, 'p90': 2.0}, 'baseline_stats': {'p50': 1.0, 'p90': 2.0}},
-            {'field': 'b', 'variance': 2.0, 'selection_stats': {'p50': 1.0, 'p90': 2.0}, 'baseline_stats': {'p50': 1.0, 'p90': 2.0}},
-            {'field': 'c', 'variance': 1.0, 'selection_stats': {'p50': 1.0, 'p90': 2.0}, 'baseline_stats': {'p50': 1.0, 'p90': 2.0}},
+            {
+                'field': 'a',
+                'variance': 3.0,
+                'selection_stats': {'p50': 1.0, 'p90': 2.0},
+                'baseline_stats': {'p50': 1.0, 'p90': 2.0},
+            },
+            {
+                'field': 'b',
+                'variance': 2.0,
+                'selection_stats': {'p50': 1.0, 'p90': 2.0},
+                'baseline_stats': {'p50': 1.0, 'p90': 2.0},
+            },
+            {
+                'field': 'c',
+                'variance': 1.0,
+                'selection_stats': {'p50': 1.0, 'p90': 2.0},
+                'baseline_stats': {'p50': 1.0, 'p90': 2.0},
+            },
         ]
         result = self._format_results(analyses, top_n=2)
         assert len(result) == 2
