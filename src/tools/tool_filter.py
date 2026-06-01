@@ -21,9 +21,6 @@ from opensearch.helper import get_opensearch_version
 # This is set during server initialization and used by individual tools
 _resolved_allow_write_setting = None
 
-# Global variable to store the resolved allow_write_categories setting
-_resolved_allow_write_categories = None
-
 
 def process_regex_patterns(regex_list, tool_names):
     """Process regex patterns and return matching tool names."""
@@ -47,36 +44,6 @@ def set_allow_write_setting(allow_write: bool) -> None:
     global _resolved_allow_write_setting
     _resolved_allow_write_setting = allow_write
     logging.debug(f'Set global allow_write setting to: {allow_write}')
-
-
-def set_allow_write_categories(categories: list) -> None:
-    """Set the global allow_write_categories setting.
-
-    When allow_write is false, tools belonging to these categories are still
-    permitted to perform write operations. This allows granular control over
-    which tool categories can write while keeping the global default restrictive.
-
-    Args:
-        categories: List of category names allowed to perform write operations
-    """
-    global _resolved_allow_write_categories
-    _resolved_allow_write_categories = categories
-    logging.debug(f'Set allow_write_categories to: {categories}')
-
-
-def get_allow_write_categories() -> list:
-    """Get the allow_write_categories setting.
-
-    Returns:
-        list: List of category names allowed to perform write operations, or empty list if not set
-    """
-    global _resolved_allow_write_categories
-    if _resolved_allow_write_categories is not None:
-        return _resolved_allow_write_categories
-    env_value = os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES', '')
-    if env_value:
-        return parse_comma_separated(env_value)
-    return []
 
 
 def get_allow_write_setting() -> bool:
@@ -131,34 +98,6 @@ def _resolve_allow_write_setting(config_file_path: str = None) -> bool:
             logging.debug(f'Could not load config file {config_file_path}: {e}')
 
     return allow_write
-
-
-def _resolve_allow_write_categories(config_file_path: str = None) -> list:
-    """Resolve the allow_write_categories setting from environment variable or config file.
-
-    Args:
-        config_file_path: Optional path to config file
-
-    Returns:
-        list: List of category names allowed to perform write operations
-    """
-    categories = parse_comma_separated(os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES', ''))
-
-    if config_file_path and os.path.exists(config_file_path):
-        try:
-            config = load_yaml_config(config_file_path)
-            if config:
-                tool_filters = config.get('tool_filters', {})
-                settings = tool_filters.get('settings', {})
-                if 'allow_write_categories' in settings:
-                    categories = settings.get('allow_write_categories', [])
-                    logging.debug(
-                        f'Using allow_write_categories from config file: {config_file_path}'
-                    )
-        except Exception as e:
-            logging.debug(f'Could not load config file {config_file_path}: {e}')
-
-    return categories
 
 
 def apply_write_filter(registry, exempt_tools=None):
@@ -491,10 +430,6 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     # This needs to be done in both single and multi mode
     resolved_allow_write = _resolve_allow_write_setting(config_file_path)
     set_allow_write_setting(resolved_allow_write)
-
-    # Resolve and set the global allow_write_categories setting
-    resolved_categories = _resolve_allow_write_categories(config_file_path)
-    set_allow_write_categories(resolved_categories)
 
     # In multi mode, always strip connection override fields — dynamic per-call
     # connection params are a single-mode feature. Multi mode uses

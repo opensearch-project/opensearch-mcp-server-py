@@ -883,64 +883,6 @@ class TestAllowWriteCategories:
         assert 'CreateQuerySetTool' in registry
         assert 'GenericOpenSearchApiTool' in registry
 
-    @patch.dict(
-        'os.environ',
-        {'OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES': 'search_relevance,agentic_memory'},
-    )
-    def test_get_allow_write_categories_from_env(self):
-        """get_allow_write_categories reads from environment variable."""
-        from tools.tool_filter import get_allow_write_categories, set_allow_write_categories
-
-        # Reset the global to force env fallback
-        set_allow_write_categories(None)
-        result = get_allow_write_categories()
-        assert result == ['search_relevance', 'agentic_memory']
-
-    def test_get_allow_write_categories_returns_empty_by_default(self):
-        """get_allow_write_categories returns empty list when nothing is configured."""
-        from tools.tool_filter import get_allow_write_categories, set_allow_write_categories
-
-        set_allow_write_categories(None)
-        result = get_allow_write_categories()
-        assert result == []
-
-    @patch('tools.tool_filter.load_yaml_config')
-    @patch('os.path.exists')
-    def test_resolve_allow_write_categories_from_config(self, mock_exists, mock_load_yaml):
-        """_resolve_allow_write_categories reads from config file."""
-        from tools.tool_filter import _resolve_allow_write_categories
-
-        mock_exists.return_value = True
-        mock_load_yaml.return_value = {
-            'tool_filters': {
-                'settings': {'allow_write_categories': ['search_relevance', 'agentic_memory']}
-            }
-        }
-
-        result = _resolve_allow_write_categories('/path/to/config.yml')
-        assert result == ['search_relevance', 'agentic_memory']
-
-    @patch('tools.tool_filter.load_yaml_config')
-    @patch('os.path.exists')
-    def test_resolve_allow_write_categories_config_overrides_env(
-        self, mock_exists, mock_load_yaml
-    ):
-        """Config file allow_write_categories overrides environment variable."""
-        import os
-        from tools.tool_filter import _resolve_allow_write_categories
-
-        os.environ['OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES'] = 'skills'
-        mock_exists.return_value = True
-        mock_load_yaml.return_value = {
-            'tool_filters': {'settings': {'allow_write_categories': ['search_relevance']}}
-        }
-
-        result = _resolve_allow_write_categories('/path/to/config.yml')
-        assert result == ['search_relevance']
-
-        # Cleanup
-        del os.environ['OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES']
-
 
 class TestAllowWriteSettings:
     """Test cases for the allow_write setting functionality."""
