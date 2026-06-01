@@ -536,17 +536,23 @@ def _merge_similar_patterns(pattern_map: Dict[str, float]):
         return
 
     patterns = sorted(pattern_map.keys())
+    token_sets = {p: set(p.split()) for p in patterns}
     removed: Set[str] = set()
 
     for i in range(len(patterns)):
         p1 = patterns[i]
         if p1 in removed:
             continue
+        set1 = token_sets[p1]
         for j in range(i + 1, len(patterns)):
             p2 = patterns[j]
             if p2 in removed:
                 continue
-            if _jaccard_similarity(p1, p2) > LOG_PATTERN_THRESHOLD:
+            set2 = token_sets[p2]
+            union = set1 | set2
+            intersection_size = len(set1) + len(set2) - len(union)
+            similarity = intersection_size / len(union) if union else 0.0
+            if similarity > LOG_PATTERN_THRESHOLD:
                 count1 = pattern_map.get(p1, 0.0)
                 count2 = pattern_map.get(p2, 0.0)
                 pattern_map[p1] = count1 + count2

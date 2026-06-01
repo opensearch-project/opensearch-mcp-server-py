@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import math
-from typing import List, Optional
+from typing import Dict, List
 
 
 class ClusterNode:
@@ -88,7 +88,12 @@ class HierarchicalAgglomerativeClustering:
         return dot_product / (norm_a * norm_b)
 
     def fit(self, linkage: str, threshold: float) -> List[ClusterNode]:
-        """Run clustering until no pair is closer than threshold."""
+        """Run clustering until no pair is closer than threshold.
+
+        Uses a cached distance dict keyed by (cluster_id, cluster_id) pairs.
+        On each merge, only distances involving the new cluster are computed,
+        reducing repeated work from O(n^2) per round to O(n) per round.
+        """
         if threshold < 0:
             raise ValueError('Distance threshold must be non-negative')
 
@@ -96,40 +101,54 @@ class HierarchicalAgglomerativeClustering:
         for i in range(self.n_samples):
             active_clusters.append(ClusterNode.leaf(i, i))
 
+        # Pre-compute all pairwise distances once: O(n^2)
+        dist_cache: Dict[tuple, float] = {}
+        for i in range(len(active_clusters)):
+            for j in range(i + 1, len(active_clusters)):
+                id_i = active_clusters[i].id
+                id_j = active_clusters[j].id
+                d = self._compute_cluster_distance(
+                    active_clusters[i], active_clusters[j], linkage
+                )
+                dist_cache[(id_i, id_j)] = d
+
         next_cluster_id = self.n_samples
 
         while len(active_clusters) > 1:
-            closest_pair = self._find_closest_clusters(active_clusters, linkage, threshold)
-            if closest_pair is None:
+            # Find closest pair using cache: O(n^2) lookups but no recomputation
+            best_i, best_j = -1, -1
+            min_distance = threshold
+            for i in range(len(active_clusters)):
+                for j in range(i + 1, len(active_clusters)):
+                    id_i = active_clusters[i].id
+                    id_j = active_clusters[j].id
+                    key = (min(id_i, id_j), max(id_i, id_j))
+                    d = dist_cache[key]
+                    if d < min_distance:
+                        min_distance = d
+                        best_i, best_j = i, j
+
+            if best_i == -1:
                 break
 
-            i, j = closest_pair
             new_cluster = ClusterNode.merge(
-                next_cluster_id, active_clusters[i], active_clusters[j]
+                next_cluster_id, active_clusters[best_i], active_clusters[best_j]
             )
+
+            # Remove merged clusters (reverse order to preserve indices)
+            active_clusters.pop(max(best_i, best_j))
+            active_clusters.pop(min(best_i, best_j))
+
+            # Compute distances from new cluster to all remaining: O(n)
+            for existing in active_clusters:
+                d = self._compute_cluster_distance(new_cluster, existing, linkage)
+                key = (min(new_cluster.id, existing.id), max(new_cluster.id, existing.id))
+                dist_cache[key] = d
+
+            active_clusters.append(new_cluster)
             next_cluster_id += 1
 
-            # Remove in reverse order to preserve indices
-            active_clusters.pop(max(i, j))
-            active_clusters.pop(min(i, j))
-            active_clusters.append(new_cluster)
-
         return active_clusters
-
-    def _find_closest_clusters(
-        self, clusters: List[ClusterNode], linkage: str, threshold: float
-    ) -> Optional[tuple]:
-        min_distance = threshold
-        best_i, best_j = -1, -1
-
-        for i in range(len(clusters)):
-            for j in range(i + 1, len(clusters)):
-                distance = self._compute_cluster_distance(clusters[i], clusters[j], linkage)
-                if distance < min_distance:
-                    min_distance = distance
-                    best_i, best_j = i, j
-
-        return (best_i, best_j) if best_i != -1 else None
 
     def _compute_cluster_distance(self, c1: ClusterNode, c2: ClusterNode, linkage: str) -> float:
         if linkage == LinkageMethod.SINGLE:

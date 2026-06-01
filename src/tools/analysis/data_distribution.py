@@ -258,12 +258,19 @@ def _get_useful_fields(data: List[Dict], field_types: Dict[str, str]) -> List[st
 
     field_value_sets: Dict[str, Set[str]] = {field: set() for field in normalized_fields}
     max_cardinality = max(MIN_CARDINALITY_BASE, len(data) // MIN_CARDINALITY_DIVISOR)
+    exceeded = set()
 
     for doc in data:
         for field in normalized_fields:
+            if field in exceeded:
+                continue
             value = get_flattened_value(doc, field)
             if value is not None:
                 field_value_sets[field].add(str(value))
+
+                if field not in number_fields_set and not field.lower().endswith('id'):
+                    if len(field_value_sets[field]) > max_cardinality:
+                        exceeded.add(field)
 
     result = []
     for field in normalized_fields:
@@ -347,9 +354,8 @@ def _group_numeric_keys(
         except (ValueError, TypeError):
             return selection_dist, baseline_dist
 
-    numeric_keys.sort()
-    min_val = numeric_keys[0]
-    max_val = numeric_keys[-1]
+    min_val = min(numeric_keys)
+    max_val = max(numeric_keys)
     range_val = max_val - min_val
     if range_val == 0:
         return selection_dist, baseline_dist

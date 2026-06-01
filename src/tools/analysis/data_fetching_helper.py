@@ -254,6 +254,9 @@ def get_flattened_value(doc: Dict[str, Any], field: str) -> Any:
     """Extract nested field value using dot notation."""
     if doc is None or field is None:
         return None
+    # decrease call func split
+    if '.' not in field:
+        return doc.get(field)
 
     parts = field.split('.')
     current = doc
