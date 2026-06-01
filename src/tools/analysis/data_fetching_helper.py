@@ -4,9 +4,9 @@
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set
-
 from opensearchpy import AsyncOpenSearch
+from typing import Any, Dict, List, Set
+
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +30,10 @@ NUMBER_FIELD_TYPES = {
 
 
 class AnalysisParameters:
+    """Parsed and validated parameters for analysis tools."""
+
     def __init__(self, parameters: Dict[str, str]):
+        """Initialize from raw parameter dict."""
         self.index = parameters.get('index', '')
         self.time_field = parameters.get('timeField', DEFAULT_TIME_FIELD)
         self.selection_time_range_start = parameters.get('selectionTimeRangeStart', '')
@@ -58,12 +61,13 @@ class AnalysisParameters:
             try:
                 self.filter = json.loads(filter_param)
             except Exception:
-                raise ValueError(f"Invalid 'filter' parameter: must be a valid JSON array")
+                raise ValueError("Invalid 'filter' parameter: must be a valid JSON array")
 
         self.dsl = parameters.get('dsl', '')
         self.ppl = parameters.get('ppl', '')
 
     def validate(self):
+        """Validate required parameters are present."""
         if not self.index:
             raise ValueError("Missing required parameter: 'index'")
         if not self.selection_time_range_start or not self.selection_time_range_end:
@@ -76,6 +80,7 @@ class AnalysisParameters:
             )
 
     def has_baseline_time_range(self) -> bool:
+        """Return True if both baseline start and end times are provided."""
         return bool(self.baseline_time_range_start) and bool(self.baseline_time_range_end)
 
 

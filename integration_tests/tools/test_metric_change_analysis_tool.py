@@ -5,7 +5,6 @@ import pytest
 from integration_tests.framework.assertions import (
     assert_contains_json,
     assert_tool_error,
-    assert_tool_success,
 )
 from integration_tests.framework.constants import TEST_INDEX
 
@@ -49,7 +48,7 @@ class TestMetricChangeAnalysisTool:
             assert 'p90' in entry['logRatios']
 
     async def test_metric_change_with_top_n(self, default_client):
-        """topN parameter limits the number of returned fields."""
+        """TopN parameter limits the number of returned fields."""
         result = await default_client.call_tool(
             'MetricChangeAnalysisTool',
             arguments={

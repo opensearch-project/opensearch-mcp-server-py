@@ -618,8 +618,8 @@ class TestMetricChangeAnalysisLogic:
 
     def setup_method(self):
         from tools.analysis.metric_change_analysis import (
-            _calculate_percentiles,
             _calculate_percentile_variance,
+            _calculate_percentiles,
             _extract_numeric_values,
             _format_results,
             _safe_log_ratio,

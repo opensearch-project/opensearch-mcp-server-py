@@ -3,8 +3,6 @@
 
 import logging
 import math
-from typing import Any, Dict, List, Set
-
 from .data_fetching_helper import (
     AnalysisParameters,
     fetch_index_data_dsl,
@@ -12,6 +10,8 @@ from .data_fetching_helper import (
     get_flattened_value,
     get_number_fields,
 )
+from typing import Any, Dict, List, Set
+
 
 logger = logging.getLogger(__name__)
 

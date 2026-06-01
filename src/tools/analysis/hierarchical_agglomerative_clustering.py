@@ -6,27 +6,35 @@ from typing import List, Optional
 
 
 class ClusterNode:
+    """A node in the hierarchical clustering tree."""
+
     def __init__(self, node_id: int, samples: List[int]):
+        """Initialize with node ID and sample indices."""
         self.id = node_id
         self.samples = list(samples)
         self.size = len(self.samples)
 
     @classmethod
     def leaf(cls, node_id: int, sample: int) -> 'ClusterNode':
+        """Create a leaf node with a single sample."""
         return cls(node_id, [sample])
 
     @classmethod
     def merge(cls, node_id: int, left: 'ClusterNode', right: 'ClusterNode') -> 'ClusterNode':
+        """Merge two nodes into a new parent node."""
         return cls(node_id, left.samples + right.samples)
 
 
 class LinkageMethod:
+    """Constants for linkage methods."""
+
     SINGLE = 'single'
     COMPLETE = 'complete'
     AVERAGE = 'average'
 
 
 def calculate_cosine_similarity(a: List[float], b: List[float]) -> float:
+    """Compute cosine similarity between two vectors."""
     dot_product = 0.0
     norm_a = 0.0
     norm_b = 0.0
@@ -43,7 +51,10 @@ def calculate_cosine_similarity(a: List[float], b: List[float]) -> float:
 
 
 class HierarchicalAgglomerativeClustering:
+    """Agglomerative clustering using a precomputed cosine distance matrix."""
+
     def __init__(self, data: List[List[float]]):
+        """Initialize with data vectors and precompute distance matrix."""
         self.data = data
         self.n_samples = len(data)
         self.n_features = len(data[0]) if data else 0
@@ -77,6 +88,7 @@ class HierarchicalAgglomerativeClustering:
         return dot_product / (norm_a * norm_b)
 
     def fit(self, linkage: str, threshold: float) -> List[ClusterNode]:
+        """Run clustering until no pair is closer than threshold."""
         if threshold < 0:
             raise ValueError('Distance threshold must be non-negative')
 
@@ -158,6 +170,7 @@ class HierarchicalAgglomerativeClustering:
         return sum_dist / count if count > 0 else 0.0
 
     def get_cluster_centroid(self, cluster: ClusterNode) -> int:
+        """Return the medoid index of the cluster."""
         if len(cluster.samples) == 1:
             return cluster.samples[0]
 

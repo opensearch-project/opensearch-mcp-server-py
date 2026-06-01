@@ -1,12 +1,9 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import json
 import logging
-import math
-from typing import Any, Dict, List, Set, Tuple
-
 from .data_fetching_helper import (
+    NUMBER_FIELD_TYPES,
     QUERY_TYPE_PPL,
     AnalysisParameters,
     execute_ppl_and_parse_docs,
@@ -14,8 +11,9 @@ from .data_fetching_helper import (
     get_field_types,
     get_flattened_value,
     get_number_fields,
-    NUMBER_FIELD_TYPES,
 )
+from typing import Dict, List, Set, Tuple
+
 
 logger = logging.getLogger(__name__)
 

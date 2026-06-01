@@ -3,20 +3,22 @@
 
 import logging
 import math
-from typing import Dict, List, Set
-
 from .hierarchical_agglomerative_clustering import (
-    ClusterNode,
     HierarchicalAgglomerativeClustering,
     LinkageMethod,
     calculate_cosine_similarity,
 )
+from typing import Dict, List, Set
+
 
 logger = logging.getLogger(__name__)
 
 
 class ClusteringHelper:
+    """Clusters log vectors and identifies representative traces."""
+
     def __init__(self, log_vectors_clustering_threshold: float):
+        """Initialize with cosine similarity threshold for clustering."""
         if log_vectors_clustering_threshold < 0.0 or log_vectors_clustering_threshold > 1.0:
             raise ValueError(
                 f'Clustering threshold must be between 0.0 and 1.0, got: {log_vectors_clustering_threshold}'
@@ -26,6 +28,7 @@ class ClusteringHelper:
     def cluster_log_vectors_and_get_representative(
         self, log_vectors: Dict[str, List[float]]
     ) -> List[str]:
+        """Cluster log vectors and return representative trace IDs."""
         if not log_vectors:
             return []
 

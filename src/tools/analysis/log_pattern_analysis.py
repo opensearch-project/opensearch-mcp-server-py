@@ -4,11 +4,11 @@
 import logging
 import math
 import re
-from typing import Any, Dict, List, Optional, Set
-
 from .clustering_helper import ClusteringHelper
-from .hierarchical_agglomerative_clustering import calculate_cosine_similarity
 from .data_fetching_helper import execute_ppl_and_parse_datarows
+from .hierarchical_agglomerative_clustering import calculate_cosine_similarity
+from typing import Dict, List, Optional, Set
+
 
 logger = logging.getLogger(__name__)
 
@@ -570,7 +570,7 @@ def _merge_similar_patterns(pattern_map: Dict[str, float]):
 def _calculate_pattern_differences(
     base_patterns: Dict[str, float], selection_patterns: Dict[str, float]
 ) -> List[Dict]:
-    """calculate lift"""
+    """Calculate lift between base and selection pattern frequencies."""
     differences = []
     selection_total = sum(selection_patterns.values())
     base_total = sum(base_patterns.values())
