@@ -477,7 +477,7 @@ async def _srw_search(args, entity: str) -> json:
     Args:
         args: Tool args containing the optional query_body
         entity: The SRW entity name, e.g. 'query_sets', 'search_configurations',
-                'judgments', or 'experiment'
+                'judgments', or 'experiments'
 
     Returns:
         json: OpenSearch search response
@@ -626,7 +626,7 @@ async def search_experiments(args: SearchExperimentsArgs) -> json:
     Returns:
         json: OpenSearch search response
     """
-    return await _srw_search(args, 'experiment')
+    return await _srw_search(args, 'experiments')
 
 
 def convert_search_results_to_csv(search_results: dict) -> str:
