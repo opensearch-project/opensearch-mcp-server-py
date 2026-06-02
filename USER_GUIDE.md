@@ -631,6 +631,7 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 | `OPENSEARCH_ENABLED_TOOLS_REGEX` | No | `''` | Comma-separated list of regex patterns for enabled tools |
 | `OPENSEARCH_DISABLED_TOOLS_REGEX` | No | `''` | Comma-separated list of regex patterns for disabled tools |
 | `OPENSEARCH_SETTINGS_ALLOW_WRITE` | No | `"true"` | Enable/disable write operations (`"true"` or `"false"`) |
+| `OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES` | No | `''` | Comma-separated list of categories that allow write operations |
 
 ### Agentic Memory Variables
 
@@ -714,6 +715,8 @@ tool_filters:
     - <regex_pattern_to_disable>
   settings:
     allow_write: true  # Enable/disable write-only operations
+    allow_write_categories:  # Categories that allow write operations
+      - <category_name_to_allow_write>
 ```
 
 To use your configuration file, start the server with the `--config` flag:
@@ -747,7 +750,32 @@ export OPENSEARCH_DISABLED_TOOLS_REGEX="<regex_pattern>"
 
 # Operation Settings
 export OPENSEARCH_SETTINGS_ALLOW_WRITE=true
+export OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES="<category_name>,<category_name>"
 ```
+
+### Per-Category Write Permissions
+
+Categories listed in `allow_write_categories` allow write operations. Tools not in the listed categories remain blocked.
+
+**YAML Configuration:**
+```yaml
+tool_filters:
+  enabled_categories:
+    - <category_name>
+  settings:
+    allow_write: false
+    allow_write_categories:
+      - <category_name>
+```
+
+**Environment Variables:**
+```bash
+export OPENSEARCH_SETTINGS_ALLOW_WRITE=false
+export OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES="<category_name>"
+export OPENSEARCH_ENABLED_CATEGORIES="<category_name>"
+```
+
+**Note:** `allow_write_categories` only takes effect when `allow_write` is `false`. It selectively enables write operations for the specified categories while keeping all other tools read-only.
 
 ### Important Notes
 - Tool names are case-insensitive

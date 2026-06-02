@@ -220,7 +220,7 @@ class TestSRWSearchTools:
         assert 'Experiment search results' in result[0]['text']
 
         call_kwargs = self.mock_client.transport.perform_request.call_args
-        assert call_kwargs.kwargs['url'] == '/_plugins/_search_relevance/experiment/_search'
+        assert call_kwargs.kwargs['url'] == '/_plugins/_search_relevance/experiments/_search'
         body = json.loads(call_kwargs.kwargs['body'])
         assert body == {'query': {'match_all': {}}}
 

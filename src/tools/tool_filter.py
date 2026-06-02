@@ -100,14 +100,20 @@ def _resolve_allow_write_setting(config_file_path: str = None) -> bool:
     return allow_write
 
 
-def apply_write_filter(registry):
+def apply_write_filter(registry, exempt_tools=None):
     """Apply allow_write filters to the registry.
 
     Removes tools that only have write HTTP methods, unless the tool
-    has ``bypass_write_filter`` set to True (e.g. memory tools).
+    has ``bypass_write_filter`` set to True (e.g. memory tools) or in the exempt_tools set.
+
+    Args:
+        registry: The tool registry to filter
+        exempt_tools: Set of tool names (registry keys) exempt from the write filter
     """
+    if exempt_tools is None:
+        exempt_tools = set()
     for tool_name in list(registry.keys()):
-        if registry[tool_name].get('bypass_write_filter'):
+        if registry[tool_name].get('bypass_write_filter') or tool_name in exempt_tools:
             continue
         http_methods = registry[tool_name].get('http_methods', [])
         if 'GET' not in http_methods:
@@ -134,6 +140,7 @@ def process_tool_filter(
     enabled_tools_regex: str = None,
     disabled_tools_regex: str = None,
     allow_write: bool = None,
+    allow_write_categories: list = None,
     filter_path: str = None,
     tool_registry: dict = None,
 ) -> None:
@@ -148,6 +155,7 @@ def process_tool_filter(
         enabled_tools_regex: Comma-separates list of enabled tools regex
         disabled_tools_regex: Comma-separated list of disabled tools regex
         allow_write: If True, allow tools with PUT/POST methods
+        allow_write_categories: List of category names whose tools are exempt from the write filter
         filter_path: Path to the YAML filter configuration file
         tool_registry: The tool registry to filter.
     """
@@ -285,6 +293,8 @@ def process_tool_filter(
             settings = tool_filters.get('settings', {})
             if settings:
                 allow_write = settings.get('allow_write', True)
+                if 'allow_write_categories' in settings:
+                    allow_write_categories = settings.get('allow_write_categories', [])
 
         # Process environment variables
         if tool_categories:
@@ -311,7 +321,22 @@ def process_tool_filter(
 
         # Apply allow_write filter first
         if not allow_write:
-            apply_write_filter(tool_registry)
+            exempt_tools = set()
+            if allow_write_categories:
+                display_to_key = {
+                    info.get('display_name', '').lower(): key
+                    for key, info in tool_registry.items()
+                }
+                for category in allow_write_categories:
+                    category_tool_names = category_to_tools.get(category, [])
+                    for tool_display_name in category_tool_names:
+                        key = display_to_key.get(tool_display_name.lower())
+                        if key:
+                            exempt_tools.add(key)
+                logging.debug(
+                    f'Tools exempt from write filter via allow_write_categories: {exempt_tools}'
+                )
+            apply_write_filter(tool_registry, exempt_tools=exempt_tools)
 
         # Process tools from categories and regex patterns
         enabled_tools_from_categories = process_categories(
@@ -439,6 +464,10 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         'enabled_tools_regex': os.getenv('OPENSEARCH_ENABLED_TOOLS_REGEX', ''),
         'disabled_tools_regex': os.getenv('OPENSEARCH_DISABLED_TOOLS_REGEX', ''),
         'allow_write': os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE', 'true').lower() == 'true',
+        'allow_write_categories': parse_comma_separated(
+            os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES', '')
+        )
+        or None,
     }
 
     # Check if both config and env variables are set
