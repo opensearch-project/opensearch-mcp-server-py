@@ -3,6 +3,7 @@
 
 import logging
 import pytest
+from mcp.types import CallToolResult
 from mcp_server_opensearch.tool_executor import execute_tool
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -32,7 +33,10 @@ class TestExecuteTool:
         with caplog.at_level(logging.INFO):
             result = await execute_tool('TestTool', {}, enabled_tools)
 
-        assert result == [{'type': 'text', 'text': 'Success'}]
+        # Success is returned as a CallToolResult with isError=False.
+        assert isinstance(result, CallToolResult)
+        assert result.isError is False
+        assert result.content[0].text == 'Success'
         # Check structured log was emitted
         assert any('Tool executed: TestTool' in r.message for r in caplog.records)
         # Check extra fields
@@ -62,7 +66,10 @@ class TestExecuteTool:
         with caplog.at_level(logging.ERROR):
             result = await execute_tool('TestTool', {}, enabled_tools)
 
-        assert result[0]['is_error'] is True
+        assert isinstance(result, CallToolResult)
+        assert result.isError is True
+        assert getattr(result.content[0], 'is_error', None) is None
+        assert result.content[0].text == 'Error searching index: connection refused'
         error_records = [
             r
             for r in caplog.records
