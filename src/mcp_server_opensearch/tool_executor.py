@@ -64,15 +64,6 @@ async def execute_tool(
         tool = enabled_tools[found_tool_key]
         from tools.tool_params import validate_args_for_mode
 
-        logger.info(
-            f'Tool called: {name}',
-            extra={
-                'event_type': 'tool_call',
-                'tool_name': name,
-                'arguments': arguments,
-            },
-        )
-
         parsed = validate_args_for_mode(arguments, tool['args_model'])
         result = await tool['function'](parsed)
 

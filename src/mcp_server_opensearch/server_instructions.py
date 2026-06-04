@@ -40,6 +40,38 @@ Provide opensearch_url plus the appropriate auth parameters for your target clus
 Parameters not provided fall back to server environment variables (if any).\
 """
 
+_SKILLS_TOOLS_INSTRUCTIONS = """\
+This server provides advanced analysis tools that should be used INSTEAD OF \
+writing manual SearchIndexTool aggregation queries:
+
+- DataDistributionTool: Use FIRST for root-cause investigation. Automatically discovers \
+which categorical field values (service names, error codes, status values) shifted most \
+between a baseline and an anomaly window. Replaces dozens of manual aggregation queries.
+
+- MetricChangeAnalysisTool: Use for metric investigation. Compares percentile distributions \
+of ALL numeric fields between a baseline and an anomaly window, returns top fields ranked \
+by change score. Replaces manual field-by-field comparison.
+
+- LogPatternAnalysisTool: Use for log analysis. Clusters raw log messages into patterns \
+using ML, highlights which patterns are new or surging compared to a baseline period. \
+Replaces manual keyword searches.\
+"""
+
+
+def are_skills_enabled() -> bool:
+    """Check whether skills tools are enabled based on environment/config.
+
+    Skills are enabled when 'skills' appears in OPENSEARCH_ENABLED_CATEGORIES
+    and NOT in OPENSEARCH_DISABLED_CATEGORIES.
+    """
+    enabled_cats = os.getenv('OPENSEARCH_ENABLED_CATEGORIES', '').lower()
+    disabled_cats = os.getenv('OPENSEARCH_DISABLED_CATEGORIES', '').lower()
+    if 'skills' in disabled_cats:
+        return False
+    if 'skills' in enabled_cats:
+        return True
+    return False
+
 
 def is_dynamic_mode_enabled() -> bool:
     """Determine whether dynamic (per-call) connection mode is active.
@@ -89,20 +121,21 @@ def has_preconfigured_connection() -> bool:
 def get_server_instructions() -> str | None:
     """Return server instructions based on current configuration.
 
-    Only applies in single mode. In multi mode, dynamic connection params
-    are not supported, so no instructions are needed.
-
-    When dynamic mode is active in single mode (no pre-configured connection,
-    or ``OPENSEARCH_DYNAMIC_CONNECTION=true``), returns instructions explaining
-    the per-call connection parameters. Otherwise returns None.
+    Combines applicable instruction sections:
+    - Dynamic connection instructions (single mode, no pre-configured endpoint)
+    - Skills tools instructions (when skills category is enabled)
 
     Returns:
         str or None: Instructions text, or None if not needed.
     """
     from mcp_server_opensearch.global_state import get_mode
 
-    if get_mode() != 'single':
-        return None
-    if not is_dynamic_mode_enabled():
-        return None
-    return _DYNAMIC_CONNECTION_INSTRUCTIONS
+    parts = []
+
+    if get_mode() == 'single' and is_dynamic_mode_enabled():
+        parts.append(_DYNAMIC_CONNECTION_INSTRUCTIONS)
+
+    if are_skills_enabled():
+        parts.append(_SKILLS_TOOLS_INSTRUCTIONS)
+
+    return '\n\n'.join(parts) if parts else None
