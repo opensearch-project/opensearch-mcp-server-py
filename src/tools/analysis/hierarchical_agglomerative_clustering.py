@@ -1,8 +1,10 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import math
-from typing import Dict, List
+import numpy as np
+from scipy.cluster.hierarchy import fcluster, linkage
+from scipy.spatial.distance import squareform
+from typing import List
 
 
 class ClusterNode:
@@ -35,19 +37,13 @@ class LinkageMethod:
 
 def calculate_cosine_similarity(a: List[float], b: List[float]) -> float:
     """Compute cosine similarity between two vectors."""
-    dot_product = 0.0
-    norm_a = 0.0
-    norm_b = 0.0
-
-    for i in range(len(a)):
-        dot_product += a[i] * b[i]
-        norm_a += a[i] * a[i]
-        norm_b += b[i] * b[i]
-
+    a_arr = np.asarray(a, dtype=np.float64)
+    b_arr = np.asarray(b, dtype=np.float64)
+    norm_a = np.linalg.norm(a_arr)
+    norm_b = np.linalg.norm(b_arr)
     if norm_a == 0 or norm_b == 0:
         return 0.0
-
-    return dot_product / (math.sqrt(norm_a) * math.sqrt(norm_b))
+    return float(np.dot(a_arr, b_arr) / (norm_a * norm_b))
 
 
 class HierarchicalAgglomerativeClustering:
@@ -55,151 +51,62 @@ class HierarchicalAgglomerativeClustering:
 
     def __init__(self, data: List[List[float]]):
         """Initialize with data vectors and precompute distance matrix."""
-        self.data = data
         self.n_samples = len(data)
         self.n_features = len(data[0]) if data else 0
-        self.distance_matrix = [[0.0] * self.n_samples for _ in range(self.n_samples)]
-        self._compute_cosine_distance_matrix()
+        self._data_matrix = np.asarray(data, dtype=np.float64)
+        self.distance_matrix = self._compute_cosine_distance_matrix()
 
-    def _compute_cosine_distance_matrix(self):
-        norms = [0.0] * self.n_samples
-        for i in range(self.n_samples):
-            norm = 0.0
-            for j in range(self.n_features):
-                norm += self.data[i][j] * self.data[i][j]
-            norms[i] = math.sqrt(norm)
+    def _compute_cosine_distance_matrix(self) -> np.ndarray:
+        """Compute pairwise cosine distance matrix using vectorized operations."""
+        norms = np.linalg.norm(self._data_matrix, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)
+        normalized = self._data_matrix / norms
+        with np.errstate(invalid='ignore', divide='ignore', over='ignore'):
+            similarity = np.nan_to_num(normalized @ normalized.T, nan=0.0)
+        np.clip(similarity, -1.0, 1.0, out=similarity)
+        distance = 1.0 - similarity
+        np.fill_diagonal(distance, 0.0)
+        return distance
 
-        for i in range(self.n_samples):
-            for j in range(i + 1, self.n_samples):
-                similarity = self._cosine_similarity_with_norms(
-                    self.data[i], self.data[j], norms[i], norms[j]
-                )
-                distance = 1.0 - similarity
-                self.distance_matrix[i][j] = distance
-                self.distance_matrix[j][i] = distance
-
-    @staticmethod
-    def _cosine_similarity_with_norms(
-        a: List[float], b: List[float], norm_a: float, norm_b: float
-    ) -> float:
-        if norm_a == 0.0 or norm_b == 0.0:
-            return 0.0
-        dot_product = sum(a[i] * b[i] for i in range(len(a)))
-        return dot_product / (norm_a * norm_b)
-
-    def fit(self, linkage: str, threshold: float) -> List[ClusterNode]:
-        """Run clustering until no pair is closer than threshold.
-
-        Uses a cached distance dict keyed by (cluster_id, cluster_id) pairs.
-        On each merge, only distances involving the new cluster are computed,
-        reducing repeated work from O(n^2) per round to O(n) per round.
-        """
+    def fit(self, linkage_method: str, threshold: float) -> List[ClusterNode]:
+        """Run clustering until no pair is closer than threshold."""
         if threshold < 0:
             raise ValueError('Distance threshold must be non-negative')
 
-        active_clusters: List[ClusterNode] = []
-        for i in range(self.n_samples):
-            active_clusters.append(ClusterNode.leaf(i, i))
+        if self.n_samples == 1:
+            return [ClusterNode.leaf(0, 0)]
 
-        # Pre-compute all pairwise distances once: O(n^2)
-        dist_cache: Dict[tuple, float] = {}
-        for i in range(len(active_clusters)):
-            for j in range(i + 1, len(active_clusters)):
-                id_i = active_clusters[i].id
-                id_j = active_clusters[j].id
-                d = self._compute_cluster_distance(active_clusters[i], active_clusters[j], linkage)
-                dist_cache[(id_i, id_j)] = d
+        condensed = squareform(self.distance_matrix, checks=False)
+        Z = linkage(condensed, method=linkage_method)
+        labels = fcluster(Z, t=threshold, criterion='distance')
 
-        next_cluster_id = self.n_samples
+        clusters_map: dict = {}
+        for sample_idx, label in enumerate(labels):
+            clusters_map.setdefault(label, []).append(sample_idx)
 
-        while len(active_clusters) > 1:
-            # Find closest pair using cache: O(n^2) lookups but no recomputation
-            best_i, best_j = -1, -1
-            min_distance = threshold
-            for i in range(len(active_clusters)):
-                for j in range(i + 1, len(active_clusters)):
-                    id_i = active_clusters[i].id
-                    id_j = active_clusters[j].id
-                    key = (min(id_i, id_j), max(id_i, id_j))
-                    d = dist_cache[key]
-                    if d < min_distance:
-                        min_distance = d
-                        best_i, best_j = i, j
-
-            if best_i == -1:
-                break
-
-            new_cluster = ClusterNode.merge(
-                next_cluster_id, active_clusters[best_i], active_clusters[best_j]
-            )
-
-            # Remove merged clusters (reverse order to preserve indices)
-            active_clusters.pop(max(best_i, best_j))
-            active_clusters.pop(min(best_i, best_j))
-
-            # Compute distances from new cluster to all remaining: O(n)
-            for existing in active_clusters:
-                d = self._compute_cluster_distance(new_cluster, existing, linkage)
-                key = (min(new_cluster.id, existing.id), max(new_cluster.id, existing.id))
-                dist_cache[key] = d
-
-            active_clusters.append(new_cluster)
-            next_cluster_id += 1
-
-        return active_clusters
+        clusters = []
+        for node_id, (_, samples) in enumerate(sorted(clusters_map.items())):
+            clusters.append(ClusterNode(node_id, samples))
+        return clusters
 
     def _compute_cluster_distance(self, c1: ClusterNode, c2: ClusterNode, linkage: str) -> float:
+        """Compute distance between two clusters using the specified linkage."""
+        sub_matrix = self.distance_matrix[np.ix_(c1.samples, c2.samples)]
         if linkage == LinkageMethod.SINGLE:
-            return self._single_linkage(c1, c2)
+            return float(sub_matrix.min())
         elif linkage == LinkageMethod.COMPLETE:
-            return self._complete_linkage(c1, c2)
+            return float(sub_matrix.max())
         elif linkage == LinkageMethod.AVERAGE:
-            return self._average_linkage(c1, c2)
+            return float(sub_matrix.mean())
         raise ValueError(f'Unknown linkage method: {linkage}')
-
-    def _single_linkage(self, c1: ClusterNode, c2: ClusterNode) -> float:
-        min_dist = float('inf')
-        for i in c1.samples:
-            for j in c2.samples:
-                dist = self.distance_matrix[i][j]
-                if dist < min_dist:
-                    min_dist = dist
-                    if min_dist < 1e-10:
-                        return min_dist
-        return min_dist
-
-    def _complete_linkage(self, c1: ClusterNode, c2: ClusterNode) -> float:
-        max_dist = float('-inf')
-        for i in c1.samples:
-            for j in c2.samples:
-                dist = self.distance_matrix[i][j]
-                if dist > max_dist:
-                    max_dist = dist
-        return max_dist
-
-    def _average_linkage(self, c1: ClusterNode, c2: ClusterNode) -> float:
-        sum_dist = 0.0
-        count = 0
-        for i in c1.samples:
-            for j in c2.samples:
-                sum_dist += self.distance_matrix[i][j]
-                count += 1
-        return sum_dist / count if count > 0 else 0.0
 
     def get_cluster_centroid(self, cluster: ClusterNode) -> int:
         """Return the medoid index of the cluster."""
         if len(cluster.samples) == 1:
             return cluster.samples[0]
 
-        medoid_index = cluster.samples[0]
-        min_total_distance = float('inf')
-
-        for point_i in cluster.samples:
-            total_distance = sum(
-                self.distance_matrix[point_i][point_j] for point_j in cluster.samples
-            )
-            if total_distance < min_total_distance:
-                min_total_distance = total_distance
-                medoid_index = point_i
-
-        return medoid_index
+        samples = cluster.samples
+        sub_matrix = self.distance_matrix[np.ix_(samples, samples)]
+        total_distances = sub_matrix.sum(axis=1)
+        medoid_local = int(np.argmin(total_distances))
+        return samples[medoid_local]

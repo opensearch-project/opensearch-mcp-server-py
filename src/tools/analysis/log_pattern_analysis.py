@@ -3,10 +3,10 @@
 
 import logging
 import math
+import numpy as np
 import re
 from .clustering_helper import ClusteringHelper
 from .data_fetching_helper import execute_ppl_and_parse_datarows
-from .hierarchical_agglomerative_clustering import calculate_cosine_similarity
 from typing import Dict, List, Optional, Set
 
 
@@ -321,6 +321,25 @@ def _filter_selection_centroids(
     selection_vector_map: Dict[str, List[float]],
 ) -> List[str]:
     """Keep only selection centroids dissimilar to all base centroids."""
+    if not base_centroids or not selection_candidates:
+        return list(selection_candidates)
+
+    base_vectors = []
+    valid_base = []
+    for bc in base_centroids:
+        v = base_vector_map.get(bc)
+        if v is not None:
+            base_vectors.append(v)
+            valid_base.append(bc)
+
+    if not valid_base:
+        return list(selection_candidates)
+
+    base_matrix = np.asarray(base_vectors, dtype=np.float64)
+    base_norms = np.linalg.norm(base_matrix, axis=1, keepdims=True)
+    base_norms = np.where(base_norms == 0, 1.0, base_norms)
+    base_normalized = base_matrix / base_norms
+
     selection_centroids = []
     for candidate in selection_candidates:
         candidate_vector = selection_vector_map.get(candidate)
@@ -328,17 +347,15 @@ def _filter_selection_centroids(
             logger.warning('No vector found for selection candidate: %s', candidate)
             continue
 
-        is_exceptional = True
-        for base_centroid in base_centroids:
-            base_vector = base_vector_map.get(base_centroid)
-            if base_vector is not None:
-                sim = calculate_cosine_similarity(base_vector, candidate_vector)
-                if sim > LOG_VECTORS_CLUSTERING_THRESHOLD:
-                    is_exceptional = False
-                    break
+        cand_arr = np.asarray(candidate_vector, dtype=np.float64)
+        cand_norm = np.linalg.norm(cand_arr)
+        if cand_norm == 0:
+            selection_centroids.append(candidate)
+            continue
+        cand_normalized = cand_arr / cand_norm
 
-        if is_exceptional:
-            # far from all base_centroid
+        sims = base_normalized @ cand_normalized
+        if np.all(sims <= LOG_VECTORS_CLUSTERING_THRESHOLD):
             selection_centroids.append(candidate)
 
     return selection_centroids

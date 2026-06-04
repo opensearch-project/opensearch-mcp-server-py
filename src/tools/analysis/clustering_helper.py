@@ -2,12 +2,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-import math
+import numpy as np
 from .hierarchical_agglomerative_clustering import (
     HierarchicalAgglomerativeClustering,
     LinkageMethod,
-    calculate_cosine_similarity,
 )
+from sklearn.cluster import KMeans
 from typing import Dict, List, Set
 
 
@@ -39,14 +39,11 @@ class ClusteringHelper:
         vectors = [log_vectors[k] for k in keys]
         index_trace_id_map = {i: keys[i] for i in range(len(keys))}
 
-        # Choose clustering approach based on dataset size
         if len(log_vectors) > 1000:
-            # k-means + hac
             final_centroids = self._process_two_phase_clustering_for_large_dataset(
                 vectors, index_trace_id_map
             )
         else:
-            # hac
             final_centroids = self._perform_clustering(vectors, index_trace_id_map)
 
         logger.debug(
@@ -70,11 +67,13 @@ class ClusteringHelper:
                     f'Vector dimension mismatch: expected {vector_dimension} '
                     f"but got {len(vector)} for trace ID '{trace_id}'"
                 )
-            for i in range(len(vector)):
-                if math.isnan(vector[i]) or math.isinf(vector[i]):
-                    raise ValueError(
-                        f"Vector for trace ID '{trace_id}' contains invalid value at index {i}: {vector[i]}"
-                    )
+            arr = np.asarray(vector)
+            if not np.all(np.isfinite(arr)):
+                bad_idx = int(np.where(~np.isfinite(arr))[0][0])
+                raise ValueError(
+                    f"Vector for trace ID '{trace_id}' contains invalid value"
+                    f' at index {bad_idx}: {vector[bad_idx]}'
+                )
 
     def _process_two_phase_clustering_for_large_dataset(
         self, vectors: List[List[float]], index_trace_id_map: Dict[int, str]
@@ -99,75 +98,30 @@ class ClusteringHelper:
     def _perform_kmeans_clustering(
         self, vectors: List[List[float]], num_clusters: int
     ) -> List[List[int]]:
-        """Simple K-means++ clustering implementation."""
-        import random
-
+        """K-means clustering using scikit-learn with cosine-friendly normalization."""
         if not vectors:
             return []
 
         num_clusters = max(1, min(num_clusters, len(vectors)))
         n = len(vectors)
-        dim = len(vectors[0])
 
-        # K-means++ initialization
-        centroids = []
-        first_idx = random.randint(0, n - 1)
-        centroids.append(list(vectors[first_idx]))
+        data = np.asarray(vectors, dtype=np.float64)
+        norms = np.linalg.norm(data, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)
+        normalized_data = data / norms
 
-        for _ in range(1, num_clusters):
-            distances = []
-            for v in vectors:
-                min_dist = min(1.0 - calculate_cosine_similarity(v, c) for c in centroids)
-                distances.append(min_dist * min_dist)
-            total = sum(distances)
-            if total == 0:
-                break
-            r = random.random() * total
-            cumulative = 0.0
-            chosen = 0
-            for idx, d in enumerate(distances):
-                cumulative += d
-                if cumulative >= r:
-                    chosen = idx
-                    break
-            centroids.append(list(vectors[chosen]))
+        kmeans = KMeans(
+            n_clusters=num_clusters,
+            init='k-means++',
+            n_init=1,
+            max_iter=300,
+            random_state=None,
+        )
+        labels = kmeans.fit_predict(normalized_data)
 
-        # K-means iterations
-        assignments = [0] * n
-        for _ in range(300):
-            # Assign
-            changed = False
-            for i in range(n):
-                best_cluster = 0
-                best_sim = -1.0
-                for c_idx, centroid in enumerate(centroids):
-                    sim = calculate_cosine_similarity(vectors[i], centroid)
-                    if sim > best_sim:
-                        best_sim = sim
-                        best_cluster = c_idx
-                if assignments[i] != best_cluster:
-                    changed = True
-                    assignments[i] = best_cluster
-
-            if not changed:
-                break
-
-            # Update centroids
-            for c_idx in range(len(centroids)):
-                members = [i for i in range(n) if assignments[i] == c_idx]
-                if members:
-                    new_centroid = [0.0] * dim
-                    for m in members:
-                        for d in range(dim):
-                            new_centroid[d] += vectors[m][d]
-                    for d in range(dim):
-                        new_centroid[d] /= len(members)
-                    centroids[c_idx] = new_centroid
-
-        # Build cluster index lists
-        result: List[List[int]] = [[] for _ in range(len(centroids))]
+        result: List[List[int]] = [[] for _ in range(num_clusters)]
         for i in range(n):
-            result[assignments[i]].append(i)
+            result[labels[i]].append(i)
         return [c for c in result if c]
 
     def _process_cluster(
@@ -265,16 +219,23 @@ class ClusteringHelper:
     def _remove_similar_vectors(
         self, vector_res: List[List[float]], index2_trace: Dict[int, str]
     ) -> List[str]:
-        to_remove: Set[int] = set()
+        if not vector_res:
+            return []
 
+        data = np.asarray(vector_res, dtype=np.float64)
+        norms = np.linalg.norm(data, axis=1, keepdims=True)
+        norms = np.where(norms == 0, 1.0, norms)
+        normalized = data / norms
+        sim_matrix = normalized @ normalized.T
+
+        to_remove: Set[int] = set()
         for i in range(len(vector_res)):
             if i in to_remove:
                 continue
             for j in range(i + 1, len(vector_res)):
                 if j in to_remove:
                     continue
-                similarity = calculate_cosine_similarity(vector_res[i], vector_res[j])
-                if similarity > self.log_vectors_clustering_threshold:
+                if sim_matrix[i, j] > self.log_vectors_clustering_threshold:
                     to_remove.add(j)
 
         return [index2_trace[i] for i in range(len(vector_res)) if i not in to_remove]

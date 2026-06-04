@@ -13,6 +13,22 @@ from opensearch.client import get_opensearch_client
 from pydantic import Field
 
 
+def _get_error_hint(exception: Exception) -> str:
+    """Return actionable hint based on exception type."""
+    exc_type = type(exception).__name__
+    exc_msg = str(exception).lower()
+
+    if 'timeout' in exc_type.lower() or 'timeout' in exc_msg:
+        return ' Hint: request timed out. Try narrowing the time range or adding a filter.'
+    if 'connectionerror' in exc_type.lower() or 'connection' in exc_msg:
+        return ' Hint: connection failed. Check if the OpenSearch cluster is reachable.'
+    if 'notfounderror' in exc_type.lower() or '404' in exc_msg:
+        return ' Hint: index not found. Check the index name.'
+    if 'no data found' in exc_msg:
+        return ''
+    return ''
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -125,7 +141,10 @@ async def data_distribution_tool(args: DataDistributionToolArgs) -> list[dict]:
         return [{'type': 'text', 'text': f'DataDistributionTool result:\n{formatted}'}]
 
     except Exception as e:
-        return log_tool_error('DataDistributionTool', e, 'executing DataDistributionTool')
+        hint = _get_error_hint(e)
+        return log_tool_error(
+            'DataDistributionTool', e, f'executing DataDistributionTool.{hint}'
+        )
 
 
 async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> list[dict]:
@@ -166,7 +185,10 @@ async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> lis
         return [{'type': 'text', 'text': f'MetricChangeAnalysisTool result:\n{formatted}'}]
 
     except Exception as e:
-        return log_tool_error('MetricChangeAnalysisTool', e, 'executing MetricChangeAnalysisTool')
+        hint = _get_error_hint(e)
+        return log_tool_error(
+            'MetricChangeAnalysisTool', e, f'executing MetricChangeAnalysisTool.{hint}'
+        )
 
 
 async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[dict]:
@@ -200,35 +222,67 @@ async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[di
         return [{'type': 'text', 'text': f'LogPatternAnalysisTool result:\n{formatted}'}]
 
     except Exception as e:
-        return log_tool_error('LogPatternAnalysisTool', e, 'executing LogPatternAnalysisTool')
+        hint = _get_error_hint(e)
+        return log_tool_error(
+            'LogPatternAnalysisTool', e, f'executing LogPatternAnalysisTool.{hint}'
+        )
 
 
 SKILLS_TOOLS_REGISTRY = {
     'DataDistributionTool': {
         'display_name': 'DataDistributionTool',
-        'description': 'Analyzes data distribution patterns and field value frequencies within OpenSearch indices. Supports both single dataset analysis for understanding data characteristics and comparative analysis between two time periods to identify distribution changes. Automatically detects useful fields, calculates value distributions, groups numeric data, and computes divergence metrics. Useful for anomaly detection, data quality assessment, and trend analysis. We can use this tool to analyze the distribution of failures over time',
+        'description': (
+            'PREFERRED over SearchIndexTool for root-cause investigation. '
+            'Automatically discovers which categorical field values (e.g. service names, error codes, '
+            'status values) shifted most between a baseline and an anomaly window. '
+            'Use this tool FIRST when you need to identify which service, host, or component is '
+            'responsible for an anomaly — it replaces dozens of manual aggregation queries with a '
+            'single call. Provide a baseline time range to get a ranked list of field-value changes '
+            'sorted by divergence score; omit baseline for a single-window frequency snapshot. '
+            'Works on any index with keyword/boolean/numeric fields.'
+        ),
         'input_schema': DataDistributionToolArgs.model_json_schema(),
         'function': data_distribution_tool,
         'args_model': DataDistributionToolArgs,
-        'min_version': '3.3.0',
+        'min_version': '1.0.0',
         'http_methods': 'POST',
     },
     'LogPatternAnalysisTool': {
         'display_name': 'LogPatternAnalysisTool',
-        'description': 'Intelligent log pattern analysis tool for troubleshooting and anomaly detection in application logs. Use this tool when you need to: analyze error patterns in logs, identify unusual log sequences, compare log patterns between time periods, find root causes of system issues, detect anomalous behavior in application traces, or investigate performance problems. The tool automatically extracts meaningful patterns from raw log messages, groups similar patterns, identifies outliers, and provides insights for debugging. Essential for log-based troubleshooting, incident analysis, and proactive monitoring of system health.',
+        'description': (
+            'PREFERRED over SearchIndexTool for log analysis. '
+            'Automatically clusters raw log messages into patterns using ML, then highlights '
+            'which patterns are new or surging compared to a baseline period. '
+            'Use this tool when investigating errors, exceptions, or unusual behavior in log indices '
+            '— it replaces manual keyword searches by surfacing the most anomalous log patterns '
+            'ranked by statistical lift. Supports three modes: '
+            '(1) Insight mode (no baseline): extracts and ranks all patterns in the target window; '
+            '(2) Diff mode (with baseline, no trace): shows patterns that appeared or surged; '
+            '(3) Sequence mode (with baseline + traceFieldName): finds anomalous request sequences. '
+            'Always prefer this over grep-style SearchIndexTool queries on log indices.'
+        ),
         'input_schema': LogPatternAnalysisToolArgs.model_json_schema(),
         'function': log_pattern_analysis_tool,
         'args_model': LogPatternAnalysisToolArgs,
-        'min_version': '3.3.0',
+        'min_version': '1.0.0',
         'http_methods': 'POST',
     },
     'MetricChangeAnalysisTool': {
         'display_name': 'MetricChangeAnalysisTool',
-        'description': 'Compares percentile distributions (P50, P90) of numeric fields between two time ranges. Returns top fields ranked by change score. Use for root cause analysis when investigating metric anomalies. Keep both time ranges short (e.g. 15-30 minutes) and similar in duration for accurate comparison.',
+        'description': (
+            'PREFERRED over SearchIndexTool for metric investigation. '
+            'Automatically compares percentile distributions (P50, P90) of ALL numeric fields '
+            'between a baseline and an anomaly window, then returns the top fields ranked by '
+            'change score. Use this tool to quickly identify which metrics (CPU, memory, latency, '
+            'error counts, etc.) changed most — it replaces manual field-by-field comparison. '
+            'Provide two short time windows of similar duration (e.g. 15-30 min each): '
+            'one before the anomaly (baseline) and one during (selection). '
+            'Returns changeScore, P50/P90 values, and log-ratios for each field.'
+        ),
         'input_schema': MetricChangeAnalysisToolArgs.model_json_schema(),
         'function': metric_change_analysis_tool,
         'args_model': MetricChangeAnalysisToolArgs,
-        'min_version': '3.3.0',
+        'min_version': '1.0.0',
         'http_methods': 'POST',
     },
 }

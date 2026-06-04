@@ -333,30 +333,22 @@ class TestSkillsTools:
         async def mock_search(**kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                # Selection data - high response times
+                # Selection aggregation - high response times
                 return {
-                    'hits': {
-                        'hits': [
-                            {'_source': {'responseTime': 5000, 'cpuUsage': 85}},
-                            {'_source': {'responseTime': 6000, 'cpuUsage': 90}},
-                            {'_source': {'responseTime': 4500, 'cpuUsage': 88}},
-                            {'_source': {'responseTime': 7000, 'cpuUsage': 92}},
-                            {'_source': {'responseTime': 5500, 'cpuUsage': 87}},
-                        ]
-                    }
+                    'hits': {'total': {'value': 5, 'relation': 'eq'}},
+                    'aggregations': {
+                        'responseTime': {'values': {'50.0': 5500.0, '90.0': 6800.0}},
+                        'cpuUsage': {'values': {'50.0': 88.0, '90.0': 91.6}},
+                    },
                 }
             else:
-                # Baseline data - normal response times
+                # Baseline aggregation - normal response times
                 return {
-                    'hits': {
-                        'hits': [
-                            {'_source': {'responseTime': 100, 'cpuUsage': 30}},
-                            {'_source': {'responseTime': 150, 'cpuUsage': 35}},
-                            {'_source': {'responseTime': 120, 'cpuUsage': 28}},
-                            {'_source': {'responseTime': 130, 'cpuUsage': 32}},
-                            {'_source': {'responseTime': 110, 'cpuUsage': 31}},
-                        ]
-                    }
+                    'hits': {'total': {'value': 5, 'relation': 'eq'}},
+                    'aggregations': {
+                        'responseTime': {'values': {'50.0': 120.0, '90.0': 146.0}},
+                        'cpuUsage': {'values': {'50.0': 31.0, '90.0': 34.6}},
+                    },
                 }
 
         self.mock_client.search = AsyncMock(side_effect=mock_search)
@@ -436,7 +428,14 @@ class TestSkillsTools:
     @pytest.mark.asyncio
     async def test_metric_change_analysis_tool_no_data(self):
         """Test metric_change_analysis_tool when no data found."""
-        self.mock_client.search = AsyncMock(return_value={'hits': {'hits': []}})
+        self.mock_client.search = AsyncMock(
+            return_value={
+                'hits': {'total': {'value': 0, 'relation': 'eq'}},
+                'aggregations': {
+                    'responseTime': {'values': {'50.0': None, '90.0': None}},
+                },
+            }
+        )
         self.mock_client.indices = Mock()
         self.mock_client.indices.get_mapping = AsyncMock(
             return_value={
@@ -478,23 +477,21 @@ class TestSkillsTools:
             call_count[0] += 1
             if call_count[0] == 1:
                 return {
-                    'hits': {
-                        'hits': [
-                            {'_source': {'fieldA': 500, 'fieldB': 20, 'fieldC': 3000}},
-                            {'_source': {'fieldA': 600, 'fieldB': 22, 'fieldC': 3500}},
-                            {'_source': {'fieldA': 550, 'fieldB': 21, 'fieldC': 3200}},
-                        ]
-                    }
+                    'hits': {'total': {'value': 3, 'relation': 'eq'}},
+                    'aggregations': {
+                        'fieldA': {'values': {'50.0': 550.0, '90.0': 590.0}},
+                        'fieldB': {'values': {'50.0': 21.0, '90.0': 21.8}},
+                        'fieldC': {'values': {'50.0': 3200.0, '90.0': 3440.0}},
+                    },
                 }
             else:
                 return {
-                    'hits': {
-                        'hits': [
-                            {'_source': {'fieldA': 100, 'fieldB': 20, 'fieldC': 100}},
-                            {'_source': {'fieldA': 110, 'fieldB': 19, 'fieldC': 120}},
-                            {'_source': {'fieldA': 105, 'fieldB': 21, 'fieldC': 110}},
-                        ]
-                    }
+                    'hits': {'total': {'value': 3, 'relation': 'eq'}},
+                    'aggregations': {
+                        'fieldA': {'values': {'50.0': 105.0, '90.0': 109.0}},
+                        'fieldB': {'values': {'50.0': 20.0, '90.0': 20.8}},
+                        'fieldC': {'values': {'50.0': 110.0, '90.0': 118.0}},
+                    },
                 }
 
         self.mock_client.search = AsyncMock(side_effect=mock_search)

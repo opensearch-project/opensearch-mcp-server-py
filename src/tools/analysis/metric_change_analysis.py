@@ -5,12 +5,11 @@ import logging
 import math
 from .data_fetching_helper import (
     AnalysisParameters,
-    fetch_index_data_dsl,
+    format_time_string,
     get_field_types,
-    get_flattened_value,
     get_number_fields,
 )
-from typing import Any, Dict, List, Set
+from typing import Dict, List, Set
 
 
 logger = logging.getLogger(__name__)
@@ -23,7 +22,11 @@ EPSILON = 1e-10
 async def execute_metric_change_analysis(
     client, params: AnalysisParameters, top_n: int = DEFAULT_TOP_N
 ) -> dict:
-    """Compare percentile distributions (P50, P90) of numeric fields between two time ranges."""
+    """Compare percentile distributions (P50, P90) of numeric fields between two time ranges.
+
+    Uses OpenSearch percentiles aggregation for server-side computation instead of
+    fetching raw documents.
+    """
     logger.debug('Starting metric change analysis with parameters: index=%s', params.index)
 
     field_types = await get_field_types(client, params.index)
@@ -34,48 +37,129 @@ async def execute_metric_change_analysis(
             'No numeric fields found in index. Percentile analysis requires numeric fields.'
         )
 
-    selection_data = await fetch_index_data_dsl(
-        client, params.selection_time_range_start, params.selection_time_range_end, params
+    selection_stats = await _fetch_percentiles_via_agg(
+        client,
+        params.index,
+        params.time_field,
+        params.selection_time_range_start,
+        params.selection_time_range_end,
+        number_fields,
+        params,
     )
-    baseline_data = await fetch_index_data_dsl(
-        client, params.baseline_time_range_start, params.baseline_time_range_end, params
+    baseline_stats = await _fetch_percentiles_via_agg(
+        client,
+        params.index,
+        params.time_field,
+        params.baseline_time_range_start,
+        params.baseline_time_range_end,
+        number_fields,
+        params,
     )
 
-    if not selection_data:
-        raise RuntimeError('No data found for selection time range')
-    if not baseline_data:
-        raise RuntimeError('No data found for baseline time range')
+    if not selection_stats:
+        hint = _check_time_field(params.time_field, field_types)
+        raise RuntimeError(f'No data found for selection time range.{hint}')
+    if not baseline_stats:
+        hint = _check_time_field(params.time_field, field_types)
+        raise RuntimeError(f'No data found for baseline time range.{hint}')
 
-    analyses = _calculate_metric_change_analysis(selection_data, baseline_data, number_fields)
+    analyses = _calculate_metric_change_from_agg(selection_stats, baseline_stats)
     results = _format_results(analyses, top_n)
     return {'percentileAnalysis': results}
 
 
-def _calculate_metric_change_analysis(
-    selection_data: List[Dict[str, Any]],
-    baseline_data: List[Dict[str, Any]],
+async def _fetch_percentiles_via_agg(
+    client,
+    index: str,
+    time_field: str,
+    time_range_start: str,
+    time_range_end: str,
     number_fields: Set[str],
-) -> List[Dict]:
-    """Calculate percentile changes for all numeric fields, sorted by change score."""
-    analyses = []
+    params: AnalysisParameters,
+) -> Dict[str, Dict[str, float]]:
+    """Fetch P50 and P90 for all numeric fields using a single aggregation request."""
+    import json
+
+    bool_query: dict = {
+        'must': [
+            {
+                'range': {
+                    time_field: {
+                        'gte': format_time_string(time_range_start),
+                        'lte': format_time_string(time_range_end),
+                        'format': 'strict_date_optional_time||epoch_millis',
+                    }
+                }
+            }
+        ]
+    }
+
+    if params.dsl:
+        dsl_map = json.loads(params.dsl.replace("'", '"'))
+        bool_query['must'].append(dsl_map)
+    elif params.filter:
+        for filter_str in params.filter:
+            filter_map = json.loads(filter_str.replace("'", '"'))
+            bool_query['must'].append(filter_map)
+
+    aggs = {}
+    for field in number_fields:
+        safe_name = field.replace('.', '_DOT_')
+        aggs[safe_name] = {'percentiles': {'field': field, 'percents': [50, 90]}}
+
+    search_body = {
+        'query': {'bool': bool_query},
+        'size': 0,
+        'aggs': aggs,
+    }
+
+    response = await client.search(index=index, body=search_body)
+
+    total_hits = response.get('hits', {}).get('total', {})
+    if isinstance(total_hits, dict):
+        count = total_hits.get('value', 0)
+    else:
+        count = total_hits
+    if count == 0:
+        return {}
+
+    aggregations = response.get('aggregations', {})
+    stats: Dict[str, Dict[str, float]] = {}
 
     for field in number_fields:
-        selection_values = _extract_numeric_values(selection_data, field)
-        baseline_values = _extract_numeric_values(baseline_data, field)
-
-        if not selection_values or not baseline_values:
+        safe_name = field.replace('.', '_DOT_')
+        agg_result = aggregations.get(safe_name, {})
+        values = agg_result.get('values', {})
+        p50 = values.get('50.0')
+        p90 = values.get('90.0')
+        if p50 is None and p90 is None:
             continue
+        stats[field] = {
+            'p50': float(p50) if p50 is not None else 0.0,
+            'p90': float(p90) if p90 is not None else 0.0,
+        }
 
-        selection_stats = _calculate_percentiles(selection_values)
-        baseline_stats = _calculate_percentiles(baseline_values)
-        variance = _calculate_percentile_variance(selection_stats, baseline_stats)
+    return stats
 
+
+def _calculate_metric_change_from_agg(
+    selection_stats: Dict[str, Dict[str, float]],
+    baseline_stats: Dict[str, Dict[str, float]],
+) -> List[Dict]:
+    """Calculate percentile changes for all numeric fields from aggregation results."""
+    analyses = []
+    common_fields = set(selection_stats.keys()) & set(baseline_stats.keys())
+
+    for field in common_fields:
+        sel = selection_stats[field]
+        base = baseline_stats[field]
+        variance = _calculate_percentile_variance(sel, base)
         analyses.append(
             {
                 'field': field,
                 'variance': variance,
-                'selection_stats': selection_stats,
-                'baseline_stats': baseline_stats,
+                'selection_stats': sel,
+                'baseline_stats': base,
             }
         )
 
@@ -83,8 +167,10 @@ def _calculate_metric_change_analysis(
     return analyses
 
 
-def _extract_numeric_values(data: List[Dict[str, Any]], field: str) -> List[float]:
+def _extract_numeric_values(data: List[Dict], field: str) -> List[float]:
     """Extract numeric values from dataset for a specific field."""
+    from .data_fetching_helper import get_flattened_value
+
     values = []
     for doc in data:
         value = get_flattened_value(doc, field)
@@ -104,30 +190,11 @@ def _calculate_percentiles(values: List[float]) -> Dict[str, float]:
     if not values:
         return {'p50': 0.0, 'p90': 0.0}
 
-    sorted_values = sorted(values)
-    p50 = _percentile(sorted_values, 50)
-    p90 = _percentile(sorted_values, 90)
-    return {'p50': p50, 'p90': p90}
+    import numpy as np
 
-
-def _percentile(sorted_values: List[float], percentile: int) -> float:
-    """Calculate a specific percentile from sorted values using linear interpolation."""
-    if not sorted_values:
-        return 0.0
-    if len(sorted_values) == 1:
-        return sorted_values[0]
-
-    index = (percentile / 100.0) * (len(sorted_values) - 1)
-    lower_index = int(math.floor(index))
-    upper_index = int(math.ceil(index))
-
-    if lower_index == upper_index:
-        return sorted_values[lower_index]
-
-    lower_value = sorted_values[lower_index]
-    upper_value = sorted_values[upper_index]
-    fraction = index - lower_index
-    return lower_value + (upper_value - lower_value) * fraction
+    arr = np.asarray(values, dtype=np.float64)
+    p50, p90 = np.percentile(arr, [50, 90], method='linear')
+    return {'p50': float(p50), 'p90': float(p90)}
 
 
 def _calculate_percentile_variance(
@@ -179,3 +246,11 @@ def _format_results(analyses: List[Dict], top_n: int) -> List[Dict]:
             }
         )
     return results
+
+
+def _check_time_field(time_field: str, field_types: Dict[str, str]) -> str:
+    """Check if timeField exists in mapping, return hint if not."""
+    if time_field in field_types:
+        return ' No documents found in this time range.'
+    date_fields = [name for name, ftype in field_types.items() if ftype == 'date']
+    return f" Check timeField: '{time_field}' not found. Date fields in index: {date_fields}"
