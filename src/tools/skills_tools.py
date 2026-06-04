@@ -142,9 +142,7 @@ async def data_distribution_tool(args: DataDistributionToolArgs) -> list[dict]:
 
     except Exception as e:
         hint = _get_error_hint(e)
-        return log_tool_error(
-            'DataDistributionTool', e, f'executing DataDistributionTool.{hint}'
-        )
+        return log_tool_error('DataDistributionTool', e, f'executing DataDistributionTool.{hint}')
 
 
 async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> list[dict]:
