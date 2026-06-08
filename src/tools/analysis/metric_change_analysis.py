@@ -96,11 +96,16 @@ async def _fetch_percentiles_via_agg(
 
     if params.dsl:
         dsl_map = json.loads(params.dsl.replace("'", '"'))
+        if 'query' in dsl_map:
+            dsl_map = dsl_map['query']
         bool_query['must'].append(dsl_map)
     elif params.filter:
-        for filter_str in params.filter:
-            filter_map = json.loads(filter_str.replace("'", '"'))
-            bool_query['must'].append(filter_map)
+        for filter_item in params.filter:
+            if isinstance(filter_item, dict):
+                bool_query['must'].append(filter_item)
+            else:
+                filter_map = json.loads(str(filter_item).replace("'", '"'))
+                bool_query['must'].append(filter_map)
 
     aggs = {}
     for field in number_fields:
@@ -251,6 +256,12 @@ def _format_results(analyses: List[Dict], top_n: int) -> List[Dict]:
 def _check_time_field(time_field: str, field_types: Dict[str, str]) -> str:
     """Check if timeField exists in mapping, return hint if not."""
     if time_field in field_types:
-        return ' No documents found in this time range.'
+        return ''
     date_fields = [name for name, ftype in field_types.items() if ftype == 'date']
-    return f" Check timeField: '{time_field}' not found. Date fields in index: {date_fields}"
+    suggested = date_fields[0] if date_fields else 'unknown'
+    return (
+        f"\n\nERROR: Invalid parameter 'timeField'.\n"
+        f'Current value: {time_field}\n'
+        f'Valid values: {", ".join(date_fields)}\n'
+        f"REQUIRED ACTION: Retry this tool call with timeField='{suggested}'"
+    )

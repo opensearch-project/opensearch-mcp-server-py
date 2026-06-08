@@ -51,6 +51,20 @@ async def execute_data_distribution(client, params: AnalysisParameters) -> dict:
         return await _execute_dsl_analysis(client, params)
 
 
+def _check_time_field(time_field: str, field_types: Dict[str, str]) -> str:
+    """Check if timeField exists in mapping, return hint if not."""
+    if time_field in field_types:
+        return ''
+    date_fields = [name for name, ftype in field_types.items() if ftype == 'date']
+    suggested = date_fields[0] if date_fields else 'unknown'
+    return (
+        f"\n\nERROR: Invalid parameter 'timeField'.\n"
+        f'Current value: {time_field}\n'
+        f'Valid values: {", ".join(date_fields)}\n'
+        f"REQUIRED ACTION: Retry this tool call with timeField='{suggested}'"
+    )
+
+
 async def _execute_dsl_analysis(client, params: AnalysisParameters) -> dict:
     """Fetch data via DSL queries and perform distribution analysis."""
     if params.has_baseline_time_range():
@@ -61,9 +75,13 @@ async def _execute_dsl_analysis(client, params: AnalysisParameters) -> dict:
             client, params.baseline_time_range_start, params.baseline_time_range_end, params
         )
         if not selection_data:
-            raise RuntimeError('No data found for selection time range')
+            field_types = await get_field_types(client, params.index)
+            hint = _check_time_field(params.time_field, field_types)
+            raise RuntimeError(f'No data found for selection time range.{hint}')
         if not baseline_data:
-            raise RuntimeError('No data found for baseline time range')
+            field_types = await get_field_types(client, params.index)
+            hint = _check_time_field(params.time_field, field_types)
+            raise RuntimeError(f'No data found for baseline time range.{hint}')
         result = await _get_comparison_distribution(
             client, selection_data, baseline_data, params.index
         )
@@ -73,7 +91,9 @@ async def _execute_dsl_analysis(client, params: AnalysisParameters) -> dict:
             client, params.selection_time_range_start, params.selection_time_range_end, params
         )
         if not selection_data:
-            raise RuntimeError('No data found for selection time range')
+            field_types = await get_field_types(client, params.index)
+            hint = _check_time_field(params.time_field, field_types)
+            raise RuntimeError(f'No data found for selection time range.{hint}')
         result = await _analyze_single_dataset(client, selection_data, params.index)
         return {'singleAnalysis': result}
 
@@ -100,9 +120,13 @@ async def _execute_ppl_analysis(client, params: AnalysisParameters) -> dict:
         selection_data = await execute_ppl_and_parse_docs(client, selection_query)
         baseline_data = await execute_ppl_and_parse_docs(client, baseline_query)
         if not selection_data:
-            raise RuntimeError('No data found for selection time range')
+            field_types = await get_field_types(client, params.index)
+            hint = _check_time_field(params.time_field, field_types)
+            raise RuntimeError(f'No data found for selection time range.{hint}')
         if not baseline_data:
-            raise RuntimeError('No data found for baseline time range')
+            field_types = await get_field_types(client, params.index)
+            hint = _check_time_field(params.time_field, field_types)
+            raise RuntimeError(f'No data found for baseline time range.{hint}')
         result = await _get_comparison_distribution(
             client, selection_data, baseline_data, params.index
         )
@@ -118,7 +142,9 @@ async def _execute_ppl_analysis(client, params: AnalysisParameters) -> dict:
         )
         selection_data = await execute_ppl_and_parse_docs(client, selection_query)
         if not selection_data:
-            raise RuntimeError('No data found for selection time range')
+            field_types = await get_field_types(client, params.index)
+            hint = _check_time_field(params.time_field, field_types)
+            raise RuntimeError(f'No data found for selection time range.{hint}')
         result = await _analyze_single_dataset(client, selection_data, params.index)
         return {'singleAnalysis': result}
 
