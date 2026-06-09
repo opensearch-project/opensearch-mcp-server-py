@@ -249,8 +249,23 @@ def _format_results(analyses: List[Dict], top_n: int) -> List[Dict]:
 
 
 def _check_time_field(time_field: str, field_types: Dict[str, str]) -> str:
-    """Check if timeField exists in mapping, return hint if not."""
+    """Return a hint explaining why a query returned no data.
+
+    Distinguishes two root causes so the caller knows what to fix:
+    - timeField is valid (exists in the mapping): the time range is likely the
+      problem, so the hint points at the time range.
+    - timeField does not exist in the mapping: the timeField itself is wrong,
+      so the hint names the actual date fields available in the index.
+    """
     if time_field in field_types:
-        return ' No documents found in this time range.'
+        return (
+            f" The timeField '{time_field}' exists in the index, so the time range is"
+            ' likely the problem: no documents fall within the requested time range.'
+            ' Try widening the time range.'
+        )
     date_fields = [name for name, ftype in field_types.items() if ftype == 'date']
-    return f" Check timeField: '{time_field}' not found. Date fields in index: {date_fields}"
+    return (
+        f" The timeField '{time_field}' does not exist in this index, so no documents"
+        ' could match (this is a timeField problem, not a time range problem).'
+        f' Retry with one of the actual date fields in the index: {date_fields}'
+    )
