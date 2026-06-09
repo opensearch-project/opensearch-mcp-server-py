@@ -56,12 +56,18 @@ class AnalysisParameters:
 
         filter_param = parameters.get('filter', '')
         if not filter_param:
-            self.filter: List[str] = []
+            self.filter: List = []
         else:
             try:
-                self.filter = json.loads(filter_param)
+                parsed = json.loads(filter_param)
             except Exception:
-                raise ValueError("Invalid 'filter' parameter: must be a valid JSON array")
+                raise ValueError("Invalid 'filter' parameter: must be valid JSON")
+            if isinstance(parsed, list):
+                self.filter = parsed
+            elif isinstance(parsed, dict):
+                self.filter = [parsed]
+            else:
+                raise ValueError("Invalid 'filter' parameter: must be a JSON object or array")
 
         self.dsl = parameters.get('dsl', '')
         self.ppl = parameters.get('ppl', '')

@@ -41,20 +41,24 @@ Parameters not provided fall back to server environment variables (if any).\
 """
 
 _SKILLS_TOOLS_INSTRUCTIONS = """\
-This server provides advanced analysis tools that should be used INSTEAD OF \
-writing manual SearchIndexTool aggregation queries:
+This server provides advanced analysis tools for anomaly investigation. \
+These tools complement SearchIndexTool — use them together for best results:
 
-- DataDistributionTool: Use FIRST for root-cause investigation. Automatically discovers \
-which categorical field values (service names, error codes, status values) shifted most \
-between a baseline and an anomaly window. Replaces dozens of manual aggregation queries.
+- DataDistributionTool: Discovers which categorical field values (service names, error codes, \
+status values) shifted most between a baseline and an anomaly window. Note: this tool analyzes \
+frequency distribution of field values, not latency or duration. For latency-based investigation, \
+use SearchIndexTool with sort by duration.
 
-- MetricChangeAnalysisTool: Use for metric investigation. Compares percentile distributions \
-of ALL numeric fields between a baseline and an anomaly window, returns top fields ranked \
-by change score. Replaces manual field-by-field comparison.
+- MetricChangeAnalysisTool: Compares percentile distributions of ALL numeric fields between \
+a baseline and an anomaly window, returns top fields ranked by change score. Note: counter-type \
+metrics (e.g. failures-total) that spike from zero may dominate results — cross-reference with \
+trace and log evidence before concluding.
 
-- LogPatternAnalysisTool: Use for log analysis. Clusters raw log messages into patterns \
-using ML, highlights which patterns are new or surging compared to a baseline period. \
-Replaces manual keyword searches.\
+- LogPatternAnalysisTool: Clusters raw log messages into patterns using ML, highlights which \
+patterns are new or surging compared to a baseline period.
+
+Important: Always cross-validate findings from these tools against SearchIndexTool results \
+(e.g. traces sorted by duration, error logs) before drawing conclusions.\
 """
 
 
