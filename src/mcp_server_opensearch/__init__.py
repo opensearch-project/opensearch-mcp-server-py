@@ -4,7 +4,13 @@
 import argparse
 import asyncio
 import logging
+import os
 from typing import Dict, List
+
+# limit cpu thread for numpy and sklearn
+os.environ.setdefault('OPENBLAS_NUM_THREADS', '1')
+os.environ.setdefault('MKL_NUM_THREADS', '1')
+os.environ.setdefault('OMP_NUM_THREADS', '1')
 
 
 def parse_unknown_args_to_dict(unknown_args: List[str]) -> Dict[str, str]:

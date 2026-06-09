@@ -168,11 +168,16 @@ async def fetch_index_data_dsl(
 
     if params.dsl:
         dsl_map = json.loads(params.dsl.replace("'", '"'))
+        if 'query' in dsl_map:
+            dsl_map = dsl_map['query']
         bool_query['must'].append(dsl_map)
     elif params.filter:
-        for filter_str in params.filter:
-            filter_map = json.loads(filter_str.replace("'", '"'))
-            bool_query['must'].append(filter_map)
+        for filter_item in params.filter:
+            if isinstance(filter_item, dict):
+                bool_query['must'].append(filter_item)
+            else:
+                filter_map = json.loads(str(filter_item).replace("'", '"'))
+                bool_query['must'].append(filter_map)
 
     search_body = {
         'query': {'bool': bool_query},
