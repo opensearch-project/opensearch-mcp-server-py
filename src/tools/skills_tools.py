@@ -279,9 +279,11 @@ SKILLS_TOOLS_REGISTRY = {
             'Provide two short time windows of similar duration (e.g. 15-30 min each): '
             'one before the anomaly (baseline) and one during (selection). '
             'Returns changeScore, P50/P90 values, and log-ratios for each field. '
-            'Note: counter metrics that spike from near-zero (e.g. memory-failures-total) produce '
-            'very high change scores and may dominate results — verify these signals against '
-            'actual resource utilization metrics and trace latency data before concluding.'
+            'Every result also includes a timestamp indicating when the analysis was performed. '
+            'IMPORTANT: ALWAYS pass timeField. Discover the time field first, being sure to find '
+            'the correct field. Omitting timeField, or passing a field that is '
+            "absent from the index, causes a 'No data found' error and leads to a wrong "
+            'conclusion.'
         ),
         'input_schema': MetricChangeAnalysisToolArgs.model_json_schema(),
         'function': metric_change_analysis_tool,

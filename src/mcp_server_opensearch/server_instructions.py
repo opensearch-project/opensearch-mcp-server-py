@@ -49,10 +49,11 @@ status values) shifted most between a baseline and an anomaly window. Note: this
 frequency distribution of field values, not latency or duration. For latency-based investigation, \
 use SearchIndexTool with sort by duration.
 
-- MetricChangeAnalysisTool: Compares percentile distributions of ALL numeric fields between \
-a baseline and an anomaly window, returns top fields ranked by change score. Note: counter-type \
-metrics (e.g. failures-total) that spike from zero may dominate results — cross-reference with \
-trace and log evidence before concluding.
+- MetricChangeAnalysisTool: Use for metric investigation. Compares percentile distributions \
+of ALL numeric fields between a baseline and an anomaly window, returns top fields ranked \
+by change score. Replaces manual field-by-field comparison. ALWAYS pass timeField: discover \
+the time field and try the best to ensure it is correct. Omitting timeField, or passing a \
+field absent from the index, causes a "No data found" error and leads to a wrong conclusion.
 
 - LogPatternAnalysisTool: Clusters raw log messages into patterns using ML, highlights which \
 patterns are new or surging compared to a baseline period.
