@@ -275,7 +275,12 @@ SKILLS_TOOLS_REGISTRY = {
             'error counts, etc.) changed most — it replaces manual field-by-field comparison. '
             'Provide two short time windows of similar duration (e.g. 15-30 min each): '
             'one before the anomaly (baseline) and one during (selection). '
-            'Returns changeScore, P50/P90 values, and log-ratios for each field.'
+            'Returns changeScore, P50/P90 values, and log-ratios for each field. '
+            'Every result also includes a timestamp indicating when the analysis was performed. '
+            'IMPORTANT: ALWAYS pass timeField. Discover the time field first, being sure to find '
+            'the correct field. Omitting timeField, or passing a field that is '
+            "absent from the index, causes a 'No data found' error and leads to a wrong "
+            'conclusion.'
         ),
         'input_schema': MetricChangeAnalysisToolArgs.model_json_schema(),
         'function': metric_change_analysis_tool,
