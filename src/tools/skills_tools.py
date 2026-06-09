@@ -36,14 +36,18 @@ class DataDistributionToolArgs(baseToolArgs):
     """Arguments for the DataDistributionTool."""
 
     index: str = Field(description='Target OpenSearch index name')
-    selectionTimeRangeStart: str = Field(description='Start time for analysis period')
-    selectionTimeRangeEnd: str = Field(description='End time for analysis period')
+    selectionTimeRangeStart: str = Field(
+        description='Start time for analysis period (format: yyyy-MM-dd HH:mm:ss)'
+    )
+    selectionTimeRangeEnd: str = Field(
+        description='End time for analysis period (format: yyyy-MM-dd HH:mm:ss)'
+    )
     timeField: str = Field(description='Date/time field for filtering(required)')
     baselineTimeRangeStart: str = Field(
-        default='', description='Start time for baseline period (optional)'
+        default='', description='Start time for baseline period (format: yyyy-MM-dd HH:mm:ss)'
     )
     baselineTimeRangeEnd: str = Field(
-        default='', description='End time for baseline period (optional)'
+        default='', description='End time for baseline period (format: yyyy-MM-dd HH:mm:ss)'
     )
     size: int = Field(default=1000, description='Maximum number of documents to analyze')
     queryType: str = Field(default='dsl', description="Query type: 'dsl' (default) or 'ppl'")
@@ -96,17 +100,23 @@ class LogPatternAnalysisToolArgs(baseToolArgs):
 
     index: str = Field(description='Target OpenSearch index name containing log data')
     logFieldName: str = Field(description='Field containing raw log messages to analyze')
-    selectionTimeRangeStart: str = Field(description='Start time for analysis target period')
-    selectionTimeRangeEnd: str = Field(description='End time for analysis target period')
+    selectionTimeRangeStart: str = Field(
+        description='Start time for analysis target period (format: yyyy-MM-dd HH:mm:ss)'
+    )
+    selectionTimeRangeEnd: str = Field(
+        description='End time for analysis target period (format: yyyy-MM-dd HH:mm:ss)'
+    )
     timeField: str = Field(description='Date/time field for time-based filtering(required)')
     traceFieldName: str = Field(
         default='', description='Field for trace/correlation ID (optional)'
     )
     baseTimeRangeStart: str = Field(
-        default='', description='Start time for baseline comparison period (optional)'
+        default='',
+        description='Start time for baseline comparison period (format: yyyy-MM-dd HH:mm:ss)',
     )
     baseTimeRangeEnd: str = Field(
-        default='', description='End time for baseline comparison period (optional)'
+        default='',
+        description='End time for baseline comparison period (format: yyyy-MM-dd HH:mm:ss)',
     )
     filter: str = Field(
         default='',
@@ -230,14 +240,14 @@ SKILLS_TOOLS_REGISTRY = {
     'DataDistributionTool': {
         'display_name': 'DataDistributionTool',
         'description': (
-            'PREFERRED over SearchIndexTool for root-cause investigation. '
-            'Automatically discovers which categorical field values (e.g. service names, error codes, '
-            'status values) shifted most between a baseline and an anomaly window. '
-            'Use this tool FIRST when you need to identify which service, host, or component is '
-            'responsible for an anomaly — it replaces dozens of manual aggregation queries with a '
-            'single call. Provide a baseline time range to get a ranked list of field-value changes '
-            'sorted by divergence score; omit baseline for a single-window frequency snapshot. '
-            'Works on any index with keyword/boolean/numeric fields.'
+            'Analyzes the frequency distribution of categorical field values (e.g. service names, '
+            'error codes, status values) and identifies which values shifted most between a baseline '
+            'and an anomaly window. Provide a baseline time range to get a ranked list of field-value '
+            'changes sorted by divergence score; omit baseline for a single-window frequency snapshot. '
+            'Works on any index with keyword/boolean/numeric fields. '
+            'Note: this tool measures value frequency changes, NOT latency or duration. '
+            'A service appearing more frequently in traces does not necessarily mean it is the root cause '
+            '— always cross-check with latency data (e.g. SearchIndexTool sorted by duration).'
         ),
         'input_schema': DataDistributionToolArgs.model_json_schema(),
         'function': data_distribution_tool,
@@ -248,16 +258,12 @@ SKILLS_TOOLS_REGISTRY = {
     'LogPatternAnalysisTool': {
         'display_name': 'LogPatternAnalysisTool',
         'description': (
-            'PREFERRED over SearchIndexTool for log analysis. '
-            'Automatically clusters raw log messages into patterns using ML, then highlights '
-            'which patterns are new or surging compared to a baseline period. '
-            'Use this tool when investigating errors, exceptions, or unusual behavior in log indices '
-            '— it replaces manual keyword searches by surfacing the most anomalous log patterns '
-            'ranked by statistical lift. Supports three modes: '
+            'Clusters raw log messages into patterns using ML, then highlights which patterns '
+            'are new or surging compared to a baseline period. Supports three modes: '
             '(1) Insight mode (no baseline): extracts and ranks all patterns in the target window; '
             '(2) Diff mode (with baseline, no trace): shows patterns that appeared or surged; '
             '(3) Sequence mode (with baseline + traceFieldName): finds anomalous request sequences. '
-            'Always prefer this over grep-style SearchIndexTool queries on log indices.'
+            'Useful for discovering error patterns without knowing specific keywords upfront.'
         ),
         'input_schema': LogPatternAnalysisToolArgs.model_json_schema(),
         'function': log_pattern_analysis_tool,
@@ -268,14 +274,14 @@ SKILLS_TOOLS_REGISTRY = {
     'MetricChangeAnalysisTool': {
         'display_name': 'MetricChangeAnalysisTool',
         'description': (
-            'PREFERRED over SearchIndexTool for metric investigation. '
-            'Automatically compares percentile distributions (P50, P90) of ALL numeric fields '
-            'between a baseline and an anomaly window, then returns the top fields ranked by '
-            'change score. Use this tool to quickly identify which metrics (CPU, memory, latency, '
-            'error counts, etc.) changed most — it replaces manual field-by-field comparison. '
+            'Compares percentile distributions (P50, P90) of ALL numeric fields between a baseline '
+            'and an anomaly window, then returns the top fields ranked by change score. '
             'Provide two short time windows of similar duration (e.g. 15-30 min each): '
             'one before the anomaly (baseline) and one during (selection). '
-            'Returns changeScore, P50/P90 values, and log-ratios for each field.'
+            'Returns changeScore, P50/P90 values, and log-ratios for each field. '
+            'Note: counter metrics that spike from near-zero (e.g. memory-failures-total) produce '
+            'very high change scores and may dominate results — verify these signals against '
+            'actual resource utilization metrics and trace latency data before concluding.'
         ),
         'input_schema': MetricChangeAnalysisToolArgs.model_json_schema(),
         'function': metric_change_analysis_tool,
