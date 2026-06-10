@@ -39,7 +39,7 @@ class DataDistributionToolArgs(baseToolArgs):
         default='',
         description=(
             'Optional DSL filter clauses as JSON array. Target a business field '
-            "(e.g. serviceName), NOT metadata fields like _id or _field_names. "
+            '(e.g. serviceName), NOT metadata fields like _id or _field_names. '
             'Example: [{"term":{"serviceName":"ts-auth-service"}}].'
         ),
     )
@@ -81,7 +81,7 @@ class MetricChangeAnalysisToolArgs(baseToolArgs):
         default='',
         description=(
             'Optional DSL filter. Target a business field (e.g. serviceName), '
-            "NOT metadata fields like _id or _field_names. "
+            'NOT metadata fields like _id or _field_names. '
             'Example: {"term":{"serviceName":"ts-auth-service"}}.'
         ),
     )
@@ -188,9 +188,7 @@ async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> lis
         return [{'type': 'text', 'text': f'MetricChangeAnalysisTool result:\n{formatted}'}]
 
     except Exception as e:
-        return log_tool_error(
-            'MetricChangeAnalysisTool', e, 'executing MetricChangeAnalysisTool'
-        )
+        return log_tool_error('MetricChangeAnalysisTool', e, 'executing MetricChangeAnalysisTool')
 
 
 async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[dict]:
@@ -224,9 +222,7 @@ async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[di
         return [{'type': 'text', 'text': f'LogPatternAnalysisTool result:\n{formatted}'}]
 
     except Exception as e:
-        return log_tool_error(
-            'LogPatternAnalysisTool', e, 'executing LogPatternAnalysisTool'
-        )
+        return log_tool_error('LogPatternAnalysisTool', e, 'executing LogPatternAnalysisTool')
 
 
 SKILLS_TOOLS_REGISTRY = {

@@ -245,9 +245,9 @@ def _translate_filter_request_error(error: RequestError) -> str:
 
     if metadata_field and ('wildcard queries on' in raw or 'prefix queries on' in raw):
         return (
-            f"filter cannot use wildcard/prefix queries on the metadata field "
+            f'filter cannot use wildcard/prefix queries on the metadata field '
             f"'{metadata_field}' — these queries are only supported on keyword or text "
-            f"fields. Rewrite the filter to target a business field, for example: "
+            f'fields. Rewrite the filter to target a business field, for example: '
             f'{{"wildcard": {{"serviceName": "ts-auth-service*"}}}} or '
             f'{{"term": {{"serviceName": "ts-auth-service"}}}}.'
         )
