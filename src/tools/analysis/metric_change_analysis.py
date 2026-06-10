@@ -9,6 +9,7 @@ from .data_fetching_helper import (
     get_field_types,
     get_number_fields,
 )
+from opensearchpy.exceptions import RequestError
 from typing import Dict, List, Set
 
 
@@ -118,7 +119,10 @@ async def _fetch_percentiles_via_agg(
         'aggs': aggs,
     }
 
-    response = await client.search(index=index, body=search_body)
+    try:
+        response = await client.search(index=index, body=search_body)
+    except RequestError as e:
+        raise RuntimeError(_translate_filter_request_error(e)) from e
 
     total_hits = response.get('hits', {}).get('total', {})
     if isinstance(total_hits, dict):
@@ -172,36 +176,6 @@ def _calculate_metric_change_from_agg(
     return analyses
 
 
-def _extract_numeric_values(data: List[Dict], field: str) -> List[float]:
-    """Extract numeric values from dataset for a specific field."""
-    from .data_fetching_helper import get_flattened_value
-
-    values = []
-    for doc in data:
-        value = get_flattened_value(doc, field)
-        if value is not None:
-            try:
-                if isinstance(value, (int, float)):
-                    values.append(float(value))
-                else:
-                    values.append(float(str(value)))
-            except (ValueError, TypeError):
-                pass
-    return values
-
-
-def _calculate_percentiles(values: List[float]) -> Dict[str, float]:
-    """Calculate P50 and P90 for a list of values."""
-    if not values:
-        return {'p50': 0.0, 'p90': 0.0}
-
-    import numpy as np
-
-    arr = np.asarray(values, dtype=np.float64)
-    p50, p90 = np.percentile(arr, [50, 90], method='linear')
-    return {'p50': float(p50), 'p90': float(p90)}
-
-
 def _calculate_percentile_variance(
     selection_stats: Dict[str, float], baseline_stats: Dict[str, float]
 ) -> float:
@@ -251,6 +225,43 @@ def _format_results(analyses: List[Dict], top_n: int) -> List[Dict]:
             }
         )
     return results
+
+
+def _translate_filter_request_error(error: RequestError) -> str:
+    """Translate OpenSearch 400 errors caused by bad filter into LLM-actionable hints.
+
+    The most common failures from LLM-generated filters are:
+    - wildcard/prefix queries on metadata fields (_id, _field_names, etc.) — OpenSearch
+      only allows these on keyword/text fields.
+    - query_string without an explicit `fields` clause — expansion across all fields
+      exceeds the index field-expansion limit (default 1024) on wide indices.
+    """
+    raw = str(error)
+    metadata_field = None
+    for meta in ('_id', '_field_names', '_index', '_type', '_routing'):
+        if f'[{meta}]' in raw:
+            metadata_field = meta
+            break
+
+    if metadata_field and ('wildcard queries on' in raw or 'prefix queries on' in raw):
+        return (
+            f"filter cannot use wildcard/prefix queries on the metadata field "
+            f"'{metadata_field}' — these queries are only supported on keyword or text "
+            f"fields. Rewrite the filter to target a business field, for example: "
+            f'{{"wildcard": {{"serviceName": "ts-auth-service*"}}}} or '
+            f'{{"term": {{"serviceName": "ts-auth-service"}}}}.'
+        )
+
+    if 'field expansion for [*] matches too many fields' in raw:
+        return (
+            'filter using query_string without an explicit `fields` list caused field '
+            'expansion to exceed the index limit. Either restrict the query to specific '
+            'fields, e.g. {"query_string": {"query": "ts-auth-service*", '
+            '"fields": ["serviceName"]}}, or switch to a term/wildcard query on a '
+            'specific business field.'
+        )
+
+    return f'filter rejected by OpenSearch: {raw}'
 
 
 def _check_time_field(time_field: str, field_types: Dict[str, str]) -> str:

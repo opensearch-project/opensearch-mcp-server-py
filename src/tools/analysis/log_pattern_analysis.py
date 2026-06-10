@@ -536,18 +536,6 @@ def _post_process_pattern(pattern: str) -> str:
     return REPEATED_WILDCARDS_PATTERN.sub('<*>', pattern)
 
 
-def _jaccard_similarity(pattern1: str, pattern2: str) -> float:
-    if not pattern1 and not pattern2:
-        return 1.0
-    if not pattern1 or not pattern2:
-        return 0.0
-    set1 = set(pattern1.split())
-    set2 = set(pattern2.split())
-    union = set1 | set2
-    intersection_size = len(set1) + len(set2) - len(union)
-    return intersection_size / len(union) if union else 0.0
-
-
 def _merge_similar_patterns(pattern_map: Dict[str, float]):
     if not pattern_map:
         return

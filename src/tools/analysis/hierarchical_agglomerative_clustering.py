@@ -21,29 +21,13 @@ class ClusterNode:
         """Create a leaf node with a single sample."""
         return cls(node_id, [sample])
 
-    @classmethod
-    def merge(cls, node_id: int, left: 'ClusterNode', right: 'ClusterNode') -> 'ClusterNode':
-        """Merge two nodes into a new parent node."""
-        return cls(node_id, left.samples + right.samples)
-
 
 class LinkageMethod:
-    """Constants for linkage methods."""
+    """Constants for linkage methods passed to scipy's linkage()."""
 
     SINGLE = 'single'
     COMPLETE = 'complete'
     AVERAGE = 'average'
-
-
-def calculate_cosine_similarity(a: List[float], b: List[float]) -> float:
-    """Compute cosine similarity between two vectors."""
-    a_arr = np.asarray(a, dtype=np.float64)
-    b_arr = np.asarray(b, dtype=np.float64)
-    norm_a = np.linalg.norm(a_arr)
-    norm_b = np.linalg.norm(b_arr)
-    if norm_a == 0 or norm_b == 0:
-        return 0.0
-    return float(np.dot(a_arr, b_arr) / (norm_a * norm_b))
 
 
 class HierarchicalAgglomerativeClustering:
@@ -88,17 +72,6 @@ class HierarchicalAgglomerativeClustering:
         for node_id, (_, samples) in enumerate(sorted(clusters_map.items())):
             clusters.append(ClusterNode(node_id, samples))
         return clusters
-
-    def _compute_cluster_distance(self, c1: ClusterNode, c2: ClusterNode, linkage: str) -> float:
-        """Compute distance between two clusters using the specified linkage."""
-        sub_matrix = self.distance_matrix[np.ix_(c1.samples, c2.samples)]
-        if linkage == LinkageMethod.SINGLE:
-            return float(sub_matrix.min())
-        elif linkage == LinkageMethod.COMPLETE:
-            return float(sub_matrix.max())
-        elif linkage == LinkageMethod.AVERAGE:
-            return float(sub_matrix.mean())
-        raise ValueError(f'Unknown linkage method: {linkage}')
 
     def get_cluster_centroid(self, cluster: ClusterNode) -> int:
         """Return the medoid index of the cluster."""

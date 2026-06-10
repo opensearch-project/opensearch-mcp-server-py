@@ -13,22 +13,6 @@ from opensearch.client import get_opensearch_client
 from pydantic import Field
 
 
-def _get_error_hint(exception: Exception) -> str:
-    """Return actionable hint based on exception type."""
-    exc_type = type(exception).__name__
-    exc_msg = str(exception).lower()
-
-    if 'timeout' in exc_type.lower() or 'timeout' in exc_msg:
-        return ' Hint: request timed out. Try narrowing the time range or adding a filter.'
-    if 'connectionerror' in exc_type.lower() or 'connection' in exc_msg:
-        return ' Hint: connection failed. Check if the OpenSearch cluster is reachable.'
-    if 'notfounderror' in exc_type.lower() or '404' in exc_msg:
-        return ' Hint: index not found. Check the index name.'
-    if 'no data found' in exc_msg:
-        return ''
-    return ''
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +36,12 @@ class DataDistributionToolArgs(baseToolArgs):
     size: int = Field(default=1000, description='Maximum number of documents to analyze')
     queryType: str = Field(default='dsl', description="Query type: 'dsl' (default) or 'ppl'")
     filter: str = Field(
-        default='', description='Additional DSL filter clauses as JSON array of strings'
+        default='',
+        description=(
+            'Optional DSL filter clauses as JSON array. Target a business field '
+            "(e.g. serviceName), NOT metadata fields like _id or _field_names. "
+            'Example: [{"term":{"serviceName":"ts-auth-service"}}].'
+        ),
     )
     dsl: str = Field(default='', description='Complete DSL query as JSON string')
     ppl: str = Field(
@@ -88,7 +77,14 @@ class MetricChangeAnalysisToolArgs(baseToolArgs):
     queryType: str = Field(
         default='dsl', description="Query type: 'ppl' or 'dsl' (default: 'dsl')"
     )
-    filter: str = Field(default='', description='Additional DSL query conditions (optional)')
+    filter: str = Field(
+        default='',
+        description=(
+            'Optional DSL filter. Target a business field (e.g. serviceName), '
+            "NOT metadata fields like _id or _field_names. "
+            'Example: {"term":{"serviceName":"ts-auth-service"}}.'
+        ),
+    )
     dsl: str = Field(default='', description='Complete raw DSL query as JSON string (optional)')
     ppl: str = Field(
         default='', description='Complete PPL statement without time information (optional)'
@@ -151,8 +147,7 @@ async def data_distribution_tool(args: DataDistributionToolArgs) -> list[dict]:
         return [{'type': 'text', 'text': f'DataDistributionTool result:\n{formatted}'}]
 
     except Exception as e:
-        hint = _get_error_hint(e)
-        return log_tool_error('DataDistributionTool', e, f'executing DataDistributionTool.{hint}')
+        return log_tool_error('DataDistributionTool', e, 'executing DataDistributionTool')
 
 
 async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> list[dict]:
@@ -193,9 +188,8 @@ async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> lis
         return [{'type': 'text', 'text': f'MetricChangeAnalysisTool result:\n{formatted}'}]
 
     except Exception as e:
-        hint = _get_error_hint(e)
         return log_tool_error(
-            'MetricChangeAnalysisTool', e, f'executing MetricChangeAnalysisTool.{hint}'
+            'MetricChangeAnalysisTool', e, 'executing MetricChangeAnalysisTool'
         )
 
 
@@ -230,9 +224,8 @@ async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[di
         return [{'type': 'text', 'text': f'LogPatternAnalysisTool result:\n{formatted}'}]
 
     except Exception as e:
-        hint = _get_error_hint(e)
         return log_tool_error(
-            'LogPatternAnalysisTool', e, f'executing LogPatternAnalysisTool.{hint}'
+            'LogPatternAnalysisTool', e, 'executing LogPatternAnalysisTool'
         )
 
 

@@ -616,29 +616,13 @@ class TestMetricChangeAnalysisLogic:
     def setup_method(self):
         from tools.analysis.metric_change_analysis import (
             _calculate_percentile_variance,
-            _calculate_percentiles,
-            _extract_numeric_values,
             _format_results,
             _safe_log_ratio,
         )
 
-        self._calculate_percentiles = _calculate_percentiles
         self._calculate_percentile_variance = _calculate_percentile_variance
-        self._extract_numeric_values = _extract_numeric_values
         self._format_results = _format_results
         self._safe_log_ratio = _safe_log_ratio
-
-    def test_percentiles_single_value(self):
-        assert self._calculate_percentiles([100.0]) == {'p50': 100.0, 'p90': 100.0}
-
-    def test_percentiles_known_distribution(self):
-        values = [10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0]
-        result = self._calculate_percentiles(values)
-        assert result['p50'] == pytest.approx(55.0)
-        assert result['p90'] == pytest.approx(91.0)
-
-    def test_percentiles_empty(self):
-        assert self._calculate_percentiles([]) == {'p50': 0.0, 'p90': 0.0}
 
     def test_safe_log_ratio_equal_values(self):
         assert self._safe_log_ratio(100.0, 100.0) == 0.0
@@ -671,17 +655,6 @@ class TestMetricChangeAnalysisLogic:
         variance = self._calculate_percentile_variance(selection, baseline)
         expected = 0.5 * math.log(5000 / 100) + 0.5 * math.log(7000 / 150)
         assert variance == pytest.approx(expected)
-
-    def test_extract_numeric_values_mixed_types(self):
-        data = [
-            {'val': 10},
-            {'val': '20.5'},
-            {'val': None},
-            {'val': 'not_a_number'},
-            {'other': 99},
-        ]
-        result = self._extract_numeric_values(data, 'val')
-        assert result == [10.0, 20.5]
 
     def test_format_results_respects_top_n(self):
         analyses = [
@@ -716,29 +689,17 @@ class TestLogPatternAnalysisLogic:
     def setup_method(self):
         from tools.analysis.log_pattern_analysis import (
             _calculate_pattern_differences,
-            _jaccard_similarity,
             _merge_similar_patterns,
             _post_process_pattern,
         )
 
         self._calculate_pattern_differences = _calculate_pattern_differences
-        self._jaccard_similarity = _jaccard_similarity
         self._merge_similar_patterns = _merge_similar_patterns
         self._post_process_pattern = _post_process_pattern
 
     def test_post_process_collapses_consecutive_wildcards(self):
         assert self._post_process_pattern('ERROR <*> <*> <*> failed') == 'ERROR <*> failed'
         assert self._post_process_pattern('GET <*> 200') == 'GET <*> 200'
-
-    def test_jaccard_identical(self):
-        assert self._jaccard_similarity('a b c', 'a b c') == 1.0
-
-    def test_jaccard_disjoint(self):
-        assert self._jaccard_similarity('a b c', 'x y z') == 0.0
-
-    def test_jaccard_partial_overlap(self):
-        result = self._jaccard_similarity('a b c d', 'a b x y')
-        assert result == pytest.approx(2 / 6)
 
     def test_merge_similar_patterns(self):
         patterns = {
