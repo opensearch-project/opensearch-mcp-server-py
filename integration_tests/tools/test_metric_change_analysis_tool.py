@@ -6,20 +6,20 @@ from integration_tests.framework.assertions import (
     assert_contains_json,
     assert_tool_error,
 )
-from integration_tests.framework.constants import TEST_INDEX
+from integration_tests.framework.constants import METRIC_TEST_INDEX
 
 
 @pytest.mark.tools
-@pytest.mark.requires_ml_tool('DataDistributionTool')
+@pytest.mark.requires_ml_tool('MetricChangeAnalysisTool')
 class TestMetricChangeAnalysisTool:
-    """Tests for MetricChangeAnalysisTool (ML skills, requires OpenSearch 3.3+)."""
+    """Tests for MetricChangeAnalysisTool."""
 
     async def test_metric_change_analysis_structure(self, default_client):
         """Result contains percentileAnalysis with correct field structure."""
         result = await default_client.call_tool(
             'MetricChangeAnalysisTool',
             arguments={
-                'index': TEST_INDEX,
+                'index': METRIC_TEST_INDEX,
                 'timeField': 'timestamp',
                 'selectionTimeRangeStart': '2025-01-02 00:00:00',
                 'selectionTimeRangeEnd': '2025-01-04 00:00:00',
@@ -52,7 +52,7 @@ class TestMetricChangeAnalysisTool:
         result = await default_client.call_tool(
             'MetricChangeAnalysisTool',
             arguments={
-                'index': TEST_INDEX,
+                'index': METRIC_TEST_INDEX,
                 'timeField': 'timestamp',
                 'selectionTimeRangeStart': '2025-01-02 00:00:00',
                 'selectionTimeRangeEnd': '2025-01-04 00:00:00',
@@ -69,7 +69,7 @@ class TestMetricChangeAnalysisTool:
         result = await default_client.call_tool(
             'MetricChangeAnalysisTool',
             arguments={
-                'index': TEST_INDEX,
+                'index': METRIC_TEST_INDEX,
                 'timeField': 'timestamp',
                 'selectionTimeRangeStart': '2025-01-02 00:00:00',
                 'selectionTimeRangeEnd': '2025-01-04 00:00:00',
@@ -101,7 +101,7 @@ class TestMetricChangeAnalysisTool:
         result = await default_client.call_tool(
             'MetricChangeAnalysisTool',
             arguments={
-                'index': TEST_INDEX,
+                'index': METRIC_TEST_INDEX,
                 'timeField': 'timestamp',
                 'selectionTimeRangeStart': '2020-01-02 00:00:00',
                 'selectionTimeRangeEnd': '2020-01-04 00:00:00',
@@ -116,7 +116,7 @@ class TestMetricChangeAnalysisTool:
         result = await default_client.call_tool(
             'MetricChangeAnalysisTool',
             arguments={
-                'index': TEST_INDEX,
+                'index': METRIC_TEST_INDEX,
                 'timeField': 'timestamp',
                 'selectionTimeRangeStart': '2025-01-02 00:00:00',
                 'selectionTimeRangeEnd': '2025-01-04 00:00:00',

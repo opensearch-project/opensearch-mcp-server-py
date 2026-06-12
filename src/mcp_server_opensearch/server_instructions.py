@@ -126,12 +126,18 @@ def has_preconfigured_connection() -> bool:
 def get_server_instructions() -> str | None:
     """Return server instructions based on current configuration.
 
-    Combines applicable instruction sections:
-    - Dynamic connection instructions (single mode, no pre-configured endpoint)
-    - Skills tools instructions (when skills category is enabled)
+    Only applies in single mode. In multi mode, dynamic connection params
+    are not supported, so no instructions are needed.
+
+    When dynamic mode is active in single mode (no pre-configured connection,
+    or ``OPENSEARCH_DYNAMIC_CONNECTION=true``), returns instructions explaining
+    the per-call connection parameters. Otherwise returns None.
+
+    Skills tools instructions are appended when the ``skills`` category is
+    enabled (``OPENSEARCH_ENABLED_CATEGORIES=skills``).
 
     Returns:
-        str or None: Instructions text, or None if not needed.
+        str or None: Combined instructions text, or None if no section applies.
     """
     from mcp_server_opensearch.global_state import get_mode
 

@@ -257,7 +257,7 @@ SKILLS_TOOLS_REGISTRY = {
         'input_schema': LogPatternAnalysisToolArgs.model_json_schema(),
         'function': log_pattern_analysis_tool,
         'args_model': LogPatternAnalysisToolArgs,
-        'min_version': '1.0.0',
+        'min_version': '2.19.0',
         'http_methods': 'POST',
     },
     'MetricChangeAnalysisTool': {

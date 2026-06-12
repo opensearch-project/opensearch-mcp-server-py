@@ -2,9 +2,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-from .data_fetching_helper import (
+from .constants import (
+    DATA_FIELD_CARDINALITY_DIVISOR,
+    DATA_FIELD_MAX_CARDINALITY,
+    DATE_FIELD_TYPES,
+    DEFAULT_COMPARISON_RESULT_LIMIT,
+    DEFAULT_SINGLE_ANALYSIS_RESULT_LIMIT,
+    ID_FIELD_MAX_CARDINALITY,
+    MIN_CARDINALITY_BASE,
+    MIN_CARDINALITY_DIVISOR,
     NUMBER_FIELD_TYPES,
+    NUMERIC_GROUPING_THRESHOLD,
+    PERCENTAGE_MULTIPLIER,
     QUERY_TYPE_PPL,
+    TOP_CHANGES_LIMIT,
+    USEFUL_FIELD_TYPES,
+)
+from .data_fetching_helper import (
     AnalysisParameters,
     execute_ppl_and_parse_docs,
     fetch_index_data_dsl,
@@ -16,30 +30,6 @@ from typing import Dict, List, Set, Tuple
 
 
 logger = logging.getLogger(__name__)
-
-USEFUL_FIELD_TYPES = {
-    'keyword',
-    'boolean',
-    'text',
-    'byte',
-    'short',
-    'integer',
-    'long',
-    'float',
-    'double',
-    'half_float',
-    'scaled_float',
-}
-DEFAULT_COMPARISON_RESULT_LIMIT = 10
-DEFAULT_SINGLE_ANALYSIS_RESULT_LIMIT = 30
-MIN_CARDINALITY_DIVISOR = 4
-MIN_CARDINALITY_BASE = 5
-ID_FIELD_MAX_CARDINALITY = 30
-DATA_FIELD_MAX_CARDINALITY = 10
-DATA_FIELD_CARDINALITY_DIVISOR = 2
-NUMERIC_GROUPING_THRESHOLD = 10
-PERCENTAGE_MULTIPLIER = 100.0
-TOP_CHANGES_LIMIT = 10
 
 
 async def execute_data_distribution(client, params: AnalysisParameters) -> dict:
@@ -66,7 +56,7 @@ def _check_time_field(time_field: str, field_types: Dict[str, str]) -> str:
             ' likely the problem: no documents fall within the requested time range.'
             ' Try widening the time range.'
         )
-    date_fields = [name for name, ftype in field_types.items() if ftype == 'date']
+    date_fields = [name for name, ftype in field_types.items() if ftype in DATE_FIELD_TYPES]
     return (
         f" The timeField '{time_field}' does not exist in this index, so no documents"
         ' could match (this is a timeField problem, not a time range problem).'
@@ -314,7 +304,6 @@ def _get_useful_fields(data: List[Dict], field_types: Dict[str, str]) -> List[st
             if 0 < cardinality <= ID_FIELD_MAX_CARDINALITY:
                 result.append(field)
         elif field in number_fields_set:
-            # if cardinality > 0:
             result.append(field)
         else:
             if 0 < cardinality <= max_cardinality:

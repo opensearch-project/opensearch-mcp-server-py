@@ -3,6 +3,12 @@
 
 import logging
 import math
+from .constants import (
+    DATE_FIELD_TYPES,
+    DEFAULT_TOP_N,
+    EPSILON,
+    LOG_RATIO_CAP,
+)
 from .data_fetching_helper import (
     AnalysisParameters,
     format_time_string,
@@ -14,10 +20,6 @@ from typing import Dict, List, Set
 
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_TOP_N = 10
-LOG_RATIO_CAP = 10.0
-EPSILON = 1e-10
 
 
 async def execute_metric_change_analysis(
@@ -279,7 +281,7 @@ def _check_time_field(time_field: str, field_types: Dict[str, str]) -> str:
             ' likely the problem: no documents fall within the requested time range.'
             ' Try widening the time range.'
         )
-    date_fields = [name for name, ftype in field_types.items() if ftype == 'date']
+    date_fields = [name for name, ftype in field_types.items() if ftype in DATE_FIELD_TYPES]
     return (
         f" The timeField '{time_field}' does not exist in this index, so no documents"
         ' could match (this is a timeField problem, not a time range problem).'

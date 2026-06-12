@@ -6,17 +6,17 @@ import math
 import numpy as np
 import re
 from .clustering_helper import ClusteringHelper
+from .constants import (
+    LOG_PATTERN_LIFT,
+    LOG_PATTERN_THRESHOLD,
+    LOG_VECTORS_CLUSTERING_THRESHOLD,
+    MAX_LOG_SAMPLE_SIZE,
+)
 from .data_fetching_helper import execute_ppl_and_parse_datarows
 from typing import Dict, List, Optional, Set
 
 
 logger = logging.getLogger(__name__)
-
-LOG_VECTORS_CLUSTERING_THRESHOLD = 0.5
-LOG_PATTERN_THRESHOLD = 0.75
-LOG_PATTERN_LIFT = 3
-DEFAULT_TIME_FIELD = '@timestamp'
-MAX_LOG_SAMPLE_SIZE = 10000
 
 REPEATED_WILDCARDS_PATTERN = re.compile(r'(<\*>)(\s+<\*>)+')
 

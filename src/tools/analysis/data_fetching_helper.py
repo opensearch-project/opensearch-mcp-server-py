@@ -3,30 +3,21 @@
 
 import json
 import logging
+from .constants import (
+    DATE_FORMAT_PATTERN,
+    DEFAULT_SIZE,
+    DEFAULT_TIME_FIELD,
+    MAX_SIZE_LIMIT,
+    NUMBER_FIELD_TYPES,
+    QUERY_TYPE_DSL,
+    QUERY_TYPE_PPL,
+)
 from datetime import datetime, timezone
 from opensearchpy import AsyncOpenSearch
 from typing import Any, Dict, List, Set
 
 
 logger = logging.getLogger(__name__)
-
-DATE_FORMAT_PATTERN = '%Y-%m-%d %H:%M:%S'
-QUERY_TYPE_PPL = 'ppl'
-QUERY_TYPE_DSL = 'dsl'
-DEFAULT_TIME_FIELD = '@timestamp'
-DEFAULT_SIZE = 1000
-MAX_SIZE_LIMIT = 10000
-
-NUMBER_FIELD_TYPES = {
-    'byte',
-    'short',
-    'integer',
-    'long',
-    'float',
-    'double',
-    'half_float',
-    'scaled_float',
-}
 
 
 class AnalysisParameters:
