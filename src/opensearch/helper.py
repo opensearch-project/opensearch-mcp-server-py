@@ -64,6 +64,20 @@ logger = logging.getLogger(__name__)
 
 # List all the helper functions, these functions perform a single rest call to opensearch
 # these functions will be used in tools folder to eventually write more complex tools
+
+
+def log_query_timeout_warning() -> None:
+    """Warn when OPENSEARCH_QUERY_TIMEOUT is unitless and will be treated as seconds."""
+    raw_timeout = os.getenv('OPENSEARCH_QUERY_TIMEOUT', '').strip()
+    if raw_timeout.isdigit():
+        logger.warning(
+            'OPENSEARCH_QUERY_TIMEOUT=%s is unitless; treating it as %ss. '
+            'Set an explicit unit like "30s".',
+            raw_timeout,
+            raw_timeout,
+        )
+
+
 async def list_indices(args: ListIndicesArgs) -> json:
     """List indices matching the given pattern."""
     from .client import get_opensearch_client
@@ -120,12 +134,25 @@ async def search_index(args: SearchIndexArgs) -> json:
 
         search_params = {'index': args.index, 'body': query}
 
-        query_timeout = os.getenv('OPENSEARCH_QUERY_TIMEOUT', '').strip() or None
+        query_timeout = _normalize_query_timeout(os.getenv('OPENSEARCH_QUERY_TIMEOUT', ''))
         if query_timeout:
             search_params['cancel_after_time_interval'] = query_timeout
 
         response = await client.search(**search_params)
         return response
+
+
+def _normalize_query_timeout(raw_timeout: str) -> str | None:
+    """Normalize OPENSEARCH_QUERY_TIMEOUT for OpenSearch search requests.
+
+    Bare integers are treated as seconds so `30` behaves like `30s`.
+    """
+    timeout = raw_timeout.strip()
+    if not timeout:
+        return None
+    if timeout.isdigit():
+        return f'{timeout}s'
+    return timeout
 
 
 async def get_shards(args: GetShardsArgs) -> json:
