@@ -64,6 +64,35 @@ logger = logging.getLogger(__name__)
 
 # List all the helper functions, these functions perform a single rest call to opensearch
 # these functions will be used in tools folder to eventually write more complex tools
+VALID_UNITS = ('nanos', 'micros', 'ms', 's', 'm', 'h', 'd')
+
+
+def _is_valid_timeout(val: str) -> bool:
+    val_lower = val.lower()
+    return val_lower == '-1' or any(
+        val_lower.endswith(u) and val_lower[: -len(u)].isdigit() for u in VALID_UNITS
+    )
+
+
+def log_query_timeout_warning() -> None:
+    """Warn when OPENSEARCH_QUERY_TIMEOUT is unitless and will be treated as seconds, or is invalid."""
+    raw_timeout = os.getenv('OPENSEARCH_QUERY_TIMEOUT', '').strip()
+    if not raw_timeout or _is_valid_timeout(raw_timeout):
+        return
+    if raw_timeout.isdigit():
+        logger.warning(
+            'OPENSEARCH_QUERY_TIMEOUT=%s is unitless and will be treated as seconds. '
+            'Set an explicit unit like "30s".',
+            raw_timeout,
+        )
+    else:
+        logger.warning(
+            'OPENSEARCH_QUERY_TIMEOUT=%s is invalid and will be ignored. '
+            'Set an explicit integer unit like "30s" or "10m".',
+            raw_timeout,
+        )
+
+
 async def list_indices(args: ListIndicesArgs) -> tuple[list, bool]:
     """List indices matching the given pattern.
 
@@ -135,12 +164,28 @@ async def search_index(args: SearchIndexArgs) -> json:
 
         search_params = {'index': args.index, 'body': query}
 
-        query_timeout = os.getenv('OPENSEARCH_QUERY_TIMEOUT', '').strip() or None
+        query_timeout = _normalize_query_timeout(os.getenv('OPENSEARCH_QUERY_TIMEOUT', ''))
         if query_timeout:
             search_params['cancel_after_time_interval'] = query_timeout
 
         response = await client.search(**search_params)
         return response
+
+
+def _normalize_query_timeout(raw_timeout: str) -> str | None:
+    """Normalize OPENSEARCH_QUERY_TIMEOUT for OpenSearch search requests.
+
+    Bare integers are treated as seconds so `30` behaves like `30s`.
+    Invalid values (negative, fractions, alphanumeric) return None.
+    """
+    timeout = raw_timeout.strip()
+    if not timeout:
+        return None
+    if timeout.isdigit():
+        return f'{timeout}s'
+    if _is_valid_timeout(timeout):
+        return timeout
+    return None
 
 
 async def get_shards(args: GetShardsArgs) -> json:
