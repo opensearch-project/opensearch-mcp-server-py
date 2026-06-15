@@ -89,6 +89,17 @@ class MetricChangeAnalysisToolArgs(baseToolArgs):
     ppl: str = Field(
         default='', description='Complete PPL statement without time information (optional)'
     )
+    groupBy: list[str] = Field(
+        default_factory=list,
+        description=(
+            'Optional categorical keyword fields to bucket by before computing percentiles. '
+            'Leave empty when the index has many numeric columns (metric identity is in the '
+            'column name); pass dimensions like service_name / cmdb_id / kpi_name when there '
+            'are few numeric columns so distinct services / hosts / KPIs are not blended. '
+            'Never pass time/date fields. '
+            'Output `field` becomes "<group>_<column>" (or "<g1>|<g2>_<column>" for multiple).'
+        ),
+    )
 
 
 class LogPatternAnalysisToolArgs(baseToolArgs):
@@ -182,7 +193,9 @@ async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> lis
         top_n = args.topN if args.topN > 0 else 10
 
         async with get_opensearch_client(args) as client:
-            result = await execute_metric_change_analysis(client, params, top_n)
+            result = await execute_metric_change_analysis(
+                client, params, top_n, group_by=args.groupBy or None
+            )
 
         formatted = format_json(result)
         return [{'type': 'text', 'text': f'MetricChangeAnalysisTool result:\n{formatted}'}]

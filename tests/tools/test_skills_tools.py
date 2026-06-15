@@ -327,7 +327,7 @@ class TestSkillsTools:
 
     @pytest.mark.asyncio
     async def test_metric_change_analysis_tool_basic(self):
-        """Test metric_change_analysis_tool with numeric fields showing change."""
+        """Default behavior: per-column percentile aggs, no groupBy."""
         call_count = [0]
 
         async def mock_search(**kwargs):
@@ -528,6 +528,156 @@ class TestSkillsTools:
         assert 'percentileAnalysis' in result[0]['text']
         print('\n=== MetricChangeAnalysisTool with topN=2 ===')
         print(result[0]['text'])
+
+    @pytest.mark.asyncio
+    async def test_metric_change_analysis_tool_group_by_single(self):
+        """groupBy=['service_name']: percentiles per (service, numeric column),
+        output keys are `<group>_<column>`.
+        """
+
+        call_count = [0]
+
+        async def mock_search(**kwargs):
+            call_count[0] += 1
+            # selection window: svc-a latency surges, svc-b stable
+            if call_count[0] == 1:
+                return {
+                    'hits': {'total': {'value': 200, 'relation': 'eq'}},
+                    'aggregations': {
+                        'groups': {
+                            'buckets': [
+                                {
+                                    'key': 'svc-a',
+                                    'latency': {'values': {'50.0': 800.0, '90.0': 950.0}},
+                                    'cpu': {'values': {'50.0': 0.5, '90.0': 0.6}},
+                                },
+                                {
+                                    'key': 'svc-b',
+                                    'latency': {'values': {'50.0': 100.0, '90.0': 120.0}},
+                                    'cpu': {'values': {'50.0': 0.3, '90.0': 0.32}},
+                                },
+                            ]
+                        }
+                    },
+                }
+            # baseline window: both services low
+            return {
+                'hits': {'total': {'value': 200, 'relation': 'eq'}},
+                'aggregations': {
+                    'groups': {
+                        'buckets': [
+                            {
+                                'key': 'svc-a',
+                                'latency': {'values': {'50.0': 80.0, '90.0': 100.0}},
+                                'cpu': {'values': {'50.0': 0.49, '90.0': 0.59}},
+                            },
+                            {
+                                'key': 'svc-b',
+                                'latency': {'values': {'50.0': 95.0, '90.0': 115.0}},
+                                'cpu': {'values': {'50.0': 0.30, '90.0': 0.32}},
+                            },
+                        ]
+                    }
+                },
+            }
+
+        self.mock_client.search = AsyncMock(side_effect=mock_search)
+        self.mock_client.indices = Mock()
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'svc-index': {
+                    'mappings': {
+                        'properties': {
+                            'service_name': {'type': 'keyword'},
+                            'latency': {'type': 'long'},
+                            'cpu': {'type': 'float'},
+                            'timestamp': {'type': 'date'},
+                        }
+                    }
+                }
+            }
+        )
+
+        args = self.MetricChangeAnalysisToolArgs(
+            index='svc-index',
+            selectionTimeRangeStart='2023-01-01 10:00:00',
+            selectionTimeRangeEnd='2023-01-01 10:30:00',
+            timeField='timestamp',
+            baselineTimeRangeStart='2023-01-01 08:00:00',
+            baselineTimeRangeEnd='2023-01-01 08:30:00',
+            groupBy=['service_name'],
+            opensearch_cluster_name='',
+        )
+
+        result = await self._metric_change_analysis_tool(args)
+
+        text = result[0]['text']
+        # Composite keys must use single-field separator `_`.
+        assert 'svc-a_latency' in text
+        assert 'svc-a_cpu' in text
+        assert 'svc-b_latency' in text
+        # svc-a_latency moved 80→800 — should outrank stable svc-b_latency.
+        a_lat = text.find('svc-a_latency')
+        b_lat = text.find('svc-b_latency')
+        assert a_lat != -1 and b_lat != -1 and a_lat < b_lat
+        print('\n=== MetricChangeAnalysisTool groupBy=[service_name] ===')
+        print(text)
+
+    @pytest.mark.asyncio
+    async def test_metric_change_analysis_tool_group_by_multi(self):
+        """groupBy=['kpi_name','cmdb_id']: multi_terms key parts joined by `|`."""
+
+        async def mock_search(**kwargs):
+            return {
+                'hits': {'total': {'value': 50, 'relation': 'eq'}},
+                'aggregations': {
+                    'groups': {
+                        'buckets': [
+                            {
+                                # multi_terms returns list `key` plus pre-joined string
+                                'key': ['cpu_pct', 'host01'],
+                                'key_as_string': 'cpu_pct|host01',
+                                'value': {'values': {'50.0': 70.0, '90.0': 90.0}},
+                            },
+                        ]
+                    }
+                },
+            }
+
+        self.mock_client.search = AsyncMock(side_effect=mock_search)
+        self.mock_client.indices = Mock()
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'long-index': {
+                    'mappings': {
+                        'properties': {
+                            'kpi_name': {'type': 'keyword'},
+                            'cmdb_id': {'type': 'keyword'},
+                            'value': {'type': 'float'},
+                            'timestamp': {'type': 'date'},
+                        }
+                    }
+                }
+            }
+        )
+
+        args = self.MetricChangeAnalysisToolArgs(
+            index='long-index',
+            selectionTimeRangeStart='2023-01-01 10:00:00',
+            selectionTimeRangeEnd='2023-01-01 10:30:00',
+            timeField='timestamp',
+            baselineTimeRangeStart='2023-01-01 08:00:00',
+            baselineTimeRangeEnd='2023-01-01 08:30:00',
+            groupBy=['kpi_name', 'cmdb_id'],
+            opensearch_cluster_name='',
+        )
+
+        result = await self._metric_change_analysis_tool(args)
+        text = result[0]['text']
+        # Group parts joined by `|`; numeric column appended with `_`.
+        assert 'cpu_pct|host01_value' in text
+        print('\n=== MetricChangeAnalysisTool groupBy=[kpi_name, cmdb_id] ===')
+        print(text)
 
     def test_skills_tools_registry(self):
         """Test SKILLS_TOOLS_REGISTRY structure."""
