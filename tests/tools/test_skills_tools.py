@@ -531,10 +531,10 @@ class TestSkillsTools:
 
     @pytest.mark.asyncio
     async def test_metric_change_analysis_tool_group_by_single(self):
-        """groupBy=['service_name']: percentiles per (service, numeric column),
-        output keys are `<group>_<column>`.
-        """
+        """Single-field groupBy yields percentiles per (group, numeric column).
 
+        Output keys take the shape `<group>_<column>`.
+        """
         call_count = [0]
 
         async def mock_search(**kwargs):
