@@ -82,6 +82,16 @@ async def create_mcp_server(
     return server
 
 
+class _ASGIApp:
+    """ASGI app object wrapping a handler, so Starlette's Route treats it as a raw ASGI endpoint."""
+
+    def __init__(self, handler):
+        self._handler = handler
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        await self._handler(scope, receive, send)
+
+
 class MCPStarletteApp:
     """Starlette application wrapper for the MCP server."""
 
@@ -143,13 +153,15 @@ class MCPStarletteApp:
 
     def create_app(self) -> Starlette:
         """Create the Starlette application with routes."""
+        # Serve bare '/mcp' via Route (a Mount alone 307-redirects '/mcp' to '/mcp/'); Mount handles sub-paths.
+        streamable_http_app = _ASGIApp(self.handle_streamable_http)
         return Starlette(
             routes=[
                 Route('/sse', endpoint=self.handle_sse, methods=['GET']),
                 Route('/health', endpoint=self.handle_health, methods=['GET']),
                 Mount('/messages/', app=self.sse.handle_post_message),
-                Mount('/mcp', app=self.handle_streamable_http),
-                Mount('/mcp/', app=self.handle_streamable_http),
+                Route('/mcp', endpoint=streamable_http_app),
+                Mount('/mcp', app=streamable_http_app),
             ],
             lifespan=self.lifespan,
         )
