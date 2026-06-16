@@ -157,7 +157,10 @@ def main() -> None:
     configure_logging(level=log_level, log_format=args.log_format)
     logger = logging.getLogger(__name__)
 
+    from opensearch.helper import log_query_timeout_warning
+
     logger.info('Starting MCP server...')
+    log_query_timeout_warning()
     cli_tool_overrides = parse_unknown_args_to_dict(unknown)
 
     # Import servers lazily to avoid circular imports at module load time

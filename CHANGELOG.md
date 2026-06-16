@@ -10,6 +10,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Fixed
 - Fix Streamable HTTP `/mcp` endpoint issuing a 307 redirect to `/mcp/`, which broke strict proxies/clients that don't follow redirects mid-session. The bare `/mcp` path is now served directly via a `Route` ([#273](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/273))
+- Normalize bare integer `OPENSEARCH_QUERY_TIMEOUT` values to seconds so `30` is treated as `30s` instead of causing OpenSearch parse errors ([#272](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/272))
 
 ### Removed
 
