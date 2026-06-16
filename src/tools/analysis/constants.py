@@ -3,6 +3,9 @@
 
 """Shared constants for the analysis (skills) tools."""
 
+import re
+
+
 # ---------------------------------------------------------------------------
 # Query / time defaults
 # ---------------------------------------------------------------------------
@@ -113,3 +116,65 @@ LOG_PATTERN_LIFT = 3
 
 # Cap on log lines fetched per window.
 MAX_LOG_SAMPLE_SIZE = 10000
+
+# Collapse runs of placeholder tokens like '<*> <*> <*>' into a single '<*>'.
+REPEATED_WILDCARDS_PATTERN = re.compile(r'(<\*>)(\s+<\*>)+')
+
+# Lowercase keywords used to filter "interesting" log lines in insight mode.
+ERROR_KEYWORDS = {
+    'error',
+    'err',
+    'exception',
+    'failed',
+    'failure',
+    'timeout',
+    'panic',
+    'fatal',
+    'critical',
+    'severe',
+    'abort',
+    'aborted',
+    'aborting',
+    'crash',
+    'crashed',
+    'broken',
+    'corrupt',
+    'corrupted',
+    'invalid',
+    'malformed',
+    'unprocessable',
+    'denied',
+    'forbidden',
+    'unauthorized',
+    'conflict',
+    'deadlock',
+    'overflow',
+    'underflow',
+    'throttled',
+    'disk_full',
+    'insufficient',
+    'retrying',
+    'backpressure',
+    'degraded',
+    'unexpected',
+    'unusual',
+    'missing',
+    'stale',
+    'expired',
+    'mismatch',
+    'violation',
+}
+
+
+# ---------------------------------------------------------------------------
+# Metric change analysis — groupBy
+# ---------------------------------------------------------------------------
+
+# Cap on group buckets returned by terms / multi_terms agg.
+GROUP_BY_TERMS_SIZE = 1000
+
+# Separator between multiple groupBy field values inside a composite key.
+MULTI_GROUP_KEY_SEP = '|'
+
+# Separator between group key and numeric metric column in the final output key.
+GROUP_METRIC_KEY_SEP = '_'

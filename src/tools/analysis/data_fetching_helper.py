@@ -82,7 +82,32 @@ class AnalysisParameters:
 
 
 def format_time_string(time_string: str) -> str:
-    """Format time string to ISO 8601 for OpenSearch compatibility."""
+    """Format time string to ISO 8601 for OpenSearch compatibility.
+
+    Accepted inputs:
+    - 'yyyy-MM-dd HH:mm:ss' (the documented default)
+    - 'yyyy-MM-dd HH:mm:ssZ'
+    - 'yyyy-MM-dd HH:mm:ss.fff'
+    - ISO 8601 ('yyyy-MM-ddTHH:mm:ss', optionally with 'Z' or '+hh:mm')
+    - Unix epoch as numeric string (seconds, e.g. '1615322280',
+      or milliseconds, e.g. '1615322280000') — leniency for LLM callers
+      that pass back timestamps from query results.
+    """
+    s = time_string.strip()
+
+    # Unix epoch — pure numeric string (optionally negative or fractional).
+    if s and s.lstrip('-').replace('.', '', 1).isdigit():
+        try:
+            n = float(s)
+            # Threshold: 1e12 seconds is year ~33658, well past any plausible
+            # real timestamp in seconds. Anything >= 1e12 is treated as ms.
+            if abs(n) >= 1e12:
+                n /= 1000.0
+            dt = datetime.fromtimestamp(n, tz=timezone.utc)
+            return dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        except (ValueError, OSError, OverflowError):
+            pass
+
     # Normalize trailing 'Z' to '+00:00' for fromisoformat (Python 3.10 compat)
     normalized = time_string.replace('Z', '+00:00') if time_string.endswith('Z') else time_string
 
@@ -112,6 +137,10 @@ def format_time_string(time_string: str) -> str:
         dt = datetime.fromisoformat(normalized)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            # Honor the input offset by shifting to UTC before formatting,
+            # otherwise '+08:00' would be silently treated as UTC.
+            dt = dt.astimezone(timezone.utc)
         return dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
     except ValueError:
         pass

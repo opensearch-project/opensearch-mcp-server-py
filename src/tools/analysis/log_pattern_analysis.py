@@ -4,65 +4,20 @@
 import logging
 import math
 import numpy as np
-import re
 from .clustering_helper import ClusteringHelper
 from .constants import (
+    ERROR_KEYWORDS,
     LOG_PATTERN_LIFT,
     LOG_PATTERN_THRESHOLD,
     LOG_VECTORS_CLUSTERING_THRESHOLD,
     MAX_LOG_SAMPLE_SIZE,
+    REPEATED_WILDCARDS_PATTERN,
 )
-from .data_fetching_helper import execute_ppl_and_parse_datarows
+from .data_fetching_helper import execute_ppl_and_parse_datarows, format_time_string
 from typing import Dict, List, Optional, Set
 
 
 logger = logging.getLogger(__name__)
-
-REPEATED_WILDCARDS_PATTERN = re.compile(r'(<\*>)(\s+<\*>)+')
-
-ERROR_KEYWORDS = {
-    'error',
-    'err',
-    'exception',
-    'failed',
-    'failure',
-    'timeout',
-    'panic',
-    'fatal',
-    'critical',
-    'severe',
-    'abort',
-    'aborted',
-    'aborting',
-    'crash',
-    'crashed',
-    'broken',
-    'corrupt',
-    'corrupted',
-    'invalid',
-    'malformed',
-    'unprocessable',
-    'denied',
-    'forbidden',
-    'unauthorized',
-    'conflict',
-    'deadlock',
-    'overflow',
-    'underflow',
-    'throttled',
-    'disk_full',
-    'insufficient',
-    'retrying',
-    'backpressure',
-    'degraded',
-    'unexpected',
-    'unusual',
-    'missing',
-    'stale',
-    'expired',
-    'mismatch',
-    'violation',
-}
 
 
 async def execute_log_pattern_analysis(
@@ -79,6 +34,18 @@ async def execute_log_pattern_analysis(
 ) -> dict:
     """Main entry point: dispatches to sequence analysis, pattern diff, or log insight."""
     logger.debug('Starting log pattern analysis with parameters: index=%s', index)
+
+    # Normalize time inputs once at the entry. The downstream code embeds these
+    # strings directly into PPL `where` clauses, so accepting epoch / ISO etc.
+    # via format_time_string here gives the same compatibility surface as the
+    # DSL-based metric and distribution tools.
+    selection_time_range_start = format_time_string(selection_time_range_start)
+    selection_time_range_end = format_time_string(selection_time_range_end)
+    if base_time_range_start:
+        base_time_range_start = format_time_string(base_time_range_start)
+    if base_time_range_end:
+        base_time_range_end = format_time_string(base_time_range_end)
+
     has_base_time = bool(base_time_range_start) and bool(base_time_range_end)
     has_trace_field = bool(trace_field_name)
 

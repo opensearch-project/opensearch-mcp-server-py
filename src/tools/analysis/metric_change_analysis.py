@@ -7,7 +7,10 @@ from .constants import (
     DATE_FIELD_TYPES,
     DEFAULT_TOP_N,
     EPSILON,
+    GROUP_BY_TERMS_SIZE,
+    GROUP_METRIC_KEY_SEP,
     LOG_RATIO_CAP,
+    MULTI_GROUP_KEY_SEP,
 )
 from .data_fetching_helper import (
     AnalysisParameters,
@@ -17,16 +20,6 @@ from .data_fetching_helper import (
 )
 from opensearchpy.exceptions import RequestError
 from typing import Dict, List, Optional, Sequence, Set
-
-
-# Cap on group buckets returned by terms / multi_terms agg.
-GROUP_BY_TERMS_SIZE = 1000
-
-# Separator between multiple groupBy field values inside a composite key.
-MULTI_GROUP_KEY_SEP = '|'
-
-# Separator between group key and numeric metric column in the final output key.
-GROUP_METRIC_KEY_SEP = '_'
 
 
 logger = logging.getLogger(__name__)
