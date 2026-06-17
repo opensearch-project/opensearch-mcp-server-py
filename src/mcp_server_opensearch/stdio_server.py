@@ -5,7 +5,7 @@ import asyncio
 import logging
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, Tool
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
 from mcp_server_opensearch.server_instructions import get_server_instructions
@@ -67,7 +67,7 @@ async def serve(
         return tools
 
     @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict) -> CallToolResult:
         from mcp_server_opensearch.tool_executor import execute_tool
 
         return await execute_tool(name, arguments, enabled_tools)
