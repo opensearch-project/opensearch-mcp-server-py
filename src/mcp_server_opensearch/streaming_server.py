@@ -8,7 +8,7 @@ import uvicorn
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import TextContent, Tool, ToolAnnotations
+from mcp.types import CallToolResult, TextContent, Tool, ToolAnnotations
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
 from mcp_server_opensearch.server_instructions import get_server_instructions
@@ -76,12 +76,22 @@ async def create_mcp_server(
         return tools
 
     @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict) -> CallToolResult:
         from mcp_server_opensearch.tool_executor import execute_tool
 
         return await execute_tool(name, arguments, enabled_tools)
 
     return server
+
+
+class _ASGIApp:
+    """ASGI app object wrapping a handler, so Starlette's Route treats it as a raw ASGI endpoint."""
+
+    def __init__(self, handler):
+        self._handler = handler
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        await self._handler(scope, receive, send)
 
 
 class MCPStarletteApp:
@@ -145,13 +155,15 @@ class MCPStarletteApp:
 
     def create_app(self) -> Starlette:
         """Create the Starlette application with routes."""
+        # Serve bare '/mcp' via Route (a Mount alone 307-redirects '/mcp' to '/mcp/'); Mount handles sub-paths.
+        streamable_http_app = _ASGIApp(self.handle_streamable_http)
         return Starlette(
             routes=[
                 Route('/sse', endpoint=self.handle_sse, methods=['GET']),
                 Route('/health', endpoint=self.handle_health, methods=['GET']),
                 Mount('/messages/', app=self.sse.handle_post_message),
-                Mount('/mcp', app=self.handle_streamable_http),
-                Mount('/mcp/', app=self.handle_streamable_http),
+                Route('/mcp', endpoint=streamable_http_app),
+                Mount('/mcp', app=streamable_http_app),
             ],
             lifespan=self.lifespan,
         )
