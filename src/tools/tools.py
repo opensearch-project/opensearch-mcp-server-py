@@ -126,6 +126,13 @@ async def list_indices_tool(args: ListIndicesArgs) -> list[dict]:
     try:
         await check_tool_compatibility('ListIndexTool', args)
 
+        fallback_note = (
+            '\nNote: insufficient permissions for _cat/indices'
+            ' (requires cluster_monitor and indices_monitor).'
+            ' Falling back to _resolve/index.'
+            ' Showing index names only — health, size, and doc count are unavailable.'
+        )
+
         if args.include_detail:
             # Return detailed information
             if args.index:
@@ -140,12 +147,15 @@ async def list_indices_tool(args: ListIndicesArgs) -> list[dict]:
                 ]
             else:
                 # Return full metadata for all indices
-                indices = await list_indices(args)
+                indices, is_fallback = await list_indices(args)
                 formatted_indices = format_json(indices)
-                return [{'type': 'text', 'text': f'All indices information:\n{formatted_indices}'}]
+                text = f'All indices information:\n{formatted_indices}'
+                if is_fallback:
+                    text += fallback_note
+                return [{'type': 'text', 'text': text}]
         else:
             # Return minimal information (names only)
-            indices = await list_indices(args)
+            indices, _ = await list_indices(args)
             index_names = [
                 item.get('index') for item in indices if isinstance(item, dict) and 'index' in item
             ]

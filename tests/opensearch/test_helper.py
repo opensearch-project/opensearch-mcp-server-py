@@ -46,12 +46,72 @@ class TestOpenSearchHelper:
         mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
 
         # Execute
-        result = await self.list_indices(ListIndicesArgs(opensearch_cluster_name=''))
+        result, is_fallback = await self.list_indices(ListIndicesArgs(opensearch_cluster_name=''))
 
         # Assert
         assert result == mock_response
+        assert is_fallback is False
         mock_get_client.assert_called_once_with(ListIndicesArgs(opensearch_cluster_name=''))
         mock_client.cat.indices.assert_called_once_with(index=None, format='json')
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_list_indices_fallback_on_403(self, mock_get_client):
+        """Test list_indices falls back to _resolve/index on AuthorizationException."""
+        from opensearchpy.exceptions import AuthorizationException
+
+        mock_client = AsyncMock()
+        mock_client.cat.indices = AsyncMock(
+            side_effect=AuthorizationException(403, 'security_exception')
+        )
+        mock_client.indices.resolve_index = AsyncMock(
+            return_value={
+                'indices': [
+                    {'name': 'index1', 'attributes': ['open']},
+                    {'name': 'index2', 'attributes': ['open']},
+                ],
+                'aliases': [],
+                'data_streams': [],
+            }
+        )
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        result, is_fallback = await self.list_indices(ListIndicesArgs(opensearch_cluster_name=''))
+
+        assert result == [{'index': 'index1'}, {'index': 'index2'}]
+        assert is_fallback is True
+        mock_client.indices.resolve_index.assert_called_once_with('*')
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_list_indices_fallback_with_pattern(self, mock_get_client):
+        """Test list_indices fallback passes the index pattern to _resolve/index."""
+        from opensearchpy.exceptions import AuthorizationException
+
+        mock_client = AsyncMock()
+        mock_client.cat.indices = AsyncMock(
+            side_effect=AuthorizationException(403, 'security_exception')
+        )
+        mock_client.indices.resolve_index = AsyncMock(
+            return_value={
+                'indices': [{'name': 'logs-2024', 'attributes': ['open']}],
+                'aliases': [],
+                'data_streams': [],
+            }
+        )
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        result, is_fallback = await self.list_indices(
+            ListIndicesArgs(index='logs-*', opensearch_cluster_name='')
+        )
+
+        assert result == [{'index': 'logs-2024'}]
+        assert is_fallback is True
+        mock_client.indices.resolve_index.assert_called_once_with('logs-*')
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
