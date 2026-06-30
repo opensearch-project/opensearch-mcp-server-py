@@ -5,7 +5,7 @@ import asyncio
 import logging
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import CallToolResult, TextContent, Tool, ToolAnnotations
+from mcp.types import CallToolResult, Tool, ToolAnnotations
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
 from mcp_server_opensearch.server_instructions import get_server_instructions
