@@ -66,10 +66,6 @@ class MetricChangeAnalysisToolArgs(baseToolArgs):
     baselineTimeRangeEnd: str = Field(
         description='End of baseline period (format: yyyy-MM-dd HH:mm:ss). Should be at or before selectionTimeRangeStart'
     )
-    size: int = Field(
-        default=1000,
-        description='Maximum number of documents to analyze (default: 1000, max: 10000)',
-    )
     topN: int = Field(
         default=10,
         description='Number of top fields to return, ranked by change score (default: 10)',
@@ -80,8 +76,8 @@ class MetricChangeAnalysisToolArgs(baseToolArgs):
     filter: str = Field(
         default='',
         description=(
-            'Optional DSL filter. Target a business field (e.g. serviceName), '
-            'NOT metadata fields like _id or _field_names. '
+            'Optional DSL filter, a single JSON object or a JSON array of clauses. '
+            'Target a business field (e.g. serviceName), NOT metadata fields like _id. '
             'Example: {"term":{"serviceName":"ts-auth-service"}}.'
         ),
     )
@@ -181,7 +177,6 @@ async def metric_change_analysis_tool(args: MetricChangeAnalysisToolArgs) -> lis
                 'selectionTimeRangeEnd': args.selectionTimeRangeEnd,
                 'baselineTimeRangeStart': args.baselineTimeRangeStart,
                 'baselineTimeRangeEnd': args.baselineTimeRangeEnd,
-                'size': str(args.size),
                 'queryType': args.queryType,
                 'filter': args.filter,
                 'dsl': args.dsl,
@@ -254,7 +249,7 @@ SKILLS_TOOLS_REGISTRY = {
         'input_schema': DataDistributionToolArgs.model_json_schema(),
         'function': data_distribution_tool,
         'args_model': DataDistributionToolArgs,
-        'min_version': '1.0.0',
+        'min_version': '3.3.0',
         'http_methods': 'POST',
     },
     'LogPatternAnalysisTool': {
@@ -270,7 +265,7 @@ SKILLS_TOOLS_REGISTRY = {
         'input_schema': LogPatternAnalysisToolArgs.model_json_schema(),
         'function': log_pattern_analysis_tool,
         'args_model': LogPatternAnalysisToolArgs,
-        'min_version': '2.19.0',
+        'min_version': '3.3.0',
         'http_methods': 'POST',
     },
     'MetricChangeAnalysisTool': {
@@ -281,7 +276,6 @@ SKILLS_TOOLS_REGISTRY = {
             'Provide two short time windows of similar duration (e.g. 15-30 min each): '
             'one before the anomaly (baseline) and one during (selection). '
             'Returns changeScore, P50/P90 values, and log-ratios for each field. '
-            'Every result also includes a timestamp indicating when the analysis was performed. '
             'IMPORTANT: ALWAYS pass timeField. Discover the time field first, being sure to find '
             'the correct field. Omitting timeField, or passing a field that is '
             "absent from the index, causes a 'No data found' error and leads to a wrong "
@@ -290,7 +284,7 @@ SKILLS_TOOLS_REGISTRY = {
         'input_schema': MetricChangeAnalysisToolArgs.model_json_schema(),
         'function': metric_change_analysis_tool,
         'args_model': MetricChangeAnalysisToolArgs,
-        'min_version': '1.0.0',
+        'min_version': '3.3.0',
         'http_methods': 'POST',
     },
 }

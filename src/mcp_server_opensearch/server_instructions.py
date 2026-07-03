@@ -63,14 +63,44 @@ Important: Always cross-validate findings from these tools against SearchIndexTo
 """
 
 
+def _resolve_enabled_disabled_categories() -> tuple[list[str], list[str]]:
+    """Resolve enabled/disabled category names from config file or env vars.
+
+    Mirrors how ``process_tool_filter`` in ``tool_filter.py`` sources category
+    state so the instructions stay consistent with actual tool visibility: a
+    YAML config file takes precedence over environment variables (env vars are
+    ignored when a config file is present).
+
+    Returns:
+        tuple[list[str], list[str]]: (enabled_categories, disabled_categories),
+        lowercased.
+    """
+    from mcp_server_opensearch.global_state import get_config_file_path
+    from tools.utils import load_yaml_config, parse_comma_separated
+
+    config_file_path = get_config_file_path()
+    if config_file_path:
+        config = load_yaml_config(config_file_path)
+        tool_filters = (config or {}).get('tool_filters', {})
+        enabled = tool_filters.get('enabled_categories', []) or []
+        disabled = tool_filters.get('disabled_categories', []) or []
+    else:
+        enabled = parse_comma_separated(os.getenv('OPENSEARCH_ENABLED_CATEGORIES', ''))
+        disabled = parse_comma_separated(os.getenv('OPENSEARCH_DISABLED_CATEGORIES', ''))
+
+    return [c.lower() for c in enabled], [c.lower() for c in disabled]
+
+
 def are_skills_enabled() -> bool:
     """Check whether skills tools are enabled based on environment/config.
 
-    Skills are enabled when 'skills' appears in OPENSEARCH_ENABLED_CATEGORIES
-    and NOT in OPENSEARCH_DISABLED_CATEGORIES.
+    Skills are enabled when 'skills' appears in the enabled categories and NOT
+    in the disabled categories. Category state is resolved from the YAML config
+    file when present, otherwise from the OPENSEARCH_ENABLED_CATEGORIES /
+    OPENSEARCH_DISABLED_CATEGORIES environment variables — matching how
+    ``process_tool_filter`` decides tool visibility.
     """
-    enabled_cats = os.getenv('OPENSEARCH_ENABLED_CATEGORIES', '').lower()
-    disabled_cats = os.getenv('OPENSEARCH_DISABLED_CATEGORIES', '').lower()
+    enabled_cats, disabled_cats = _resolve_enabled_disabled_categories()
     if 'skills' in disabled_cats:
         return False
     if 'skills' in enabled_cats:
