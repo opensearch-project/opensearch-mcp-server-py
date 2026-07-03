@@ -100,6 +100,11 @@ LOG_RATIO_CAP = 10.0
 # Below this, a percentile value is treated as zero (avoids divide-by-zero).
 EPSILON = 1e-10
 
+# Max documents allowed in a single window before the tool refuses to run and
+# asks the caller to narrow the time range. Bounding the window keeps the
+# percentile analysis cheap for the cluster. Tune as needed.
+MAX_ANALYSIS_DOC_COUNT = 100000
+
 
 # ---------------------------------------------------------------------------
 # Log pattern analysis

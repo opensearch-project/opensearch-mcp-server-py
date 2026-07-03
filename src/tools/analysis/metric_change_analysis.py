@@ -10,6 +10,7 @@ from .constants import (
     GROUP_BY_TERMS_SIZE,
     GROUP_METRIC_KEY_SEP,
     LOG_RATIO_CAP,
+    MAX_ANALYSIS_DOC_COUNT,
     MULTI_GROUP_KEY_SEP,
 )
 from .data_fetching_helper import (
@@ -49,6 +50,11 @@ async def execute_metric_change_analysis(
         )
 
     group_by = list(group_by) if group_by else []
+
+    # Guard against unbounded windows: percentile analysis over a huge window is
+    # expensive for the cluster. Count each window first and, if either exceeds
+    # the cap, ask the caller to narrow the offending time range instead.
+    await _check_window_doc_counts(client, params)
 
     if group_by:
         fetch = _fetch_percentiles_grouped_via_agg
@@ -252,6 +258,67 @@ def _hit_count(response: dict) -> int:
     if isinstance(total, dict):
         return total.get('value', 0)
     return total or 0
+
+
+async def _count_docs(
+    client,
+    index: str,
+    time_field: str,
+    time_range_start: str,
+    time_range_end: str,
+    params: AnalysisParameters,
+) -> int:
+    """Count documents matching a single time window (plus any filter)."""
+    bool_query = _build_bool_query(time_field, time_range_start, time_range_end, params)
+    try:
+        response = await client.count(index=index, body={'query': {'bool': bool_query}})
+    except RequestError as e:
+        raise RuntimeError(_translate_filter_request_error(e)) from e
+    return int(response.get('count', 0))
+
+
+async def _check_window_doc_counts(client, params: AnalysisParameters) -> None:
+    """Ensure neither window exceeds MAX_ANALYSIS_DOC_COUNT before analysis.
+
+    Raises a RuntimeError naming the offending window(s) so the LLM knows which
+    time range to narrow. When both windows are too large, both are reported.
+    """
+    selection_count = await _count_docs(
+        client,
+        params.index,
+        params.time_field,
+        params.selection_time_range_start,
+        params.selection_time_range_end,
+        params,
+    )
+    baseline_count = await _count_docs(
+        client,
+        params.index,
+        params.time_field,
+        params.baseline_time_range_start,
+        params.baseline_time_range_end,
+        params,
+    )
+
+    oversized = []
+    if selection_count > MAX_ANALYSIS_DOC_COUNT:
+        oversized.append(
+            f'the selection range ({params.selection_time_range_start} to '
+            f'{params.selection_time_range_end}) matches {selection_count} docs'
+        )
+    if baseline_count > MAX_ANALYSIS_DOC_COUNT:
+        oversized.append(
+            f'the baseline range ({params.baseline_time_range_start} to '
+            f'{params.baseline_time_range_end}) matches {baseline_count} docs'
+        )
+
+    if oversized:
+        raise RuntimeError(
+            f'Too many documents to analyze: {" and ".join(oversized)}, '
+            f'over the limit of {MAX_ANALYSIS_DOC_COUNT} per range. '
+            'Narrow only the range(s) named above and retry, keeping the two '
+            'ranges similar in duration for a fair percentile comparison.'
+        )
 
 
 def _calculate_metric_change_from_agg(

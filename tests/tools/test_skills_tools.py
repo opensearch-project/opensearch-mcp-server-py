@@ -11,6 +11,10 @@ class TestSkillsTools:
         """Setup that runs before each test method."""
         self.mock_client = Mock()
         self.mock_client.close = AsyncMock()
+        # MetricChangeAnalysisTool counts each window before analyzing; default
+        # to a small count so the doc-count guard passes. Tests that exercise
+        # the guard override this.
+        self.mock_client.count = AsyncMock(return_value={'count': 10})
 
         self.init_client_patcher = patch(
             'opensearch.client.initialize_client', return_value=self.mock_client
@@ -677,6 +681,130 @@ class TestSkillsTools:
         # Group parts joined by `|`; numeric column appended with `_`.
         assert 'cpu_pct|host01_value' in text
         print('\n=== MetricChangeAnalysisTool groupBy=[kpi_name, cmdb_id] ===')
+        print(text)
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        'selection_over, baseline_over',
+        [
+            (True, False),  # only selection too large
+            (False, True),  # only baseline too large
+            (True, True),  # both windows too large
+        ],
+    )
+    async def test_metric_change_analysis_tool_window_too_large(
+        self, selection_over, baseline_over
+    ):
+        """When a window exceeds the doc-count cap, the tool asks to narrow it.
+
+        Only the offending range(s) should be named; when both exceed the cap
+        both are reported.
+        """
+        from tools.analysis.constants import MAX_ANALYSIS_DOC_COUNT
+
+        count_calls = [0]
+
+        async def mock_count(**kwargs):
+            # First count = selection window, second = baseline window.
+            count_calls[0] += 1
+            over = selection_over if count_calls[0] == 1 else baseline_over
+            return {'count': MAX_ANALYSIS_DOC_COUNT + 1 if over else 10}
+
+        self.mock_client.count = AsyncMock(side_effect=mock_count)
+        # search should never be reached once the guard trips.
+        self.mock_client.search = AsyncMock(
+            side_effect=AssertionError('search must not run when window is too large')
+        )
+        self.mock_client.indices = Mock()
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'responseTime': {'type': 'long'},
+                            '@timestamp': {'type': 'date'},
+                        }
+                    }
+                }
+            }
+        )
+
+        args = self.MetricChangeAnalysisToolArgs(
+            index='test-index',
+            selectionTimeRangeStart='2023-01-01 10:00:00',
+            selectionTimeRangeEnd='2023-01-01 11:00:00',
+            timeField='@timestamp',
+            baselineTimeRangeStart='2023-01-01 08:00:00',
+            baselineTimeRangeEnd='2023-01-01 08:30:00',
+            opensearch_cluster_name='',
+        )
+
+        result = await self._metric_change_analysis_tool(args)
+        text = result[0]['text']
+        assert 'Error' in text
+        assert 'Too many documents' in text
+        # Only the offending range(s) are named.
+        assert ('the selection range' in text) == selection_over
+        assert ('the baseline range' in text) == baseline_over
+        print(f'\n=== window too large (sel={selection_over}, base={baseline_over}) ===')
+        print(text)
+
+    @pytest.mark.asyncio
+    async def test_metric_change_analysis_tool_window_at_cap_allowed(self):
+        """A window exactly at the cap is allowed (guard uses strict `>`)."""
+        from tools.analysis.constants import MAX_ANALYSIS_DOC_COUNT
+
+        # Both windows sit exactly at the cap — must pass the guard and analyze.
+        self.mock_client.count = AsyncMock(return_value={'count': MAX_ANALYSIS_DOC_COUNT})
+
+        call_count = [0]
+
+        async def mock_search(**kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return {
+                    'hits': {'total': {'value': 5, 'relation': 'eq'}},
+                    'aggregations': {
+                        'responseTime': {'values': {'50.0': 5500.0, '90.0': 6800.0}},
+                    },
+                }
+            return {
+                'hits': {'total': {'value': 5, 'relation': 'eq'}},
+                'aggregations': {
+                    'responseTime': {'values': {'50.0': 120.0, '90.0': 146.0}},
+                },
+            }
+
+        self.mock_client.search = AsyncMock(side_effect=mock_search)
+        self.mock_client.indices = Mock()
+        self.mock_client.indices.get_mapping = AsyncMock(
+            return_value={
+                'test-index': {
+                    'mappings': {
+                        'properties': {
+                            'responseTime': {'type': 'long'},
+                            '@timestamp': {'type': 'date'},
+                        }
+                    }
+                }
+            }
+        )
+
+        args = self.MetricChangeAnalysisToolArgs(
+            index='test-index',
+            selectionTimeRangeStart='2023-01-01 10:00:00',
+            selectionTimeRangeEnd='2023-01-01 10:30:00',
+            timeField='@timestamp',
+            baselineTimeRangeStart='2023-01-01 08:00:00',
+            baselineTimeRangeEnd='2023-01-01 08:30:00',
+            opensearch_cluster_name='',
+        )
+
+        result = await self._metric_change_analysis_tool(args)
+        text = result[0]['text']
+        assert 'Too many documents' not in text
+        assert 'percentileAnalysis' in text
+        print('\n=== window exactly at cap (allowed) ===')
         print(text)
 
     def test_skills_tools_registry(self):
