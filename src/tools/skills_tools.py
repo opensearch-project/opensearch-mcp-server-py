@@ -249,7 +249,7 @@ SKILLS_TOOLS_REGISTRY = {
         'input_schema': DataDistributionToolArgs.model_json_schema(),
         'function': data_distribution_tool,
         'args_model': DataDistributionToolArgs,
-        'min_version': '3.3.0',
+        'min_version': '1.0.0',
         'http_methods': 'POST',
     },
     'LogPatternAnalysisTool': {
@@ -265,7 +265,7 @@ SKILLS_TOOLS_REGISTRY = {
         'input_schema': LogPatternAnalysisToolArgs.model_json_schema(),
         'function': log_pattern_analysis_tool,
         'args_model': LogPatternAnalysisToolArgs,
-        'min_version': '3.3.0',
+        'min_version': '2.19.0',
         'http_methods': 'POST',
     },
     'MetricChangeAnalysisTool': {
@@ -284,7 +284,7 @@ SKILLS_TOOLS_REGISTRY = {
         'input_schema': MetricChangeAnalysisToolArgs.model_json_schema(),
         'function': metric_change_analysis_tool,
         'args_model': MetricChangeAnalysisToolArgs,
-        'min_version': '3.3.0',
+        'min_version': '1.0.0',
         'http_methods': 'POST',
     },
 }
