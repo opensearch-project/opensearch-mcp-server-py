@@ -7,10 +7,12 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Server Modes](#server-modes)
+- [Dynamic Connection Parameters](#dynamic-connection-parameters)
 - [Authentication](#authentication)
 - [Running the Server](#running-the-server)
 - [Tool Filter](#tool-filter)
 - [Tool Customization](#tool-customization)
+- [Agent Memory](MEMORY.md)
 - [Structured Logging](#structured-logging)
 - [LangChain Integration](#langchain-integration)
 
@@ -210,6 +212,109 @@ The LLM needs to have context about the available cluster names to make informed
 ```
 
 The LLM should choose the appropriate cluster based on the operation context (e.g., use `local-dev` for testing, `production` for production data).
+
+## Dynamic Connection Parameters
+
+When the server starts with no pre-configured connection (no `OPENSEARCH_URL` environment variable and no YAML cluster config), it enters **zero-config mode**: all connection override fields are automatically exposed in every tool's schema, and server-level instructions guide the LLM to provide them. This lets a single MCP server instance serve multiple clusters without any restart or reconfiguration.
+
+When `OPENSEARCH_URL` is set or clusters are loaded from a YAML config file, the override fields are hidden from tool schemas (zero token overhead) since the agent doesn't need to supply them.
+
+### How It Works
+
+When a tool is called, any connection parameter provided in the tool input takes precedence over the corresponding environment variable. Parameters that are omitted (or set to `null`) fall back to the server's existing configuration.
+
+**Priority order (highest to lowest):**
+1. Tool input parameters (per-call overrides)
+2. Header-based authentication values (when `OPENSEARCH_HEADER_AUTH=true`)
+3. Environment variables / cluster YAML config
+
+### Schema Exposure Rules
+
+Dynamic connection parameters are a **single mode** feature. In multi mode, override fields are always hidden — use `opensearch_cluster_name` to select a pre-configured cluster instead.
+
+In single mode:
+
+| Server configuration | Override fields in schema |
+|---|---|
+| No `OPENSEARCH_URL`, no YAML config (zero-config mode) | Exposed — agent must supply `opensearch_url` |
+| `OPENSEARCH_URL` set | Hidden — URL already configured |
+| `OPENSEARCH_DYNAMIC_CONNECTION=true` | Exposed — forced on regardless of other config |
+| `OPENSEARCH_DYNAMIC_CONNECTION=false` | Hidden — forced off regardless of other config |
+
+`OPENSEARCH_DYNAMIC_CONNECTION` takes precedence over auto-detection in single mode. Use it to explicitly enable dynamic mode when you want agents to override a pre-configured URL, or to explicitly disable it in zero-config deployments where you don't want the override fields exposed.
+
+### Available Connection Parameters
+
+| Parameter | Type | Overrides | Description |
+|-----------|------|-----------|-------------|
+| `opensearch_url` | string | `OPENSEARCH_URL` | OpenSearch endpoint URL |
+| `opensearch_username` | string | `OPENSEARCH_USERNAME` | Username for basic authentication |
+| `opensearch_password` | string | `OPENSEARCH_PASSWORD` | Password for basic authentication |
+| `opensearch_no_auth` | boolean | `OPENSEARCH_NO_AUTH` | Connect without authentication |
+| `aws_region` | string | `AWS_REGION` | AWS region for IAM/Serverless auth |
+| `aws_iam_arn` | string | `AWS_IAM_ARN` | IAM role ARN for role-based auth |
+| `aws_profile` | string | `AWS_PROFILE` | AWS profile name |
+| `aws_opensearch_serverless` | boolean | `AWS_OPENSEARCH_SERVERLESS` | Use OpenSearch Serverless service |
+| `opensearch_ssl_verify` | boolean | `OPENSEARCH_SSL_VERIFY` | SSL certificate verification |
+| `opensearch_timeout` | integer | `OPENSEARCH_TIMEOUT` | Connection timeout in seconds |
+
+### Use Cases
+
+**1. Agent-driven cluster discovery:** An agent can connect to different clusters without any pre-configured environment variables:
+```json
+{
+  "opensearch_url": "https://my-cluster.us-east-1.es.amazonaws.com",
+  "aws_region": "us-east-1",
+  "index": "my-index"
+}
+```
+
+**2. Switching between clusters in a single session:** An agent can query multiple clusters in sequence by providing different URLs per call:
+```json
+{
+  "opensearch_url": "https://cluster-a.example.com",
+  "opensearch_username": "admin",
+  "opensearch_password": "password-a",
+  "index": "logs-*"
+}
+```
+```json
+{
+  "opensearch_url": "https://cluster-b.example.com",
+  "opensearch_username": "admin",
+  "opensearch_password": "password-b",
+  "index": "logs-*"
+}
+```
+
+**3. Partial overrides:** Override only the URL while keeping credentials from environment variables:
+```json
+{
+  "opensearch_url": "https://other-cluster.example.com",
+  "index": "my-index"
+}
+```
+In this example, `opensearch_username` and `opensearch_password` are not provided, so they fall back to `OPENSEARCH_USERNAME` and `OPENSEARCH_PASSWORD` environment variables.
+
+**4. MCP client configuration with no environment variables:** The server can be started with no connection environment variables at all. Agents provide everything at call time:
+```json
+{
+  "mcpServers": {
+    "opensearch-mcp-server": {
+      "command": "uvx",
+      "args": ["opensearch-mcp-server-py"],
+      "env": {}
+    }
+  }
+}
+```
+
+### Notes
+
+- Dynamic connection parameters are available in **single mode only**. In multi mode, override fields are always hidden from schemas — use `opensearch_cluster_name` to select a pre-configured cluster instead.
+- In single mode, override fields are **conditionally exposed** based on whether a connection is pre-configured (see Schema Exposure Rules above).
+- These parameters are optional on every tool. Omitting them falls back to the server's environment variable configuration.
+- Each tool call creates a fresh client connection using the resolved parameters, so there is no cross-contamination between calls with different overrides.
 
 ## Authentication
 
@@ -510,7 +615,7 @@ python -m mcp_server_opensearch --mode multi
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `--transport` | string | `stdio` | Transport type: `stdio` or `stream` |
-| `--host` | string | `0.0.0.0` | Host to bind to (streaming only) |
+| `--host` | string | `127.0.0.1` | Host to bind to (streaming only). Pass `0.0.0.0` to expose on all interfaces; the listener has no built-in auth, so front it with an authenticating proxy or restrict access via network controls. |
 | `--port` | integer | `9900` | Port to listen on (streaming only) |
 | `--mode` | string | `single` | Server mode: `single` or `multi` |
 | `--profile` | string | `''` | AWS profile to use for OpenSearch connection |
@@ -583,6 +688,13 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 | `OPENSEARCH_ENABLED_TOOLS_REGEX` | No | `''` | Comma-separated list of regex patterns for enabled tools |
 | `OPENSEARCH_DISABLED_TOOLS_REGEX` | No | `''` | Comma-separated list of regex patterns for disabled tools |
 | `OPENSEARCH_SETTINGS_ALLOW_WRITE` | No | `"true"` | Enable/disable write operations (`"true"` or `"false"`) |
+| `OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES` | No | `''` | Comma-separated list of categories that allow write operations |
+
+### Agentic Memory Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `OPENSEARCH_MEMORY_CONTAINER_ID` | No | `''` | Memory container ID for agentic memory tools. When set, `memory_container_id` is pre-filled in all tool calls. Enable the tools via the `agentic_memory` category. See [Agentic Memory Tools](MEMORY.md#agentic-memory-tools) for setup. Config file `agentic_memory.memory_container_id` takes precedence over this variable. |
 
 ### Logging & Monitoring Variables
 
@@ -660,6 +772,8 @@ tool_filters:
     - <regex_pattern_to_disable>
   settings:
     allow_write: true  # Enable/disable write-only operations
+    allow_write_categories:  # Categories that allow write operations
+      - <category_name_to_allow_write>
 ```
 
 To use your configuration file, start the server with the `--config` flag:
@@ -693,7 +807,32 @@ export OPENSEARCH_DISABLED_TOOLS_REGEX="<regex_pattern>"
 
 # Operation Settings
 export OPENSEARCH_SETTINGS_ALLOW_WRITE=true
+export OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES="<category_name>,<category_name>"
 ```
+
+### Per-Category Write Permissions
+
+Categories listed in `allow_write_categories` allow write operations. Tools not in the listed categories remain blocked.
+
+**YAML Configuration:**
+```yaml
+tool_filters:
+  enabled_categories:
+    - <category_name>
+  settings:
+    allow_write: false
+    allow_write_categories:
+      - <category_name>
+```
+
+**Environment Variables:**
+```bash
+export OPENSEARCH_SETTINGS_ALLOW_WRITE=false
+export OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES="<category_name>"
+export OPENSEARCH_ENABLED_CATEGORIES="<category_name>"
+```
+
+**Note:** `allow_write_categories` only takes effect when `allow_write` is `false`. It selectively enables write operations for the specified categories while keeping all other tools read-only.
 
 ### Important Notes
 - Tool names are case-insensitive
@@ -804,6 +943,10 @@ When the response size limit is exceeded, you'll see an error like:
 ```
 Response size exceeded limit of 10485760 bytes. Stopped reading at 15728640 bytes to prevent memory exhaustion. Consider increasing max_response_size or refining your query to return less data.
 ```
+
+## Agent Memory
+
+For documentation on both memory systems — Memory Tools (`MEMORY_TOOLS_ENABLED=true`) and Agentic Memory Tools (`agentic_memory` category) — including setup, tool reference, and a side-by-side comparison, see the [Agent Memory Guide](MEMORY.md).
 
 ## Structured Logging
 

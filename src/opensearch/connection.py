@@ -1,8 +1,7 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Custom OpenSearch connection classes with enhanced functionality.
+"""Custom OpenSearch connection classes with enhanced functionality.
 
 This module provides custom connection classes that extend the standard
 OpenSearch connection classes with additional features like response size limiting.
@@ -10,8 +9,8 @@ OpenSearch connection classes with additional features like response size limiti
 
 import logging
 import time
-
 from opensearchpy import AsyncHttpConnection
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -23,11 +22,13 @@ DEFAULT_MAX_RESPONSE_SIZE = None  # No limit by default - only enforce when expl
 # Base exception class (to avoid circular imports)
 class OpenSearchClientError(Exception):
     """Base exception for OpenSearch client errors."""
+
     pass
 
 
 class ResponseSizeExceededError(OpenSearchClientError):
     """Exception raised when response size exceeds the configured limit."""
+
     pass
 
 
@@ -68,8 +69,7 @@ def _log_request_event(
 
 
 class BufferedAsyncHttpConnection(AsyncHttpConnection):
-    """
-    Async HTTP connection that buffers responses with size limiting.
+    """Async HTTP connection that buffers responses with size limiting.
 
     This connection class prevents large responses from being loaded into memory
     by streaming the response and checking size limits during processing. If the
@@ -78,12 +78,12 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
     """
 
     def __init__(self, *args, max_response_size=DEFAULT_MAX_RESPONSE_SIZE, **kwargs):
-        """
-        Initialize buffered connection with response size limit.
+        """Initialize buffered connection with response size limit.
 
         Args:
-            max_response_size: Maximum allowed response size in bytes (default: None - no limit)
-            *args, **kwargs: Arguments passed to parent AsyncHttpConnection
+            *args: Arguments passed to parent AsyncHttpConnection.
+            max_response_size: Maximum allowed response size in bytes (default: None - no limit).
+            **kwargs: Keyword arguments passed to parent AsyncHttpConnection.
         """
         super().__init__(*args, **kwargs)
         self.max_response_size = max_response_size
@@ -97,8 +97,7 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
     async def perform_request(
         self, method, url, params=None, body=None, timeout=None, ignore=(), headers=None
     ):
-        """
-        Perform HTTP request with response size limiting.
+        """Perform HTTP request with response size limiting.
 
         This implementation leverages the parent class for authentication and session management
         but implements streaming response size checking to prevent memory exhaustion from large responses.
@@ -125,8 +124,8 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
         try:
             # Import required modules
             import aiohttp
-            from urllib.parse import urlencode
             import yarl
+            from urllib.parse import urlencode
 
             # Ensure session is created (from parent class)
             if self.session is None:
@@ -164,7 +163,7 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
             if callable(self._http_auth):
                 req_headers = {
                     **req_headers,
-                    **self._http_auth(method, url, query_string, body),
+                    **self._http_auth(method=method, url=url, body=body, headers=req_headers),
                 }
 
             start = self.loop.time()
@@ -276,8 +275,7 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
     async def _fallback_perform_request(
         self, method, url, params=None, body=None, timeout=None, ignore=(), headers=None
     ):
-        """
-        Fallback to parent implementation with post-download size checking.
+        """Fallback to parent implementation with post-download size checking.
 
         This is used when streaming is not available or fails.
         """

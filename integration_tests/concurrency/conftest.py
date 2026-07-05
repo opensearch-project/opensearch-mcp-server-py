@@ -1,8 +1,8 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import time
 import pytest_asyncio
+import time
 from integration_tests.framework.assertions import assert_tool_success
 from integration_tests.framework.aws_helpers import build_header_auth_headers
 from integration_tests.framework.client import mcp_client

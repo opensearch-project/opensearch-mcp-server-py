@@ -3,10 +3,12 @@
 
 import copy
 import logging
+import os
 import re
 import yaml
-from typing import Dict, Any
 from tools.tools import TOOL_REGISTRY as default_tool_registry
+from typing import Any, Dict
+
 
 # Constants for field names
 DISPLAY_NAME_STRING = 'display_name'
@@ -19,8 +21,7 @@ DISPLAY_NAME_PATTERN = r'^[a-zA-Z0-9_-]+$'
 
 
 def is_valid_display_name_pattern(name: str) -> bool:
-    """
-    Check if a display name follows the required pattern.
+    """Check if a display name follows the required pattern.
 
     :param name: The name to validate
     :return: True if valid, False otherwise
@@ -88,8 +89,7 @@ def _put_nested_dict(nested: dict, keys: list[str], value: Any) -> dict:
 
 
 def parse_cli_to_nested_config(cli_tool_overrides: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
-    """
-    Parse generic CLI overrides of the form 'tool.<ToolName>.<path>=<value>' into a nested dict.
+    """Parse generic CLI overrides of the form 'tool.<ToolName>.<path>=<value>' into a nested dict.
 
     Examples:
     - tool.ListIndexTool.http_methods=POST
@@ -121,8 +121,7 @@ def parse_cli_to_nested_config(cli_tool_overrides: Dict[str, str]) -> Dict[str, 
 def _validate_config(
     config: Dict[str, Dict[str, Any]], reference_registry: Dict[str, Any]
 ) -> None:
-    """
-    Validate the configuration.
+    """Validate the configuration.
 
     Checks:
     1. All tool names exist in the default registry
@@ -193,8 +192,7 @@ def _validate_config(
 def _apply_validated_configs(
     custom_registry: Dict[str, Any], configs: Dict[str, Dict[str, Any]]
 ) -> None:
-    """
-    Apply validated configurations to the registry.
+    """Apply validated configurations to the registry.
 
     :param custom_registry: The registry to modify
     :param configs: Dictionary of tool names and their custom configurations
@@ -236,17 +234,56 @@ def _apply_validated_configs(
                 tool_info[field_name] = field_value
 
 
+def _apply_memory_container_defaults(custom_registry: Dict[str, Any], container_id: str) -> None:
+    """Set memory_container_id as a default in the input_schema of all agentic memory tools.
+
+    This modifies the JSON schema so that:
+    1. MCP clients see the default value (and the field is no longer required)
+    2. validate_args_for_mode can inject it at runtime when agents omit it
+
+    :param custom_registry: The registry to modify
+    :param container_id: The memory container ID to set as default
+    """
+    agentic_memory_tool_names = [
+        'CreateAgenticMemorySessionTool',
+        'AddAgenticMemoriesTool',
+        'GetAgenticMemoryTool',
+        'UpdateAgenticMemoryTool',
+        'DeleteAgenticMemoryByIDTool',
+        'DeleteAgenticMemoryByQueryTool',
+        'SearchAgenticMemoryTool',
+    ]
+
+    for tool_name in agentic_memory_tool_names:
+        if tool_name not in custom_registry:
+            continue
+
+        tool_info = custom_registry[tool_name]
+        base_schema = tool_info.get('input_schema') or {}
+        input_schema = copy.deepcopy(base_schema)
+        properties = input_schema.get('properties') or {}
+
+        if 'memory_container_id' in properties:
+            properties['memory_container_id']['default'] = container_id
+            if 'required' in input_schema and 'memory_container_id' in input_schema['required']:
+                input_schema['required'].remove('memory_container_id')
+
+        tool_info['input_schema'] = input_schema
+
+
 def apply_custom_tool_config(
     tool_registry: Dict[str, Any],
     config_file_path: str,
     cli_tool_overrides: Dict[str, str],
 ) -> Dict[str, Any]:
-    """
-    Apply custom configurations to the tool registry from YAML file and command-line arguments.
+    """Apply custom configurations to the tool registry from YAML file and command-line arguments.
 
     Priority order:
     1. Config file settings (if config file is provided, CLI is completely ignored)
     2. CLI argument settings (only used if no config file is provided)
+
+    Additionally, if memory_container_id is configured (via config file or environment variable),
+    it will be automatically set as a default value for all agentic memory tools.
 
     :param tool_registry: The original tool registry
     :param config_file_path: Path to the YAML configuration file
@@ -254,6 +291,11 @@ def apply_custom_tool_config(
     :return: A new tool registry with custom configurations applied
     """
     custom_registry = copy.deepcopy(tool_registry)
+
+    # Apply memory_container_id defaults to agentic memory tools
+    container_id = get_memory_container_id_from_config(config_file_path)
+    if container_id:
+        _apply_memory_container_defaults(custom_registry, container_id)
 
     # Load configuration from file
     config_from_file = {}
@@ -284,3 +326,40 @@ def apply_custom_tool_config(
     default_tool_registry.update(custom_registry)
 
     return custom_registry
+
+
+def get_memory_container_id_from_config(config_file_path: str = '') -> str:
+    """Get memory container ID from config file or environment variable.
+
+    Priority order:
+    1. Config file (if provided and contains agentic_memory.memory_container_id)
+    2. Environment variable OPENSEARCH_MEMORY_CONTAINER_ID
+
+    :param config_file_path: Path to the YAML configuration file
+    :return: Memory container ID or empty string if not found
+    """
+    container_id = ''
+
+    if config_file_path:
+        try:
+            with open(config_file_path, 'r') as f:
+                config = yaml.safe_load(f)
+                if config:
+                    agentic_memory_config = config.get('agentic_memory', {})
+                    if isinstance(agentic_memory_config, dict):
+                        container_id = agentic_memory_config.get('memory_container_id', '')
+                        if container_id:
+                            logging.info(
+                                f'Using memory_container_id from config file: {container_id}'
+                            )
+                            return container_id
+        except Exception as e:
+            logging.debug(
+                f'Could not load memory_container_id from config file {config_file_path}: {e}'
+            )
+
+    container_id = os.getenv('OPENSEARCH_MEMORY_CONTAINER_ID', '')
+    if container_id:
+        logging.info(f'Using memory_container_id from environment variable: {container_id}')
+
+    return container_id

@@ -5,10 +5,7 @@ import asyncio
 import io
 import json
 import logging
-from unittest.mock import patch
-
 import pytest
-
 from mcp_server_opensearch.logging_config import (
     JsonFormatter,
     _get_rss_mb,
@@ -17,6 +14,7 @@ from mcp_server_opensearch.logging_config import (
     memory_monitor,
     start_memory_monitor,
 )
+from unittest.mock import patch
 
 
 class TestJsonFormatter:

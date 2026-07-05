@@ -3,7 +3,7 @@
 
 import json
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestTools:
@@ -58,40 +58,40 @@ class TestTools:
         # Import after patching to ensure fresh imports
         from tools.tools import (
             TOOL_REGISTRY,
+            CatNodesArgs,
+            CreateSearchConfigurationArgs,
+            DeleteSearchConfigurationArgs,
+            GetAllocationArgs,
+            GetClusterStateArgs,
+            GetIndexInfoArgs,
             GetIndexMappingArgs,
+            GetIndexStatsArgs,
+            GetLongRunningTasksArgs,
+            GetNodesArgs,
+            GetNodesHotThreadsArgs,
+            GetQueryInsightsArgs,
+            GetSearchConfigurationArgs,
+            GetSegmentsArgs,
             GetShardsArgs,
             ListIndicesArgs,
             SearchIndexArgs,
-            GetClusterStateArgs,
-            GetSegmentsArgs,
-            CatNodesArgs,
-            GetNodesArgs,
-            GetIndexInfoArgs,
-            GetIndexStatsArgs,
-            GetQueryInsightsArgs,
-            GetNodesHotThreadsArgs,
-            GetAllocationArgs,
-            GetLongRunningTasksArgs,
-            CreateSearchConfigurationArgs,
-            GetSearchConfigurationArgs,
-            DeleteSearchConfigurationArgs,
+            cat_nodes_tool,
+            create_search_configuration_tool,
+            delete_search_configuration_tool,
+            get_allocation_tool,
+            get_cluster_state_tool,
+            get_index_info_tool,
             get_index_mapping_tool,
+            get_index_stats_tool,
+            get_long_running_tasks_tool,
+            get_nodes_hot_threads_tool,
+            get_nodes_tool,
+            get_query_insights_tool,
+            get_search_configuration_tool,
+            get_segments_tool,
             get_shards_tool,
             list_indices_tool,
             search_index_tool,
-            get_cluster_state_tool,
-            get_segments_tool,
-            cat_nodes_tool,
-            get_nodes_tool,
-            get_index_info_tool,
-            get_index_stats_tool,
-            get_query_insights_tool,
-            get_nodes_hot_threads_tool,
-            get_allocation_tool,
-            get_long_running_tasks_tool,
-            create_search_configuration_tool,
-            get_search_configuration_tool,
-            delete_search_configuration_tool,
         )
 
         self.ListIndicesArgs = ListIndicesArgs
@@ -240,8 +240,7 @@ class TestTools:
         assert '"index1"' in result[0]['text']
         assert '"number_of_shards":"1"' in result[0]['text']
         assert (
-            '"field1":{"type":"text"}' in result[0]['text']
-            or '"type":"text"' in result[0]['text']
+            '"field1":{"type":"text"}' in result[0]['text'] or '"type":"text"' in result[0]['text']
         )
         self.mock_client.indices.get.assert_called_once_with(index='index1')
 
@@ -253,19 +252,17 @@ class TestTools:
             {'index': 'cwl-2024-01', 'health': 'green'},
             {'index': 'cwl-2024-02', 'health': 'green'},
         ]
-        
+
         # Execute - explicitly set include_detail=False with pattern
-        args = self.ListIndicesArgs(
-            index='cwl*', include_detail=False, opensearch_cluster_name=''
-        )
+        args = self.ListIndicesArgs(index='cwl*', include_detail=False, opensearch_cluster_name='')
         result = await self._list_indices_tool(args)
-        
+
         # Assert - should return only the matching index names
         assert len(result) == 1
         assert result[0]['type'] == 'text'
         payload = json.loads(result[0]['text'].split('\n', 1)[1])
         assert payload == ['cwl-2024-01', 'cwl-2024-02']
-        
+
         # cat.indices should be called with the pattern when include_detail=False
         self.mock_client.cat.indices.assert_called_once_with(index='cwl*', format='json')
         self.mock_client.indices.get.assert_not_called()
@@ -689,8 +686,7 @@ class TestTools:
         assert 'Detailed information for index: test-index' in result[0]['text']
         assert '"test-index"' in result[0]['text']
         assert (
-            '"field1":{"type":"text"}' in result[0]['text']
-            or '"type":"text"' in result[0]['text']
+            '"field1":{"type":"text"}' in result[0]['text'] or '"type":"text"' in result[0]['text']
         )
         assert '"number_of_shards":"1"' in result[0]['text']
         self.mock_client.indices.get.assert_called_once_with(index='test-index')
@@ -867,7 +863,7 @@ class TestTools:
         mock_hot_threads = """
 ::: {node1}{xyzdef-1234} {master}
    Hot threads at 2023-04-01T12:00:00Z, interval=500ms, busiestThreads=3, ignoreIdleThreads=true:
-   
+
    0.23% (1.2s out of 500ms) cpu usage by thread 'elasticsearch[node1][search][T#1]'
      10/10 snapshots sharing following 5 elements
        java.lang.Thread.yield(Thread.java:1343)
@@ -1369,7 +1365,7 @@ class TestListClustersTool:
         )
         self.init_client_patcher.start()
 
-        from tools.tools import list_clusters_tool, ListClustersArgs
+        from tools.tools import ListClustersArgs, list_clusters_tool
 
         self._list_clusters_tool = list_clusters_tool
         self.ListClustersArgs = ListClustersArgs

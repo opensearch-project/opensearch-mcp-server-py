@@ -16,7 +16,9 @@ def pytest_addoption(parser):
 
 def pytest_collection_modifyitems(config, items):
     if not config.getoption('--run-evals'):
-        skip = pytest.mark.skip(reason='LLM eval tests are skipped by default; pass --run-evals to run them')
+        skip = pytest.mark.skip(
+            reason='LLM eval tests are skipped by default; pass --run-evals to run them'
+        )
         for item in items:
             if item.get_closest_marker('eval'):
                 item.add_marker(skip)

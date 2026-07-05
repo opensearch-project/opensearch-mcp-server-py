@@ -3,9 +3,9 @@
 
 import logging
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
-
+from mcp.types import CallToolResult
 from mcp_server_opensearch.tool_executor import execute_tool
+from unittest.mock import AsyncMock, Mock, patch
 
 
 def make_enabled_tools(tool_key='TestTool', display_name=None, return_value=None):
@@ -33,11 +33,18 @@ class TestExecuteTool:
         with caplog.at_level(logging.INFO):
             result = await execute_tool('TestTool', {}, enabled_tools)
 
-        assert result == [{'type': 'text', 'text': 'Success'}]
+        # Success is returned as a CallToolResult with isError=False.
+        assert isinstance(result, CallToolResult)
+        assert result.isError is False
+        assert result.content[0].text == 'Success'
         # Check structured log was emitted
         assert any('Tool executed: TestTool' in r.message for r in caplog.records)
         # Check extra fields
-        success_records = [r for r in caplog.records if hasattr(r, 'event_type') and r.event_type == 'tool_execution']
+        success_records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
         assert len(success_records) == 1
         assert success_records[0].status == 'success'
         assert hasattr(success_records[0], 'duration_ms')
@@ -47,14 +54,27 @@ class TestExecuteTool:
     async def test_soft_error_detected_via_is_error_flag(self, mock_validate, caplog):
         mock_validate.return_value = Mock()
         enabled_tools = make_enabled_tools(
-            return_value=[{'type': 'text', 'text': 'Error searching index: connection refused', 'is_error': True}]
+            return_value=[
+                {
+                    'type': 'text',
+                    'text': 'Error searching index: connection refused',
+                    'is_error': True,
+                }
+            ]
         )
 
         with caplog.at_level(logging.ERROR):
             result = await execute_tool('TestTool', {}, enabled_tools)
 
-        assert result[0]['is_error'] is True
-        error_records = [r for r in caplog.records if hasattr(r, 'event_type') and r.event_type == 'tool_execution']
+        assert isinstance(result, CallToolResult)
+        assert result.isError is True
+        assert getattr(result.content[0], 'is_error', None) is None
+        assert result.content[0].text == 'Error searching index: connection refused'
+        error_records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
         assert len(error_records) == 1
         assert error_records[0].status == 'error'
 
@@ -68,9 +88,13 @@ class TestExecuteTool:
         )
 
         with caplog.at_level(logging.INFO):
-            result = await execute_tool('TestTool', {}, enabled_tools)
+            await execute_tool('TestTool', {}, enabled_tools)
 
-        records = [r for r in caplog.records if hasattr(r, 'event_type') and r.event_type == 'tool_execution']
+        records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
         assert len(records) == 1
         assert records[0].status == 'success'
 
@@ -80,7 +104,11 @@ class TestExecuteTool:
             with pytest.raises(ValueError, match='Unknown or disabled tool'):
                 await execute_tool('NonExistentTool', {}, {})
 
-        error_records = [r for r in caplog.records if hasattr(r, 'event_type') and r.event_type == 'tool_execution']
+        error_records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
         assert len(error_records) == 1
         assert error_records[0].status == 'error'
         assert error_records[0].error_type == 'UnknownToolError'
@@ -96,7 +124,11 @@ class TestExecuteTool:
             with pytest.raises(RuntimeError, match='boom'):
                 await execute_tool('TestTool', {}, enabled_tools)
 
-        error_records = [r for r in caplog.records if hasattr(r, 'event_type') and r.event_type == 'tool_execution']
+        error_records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
         assert len(error_records) == 1
         assert error_records[0].status == 'error'
         assert error_records[0].error_type == 'RuntimeError'
@@ -112,7 +144,11 @@ class TestExecuteTool:
             with pytest.raises(ValueError, match='Missing required field'):
                 await execute_tool('TestTool', {}, enabled_tools)
 
-        error_records = [r for r in caplog.records if hasattr(r, 'event_type') and r.event_type == 'tool_execution']
+        error_records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
         assert len(error_records) == 1
         assert error_records[0].status == 'error'
         assert error_records[0].error_type == 'ValidationError'
@@ -134,7 +170,9 @@ class TestExecuteTool:
     @patch('tools.tool_params.validate_args_for_mode')
     async def test_tool_key_logged(self, mock_validate, caplog):
         mock_validate.return_value = Mock()
-        enabled_tools = make_enabled_tools(tool_key='SearchIndexTool', display_name='SearchIndexTool')
+        enabled_tools = make_enabled_tools(
+            tool_key='SearchIndexTool', display_name='SearchIndexTool'
+        )
 
         with caplog.at_level(logging.INFO):
             await execute_tool('SearchIndexTool', {}, enabled_tools)

@@ -1,10 +1,10 @@
+import copy
 import pytest
 from semver import Version
-from unittest.mock import patch, MagicMock
-from tools.utils import is_tool_compatible
 from tools.tool_filter import get_tools, process_tool_filter
-from tools.tool_params import baseToolArgs
-import copy
+from tools.utils import is_tool_compatible
+from unittest.mock import MagicMock, patch
+
 
 # A dictionary for mocking TOOL_REGISTRY
 MOCK_TOOL_REGISTRY = {
@@ -157,19 +157,16 @@ class TestGetTools:
             lambda version, tool_info: tool_info['min_version'] == '1.0.0'
         )
 
-        # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools in single mode
-            result = await get_tools(mock_tool_registry)
+        # Call get_tools in single mode
+        result = await get_tools(mock_tool_registry)
 
-            # Assertions
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' not in result
-            assert 'param1' in result['ListIndexTool']['input_schema']['properties']
-            assert (
-                'opensearch_cluster_name'
-                not in result['ListIndexTool']['input_schema']['properties']
-            )
+        # Assertions
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' not in result
+        assert 'param1' in result['ListIndexTool']['input_schema']['properties']
+        assert (
+            'opensearch_cluster_name' not in result['ListIndexTool']['input_schema']['properties']
+        )
 
     @pytest.mark.asyncio
     @patch.dict('os.environ', {'AWS_OPENSEARCH_SERVERLESS': 'true'})
@@ -183,21 +180,19 @@ class TestGetTools:
         mock_get_version.return_value = None
         mock_is_compatible.return_value = True  # Should return True for serverless mode
 
-        # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools in single mode with serverless environment
-            result = await get_tools(mock_tool_registry)
+        # Call get_tools in single mode with serverless environment
+        result = await get_tools(mock_tool_registry)
 
-            # is_tool_compatible should be called with None version, and should return True for serverless
-            mock_is_compatible.assert_called()
-            # Verify all calls were made with None as the version
-            for call in mock_is_compatible.call_args_list:
-                if len(call.args) > 0:  # Check if there are positional arguments
-                    assert call.args[0] is None, f'Expected None version, got {call.args[0]}'
+        # is_tool_compatible should be called with None version, and should return True for serverless
+        mock_is_compatible.assert_called()
+        # Verify all calls were made with None as the version
+        for call in mock_is_compatible.call_args_list:
+            if len(call.args) > 0:  # Check if there are positional arguments
+                assert call.args[0] is None, f'Expected None version, got {call.args[0]}'
 
-            # Both tools should be enabled in serverless mode
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' in result
+        # Both tools should be enabled in serverless mode
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' in result
 
     @pytest.mark.asyncio
     async def test_get_tools_single_mode_handles_missing_properties(self, mock_patches):
@@ -220,11 +215,10 @@ class TestGetTools:
         mock_is_compatible.return_value = True
 
         # Patch TOOL_REGISTRY to use our test tool registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', tool_without_properties):
-            # Call get_tools in single mode - should not raise error
-            result = await get_tools(tool_without_properties)
-            assert 'ListIndexTool' in result
-            assert 'properties' not in result['ListIndexTool']['input_schema']
+        # Call get_tools in single mode - should not raise error
+        result = await get_tools(tool_without_properties)
+        assert 'ListIndexTool' in result
+        assert 'properties' not in result['ListIndexTool']['input_schema']
 
     @pytest.mark.asyncio
     async def test_get_tools_default_mode_is_single(self, mock_tool_registry, mock_patches):
@@ -234,17 +228,17 @@ class TestGetTools:
         mock_get_version.return_value = Version.parse('2.5.0')
         mock_is_compatible.return_value = True
 
-        # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools without specifying mode
-            result = await get_tools(mock_tool_registry)
-            assert (
-                'opensearch_cluster_name'
-                not in result['SearchIndexTool']['input_schema']['properties']
-            )
+        # Call get_tools without specifying mode
+        result = await get_tools(mock_tool_registry)
+        assert (
+            'opensearch_cluster_name'
+            not in result['SearchIndexTool']['input_schema']['properties']
+        )
 
     @pytest.mark.asyncio
-    async def test_get_tools_skills_tools_version_filtering(self, mock_tool_registry, mock_patches):
+    async def test_get_tools_skills_tools_version_filtering(
+        self, mock_tool_registry, mock_patches
+    ):
         """Test that skills tools are filtered based on version compatibility."""
         mock_get_version, mock_is_compatible = mock_patches
 
@@ -259,20 +253,23 @@ class TestGetTools:
         mock_is_compatible.side_effect = mock_compatibility
 
         # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            result = await get_tools(mock_tool_registry)
+        result = await get_tools(mock_tool_registry)
 
-            # Skills tools should be filtered out due to version incompatibility
-            assert 'DataDistributionTool' not in result
-            assert 'LogPatternAnalysisTool' not in result
-            # Other tools should still be present
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' in result
+        # Skills tools should be filtered out due to version incompatibility
+        assert 'DataDistributionTool' not in result
+        assert 'LogPatternAnalysisTool' not in result
+        # Other tools should still be present
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' in result
 
     @pytest.mark.asyncio
-    async def test_get_tools_skills_tools_compatible_version(self, mock_tool_registry, mock_patches):
-        """Test that skills tools are excluded by default even when version is compatible,
-        since they belong to the 'skills' category which is not enabled by default."""
+    async def test_get_tools_skills_tools_compatible_version(
+        self, mock_tool_registry, mock_patches
+    ):
+        """Test that skills tools are excluded by default even when version is compatible.
+
+        Since they belong to the 'skills' category which is not enabled by default.
+        """
         mock_get_version, mock_is_compatible = mock_patches
 
         # Setup mocks - simulate OpenSearch 3.5.0 (above skills tools min version 3.3.0)
@@ -280,15 +277,14 @@ class TestGetTools:
         mock_is_compatible.return_value = True  # All tools compatible
 
         # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            result = await get_tools(mock_tool_registry)
+        result = await get_tools(mock_tool_registry)
 
-            # Skills tools should be excluded since the skills category is not enabled by default
-            assert 'DataDistributionTool' not in result
-            assert 'LogPatternAnalysisTool' not in result
-            # Core tools should still be present
-            assert 'ListIndexTool' in result
-            assert 'SearchIndexTool' in result
+        # Skills tools should be excluded since the skills category is not enabled by default
+        assert 'DataDistributionTool' not in result
+        assert 'LogPatternAnalysisTool' not in result
+        # Core tools should still be present
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' in result
 
     @pytest.mark.asyncio
     async def test_get_tools_logs_version_info(self, mock_tool_registry, mock_patches, caplog):
@@ -298,11 +294,10 @@ class TestGetTools:
         mock_is_compatible.return_value = True
 
         # Patch TOOL_REGISTRY to use our mock registry
-        with patch('tools.tool_filter.TOOL_REGISTRY', mock_tool_registry):
-            # Call get_tools in single mode with logging capture
-            with caplog.at_level('INFO'):
-                await get_tools(mock_tool_registry)
-                assert 'Connected OpenSearch version: 2.5.0' in caplog.text
+        # Call get_tools in single mode with logging capture
+        with caplog.at_level('INFO'):
+            await get_tools(mock_tool_registry)
+            assert 'Connected OpenSearch version: 2.5.0' in caplog.text
 
 
 class TestProcessToolFilter:
@@ -372,7 +367,7 @@ class TestProcessToolFilter:
         assert 'ExplainTool' not in self.tool_registry
 
     def test_process_tool_filter_rename_tool(self):
-        """Test processing tool filtering with tool renaming feature"""
+        """Test processing tool filtering with tool renaming feature."""
         process_tool_filter(
             tool_registry=self.tool_registry,
             enabled_tools='ModelListTool',
@@ -393,7 +388,7 @@ class TestProcessToolFilter:
         assert 'ModelListTool' not in self.tool_registry
 
     def test_core_tools_default(self):
-        """Test core tools enabled by default"""
+        """Test core tools enabled by default."""
         process_tool_filter(
             tool_registry=self.tool_registry,
             allow_write=True,
@@ -408,7 +403,7 @@ class TestProcessToolFilter:
         assert 'ListModelTool' not in self.tool_registry
 
     def test_disable_core_tools(self):
-        """Test disable core tools categories, which is enabled by default"""
+        """Test disable core tools categories, which is enabled by default."""
         process_tool_filter(
             tool_registry=self.tool_registry,
             disabled_categories='core_tools',
@@ -421,7 +416,7 @@ class TestProcessToolFilter:
         assert 'ExplainTool' not in self.tool_registry
 
     def test_skills_category_is_not_enabled_by_default(self):
-        """skills tools are not enabled unless the category is explicitly enabled."""
+        """Skills tools are not enabled unless the category is explicitly enabled."""
         registry = {
             'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
             'DataDistributionTool': {
@@ -440,7 +435,7 @@ class TestProcessToolFilter:
         assert 'LogPatternAnalysisTool' not in registry
 
     def test_skills_category_can_be_enabled(self):
-        """skills tools are exposed when the category is explicitly enabled."""
+        """Skills tools are exposed when the category is explicitly enabled."""
         registry = {
             'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
             'DataDistributionTool': {
@@ -504,7 +499,10 @@ class TestProcessToolFilter:
             'SampleQuerySetTool': {'display_name': 'SampleQuerySetTool', 'http_methods': 'POST'},
             'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
             'GetJudgmentListTool': {'display_name': 'GetJudgmentListTool', 'http_methods': 'GET'},
-            'CreateJudgmentListTool': {'display_name': 'CreateJudgmentListTool', 'http_methods': 'PUT'},
+            'CreateJudgmentListTool': {
+                'display_name': 'CreateJudgmentListTool',
+                'http_methods': 'PUT',
+            },
             'CreateUBIJudgmentListTool': {
                 'display_name': 'CreateUBIJudgmentListTool',
                 'http_methods': 'PUT',
@@ -513,14 +511,35 @@ class TestProcessToolFilter:
                 'display_name': 'CreateLLMJudgmentListTool',
                 'http_methods': 'PUT',
             },
-            'DeleteJudgmentListTool': {'display_name': 'DeleteJudgmentListTool', 'http_methods': 'DELETE'},
+            'DeleteJudgmentListTool': {
+                'display_name': 'DeleteJudgmentListTool',
+                'http_methods': 'DELETE',
+            },
             'GetExperimentTool': {'display_name': 'GetExperimentTool', 'http_methods': 'GET'},
-            'CreateExperimentTool': {'display_name': 'CreateExperimentTool', 'http_methods': 'PUT'},
-            'DeleteExperimentTool': {'display_name': 'DeleteExperimentTool', 'http_methods': 'DELETE'},
-            'SearchQuerySetsTool': {'display_name': 'SearchQuerySetsTool', 'http_methods': 'GET, POST'},
-            'SearchSearchConfigurationsTool': {'display_name': 'SearchSearchConfigurationsTool', 'http_methods': 'GET, POST'},
-            'SearchJudgmentsTool': {'display_name': 'SearchJudgmentsTool', 'http_methods': 'GET, POST'},
-            'SearchExperimentsTool': {'display_name': 'SearchExperimentsTool', 'http_methods': 'GET, POST'},
+            'CreateExperimentTool': {
+                'display_name': 'CreateExperimentTool',
+                'http_methods': 'PUT',
+            },
+            'DeleteExperimentTool': {
+                'display_name': 'DeleteExperimentTool',
+                'http_methods': 'DELETE',
+            },
+            'SearchQuerySetsTool': {
+                'display_name': 'SearchQuerySetsTool',
+                'http_methods': 'GET, POST',
+            },
+            'SearchSearchConfigurationsTool': {
+                'display_name': 'SearchSearchConfigurationsTool',
+                'http_methods': 'GET, POST',
+            },
+            'SearchJudgmentsTool': {
+                'display_name': 'SearchJudgmentsTool',
+                'http_methods': 'GET, POST',
+            },
+            'SearchExperimentsTool': {
+                'display_name': 'SearchExperimentsTool',
+                'http_methods': 'GET, POST',
+            },
         }
         process_tool_filter(tool_registry=registry, allow_write=True)
 
@@ -567,7 +586,10 @@ class TestProcessToolFilter:
             'SampleQuerySetTool': {'display_name': 'SampleQuerySetTool', 'http_methods': 'POST'},
             'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
             'GetJudgmentListTool': {'display_name': 'GetJudgmentListTool', 'http_methods': 'GET'},
-            'CreateJudgmentListTool': {'display_name': 'CreateJudgmentListTool', 'http_methods': 'PUT'},
+            'CreateJudgmentListTool': {
+                'display_name': 'CreateJudgmentListTool',
+                'http_methods': 'PUT',
+            },
             'CreateUBIJudgmentListTool': {
                 'display_name': 'CreateUBIJudgmentListTool',
                 'http_methods': 'PUT',
@@ -576,14 +598,35 @@ class TestProcessToolFilter:
                 'display_name': 'CreateLLMJudgmentListTool',
                 'http_methods': 'PUT',
             },
-            'DeleteJudgmentListTool': {'display_name': 'DeleteJudgmentListTool', 'http_methods': 'DELETE'},
+            'DeleteJudgmentListTool': {
+                'display_name': 'DeleteJudgmentListTool',
+                'http_methods': 'DELETE',
+            },
             'GetExperimentTool': {'display_name': 'GetExperimentTool', 'http_methods': 'GET'},
-            'CreateExperimentTool': {'display_name': 'CreateExperimentTool', 'http_methods': 'PUT'},
-            'DeleteExperimentTool': {'display_name': 'DeleteExperimentTool', 'http_methods': 'DELETE'},
-            'SearchQuerySetsTool': {'display_name': 'SearchQuerySetsTool', 'http_methods': 'GET, POST'},
-            'SearchSearchConfigurationsTool': {'display_name': 'SearchSearchConfigurationsTool', 'http_methods': 'GET, POST'},
-            'SearchJudgmentsTool': {'display_name': 'SearchJudgmentsTool', 'http_methods': 'GET, POST'},
-            'SearchExperimentsTool': {'display_name': 'SearchExperimentsTool', 'http_methods': 'GET, POST'},
+            'CreateExperimentTool': {
+                'display_name': 'CreateExperimentTool',
+                'http_methods': 'PUT',
+            },
+            'DeleteExperimentTool': {
+                'display_name': 'DeleteExperimentTool',
+                'http_methods': 'DELETE',
+            },
+            'SearchQuerySetsTool': {
+                'display_name': 'SearchQuerySetsTool',
+                'http_methods': 'GET, POST',
+            },
+            'SearchSearchConfigurationsTool': {
+                'display_name': 'SearchSearchConfigurationsTool',
+                'http_methods': 'GET, POST',
+            },
+            'SearchJudgmentsTool': {
+                'display_name': 'SearchJudgmentsTool',
+                'http_methods': 'GET, POST',
+            },
+            'SearchExperimentsTool': {
+                'display_name': 'SearchExperimentsTool',
+                'http_methods': 'GET, POST',
+            },
         }
         process_tool_filter(
             tool_registry=registry,
@@ -611,6 +654,234 @@ class TestProcessToolFilter:
         assert 'SearchSearchConfigurationsTool' in registry
         assert 'SearchJudgmentsTool' in registry
         assert 'SearchExperimentsTool' in registry
+
+    def test_memory_category_auto_enabled_when_tools_present(self):
+        """Memory tools are auto-enabled when present in the registry."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SaveMemoryTool': {
+                'display_name': 'SaveMemoryTool',
+                'http_methods': 'GET, POST, PUT',
+                'bypass_write_filter': True,
+            },
+            'SearchMemoryTool': {
+                'display_name': 'SearchMemoryTool',
+                'http_methods': 'GET',
+            },
+            'DeleteMemoryTool': {
+                'display_name': 'DeleteMemoryTool',
+                'http_methods': 'GET, DELETE',
+                'bypass_write_filter': True,
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=True)
+
+        # Core tools enabled by default
+        assert 'ListIndexTool' in registry
+        # Memory tools auto-enabled
+        assert 'SaveMemoryTool' in registry
+        assert 'SearchMemoryTool' in registry
+        assert 'DeleteMemoryTool' in registry
+
+    def test_memory_category_not_present_when_tools_absent(self):
+        """Memory tools are not added when not in the registry."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+        }
+        process_tool_filter(tool_registry=registry, allow_write=True)
+
+        assert 'ListIndexTool' in registry
+        assert 'SaveMemoryTool' not in registry
+        assert 'SearchMemoryTool' not in registry
+        assert 'DeleteMemoryTool' not in registry
+
+    def test_memory_category_can_be_disabled(self):
+        """Memory tools can be disabled via disabled_categories."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SaveMemoryTool': {
+                'display_name': 'SaveMemoryTool',
+                'http_methods': 'GET, POST, PUT',
+                'bypass_write_filter': True,
+            },
+            'SearchMemoryTool': {
+                'display_name': 'SearchMemoryTool',
+                'http_methods': 'GET',
+            },
+            'DeleteMemoryTool': {
+                'display_name': 'DeleteMemoryTool',
+                'http_methods': 'GET, DELETE',
+                'bypass_write_filter': True,
+            },
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            disabled_categories='memory',
+            allow_write=True,
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'SaveMemoryTool' not in registry
+        assert 'SearchMemoryTool' not in registry
+        assert 'DeleteMemoryTool' not in registry
+
+    def test_memory_tools_survive_write_filter(self):
+        """Memory tools with bypass_write_filter survive when allow_write is False."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SaveMemoryTool': {
+                'display_name': 'SaveMemoryTool',
+                'http_methods': 'GET, POST, PUT',
+                'bypass_write_filter': True,
+            },
+            'SearchMemoryTool': {
+                'display_name': 'SearchMemoryTool',
+                'http_methods': 'GET',
+            },
+            'DeleteMemoryTool': {
+                'display_name': 'DeleteMemoryTool',
+                'http_methods': 'GET, DELETE',
+                'bypass_write_filter': True,
+            },
+            'IndicesCreateTool': {
+                'display_name': 'IndicesCreateTool',
+                'http_methods': 'PUT',
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=False)
+
+        # Memory tools survive despite having write methods
+        assert 'SaveMemoryTool' in registry
+        assert 'SearchMemoryTool' in registry
+        assert 'DeleteMemoryTool' in registry
+        # Regular write-only tool gets removed
+        assert 'IndicesCreateTool' not in registry
+
+
+class TestAllowWriteCategories:
+    """Test cases for allow_write_categories setting."""
+
+    def test_allow_write_false_removes_write_only_tools(self):
+        """When allow_write is false, write-only tools are removed."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SearchIndexTool': {'display_name': 'SearchIndexTool', 'http_methods': 'GET, POST'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
+            'GenericOpenSearchApiTool': {
+                'display_name': 'GenericOpenSearchApiTool',
+                'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+            },
+        }
+        process_tool_filter(tool_registry=registry, allow_write=False)
+
+        assert 'ListIndexTool' in registry
+        assert 'SearchIndexTool' in registry
+        assert 'GenericOpenSearchApiTool' in registry  # has GET, so survives
+        assert 'CreateQuerySetTool' not in registry  # PUT only, removed
+        assert 'DeleteQuerySetTool' not in registry  # DELETE only, removed
+
+    def test_allow_write_categories_exempts_category_from_write_filter(self):
+        """Tools in allow_write_categories survive the write filter even with allow_write=false."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'SearchIndexTool': {'display_name': 'SearchIndexTool', 'http_methods': 'GET, POST'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
+            'GetQuerySetTool': {'display_name': 'GetQuerySetTool', 'http_methods': 'GET'},
+            'GenericOpenSearchApiTool': {
+                'display_name': 'GenericOpenSearchApiTool',
+                'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+            },
+            'IndicesCreateTool': {'display_name': 'IndicesCreateTool', 'http_methods': 'PUT'},
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=False,
+            allow_write_categories=['search_relevance'],
+            enabled_categories='core_tools,search_relevance',
+        )
+
+        # search_relevance write tools survive because of allow_write_categories
+        assert 'CreateQuerySetTool' in registry
+        assert 'DeleteQuerySetTool' in registry
+        assert 'GetQuerySetTool' in registry
+
+        # core_tools with GET survive normally
+        assert 'ListIndexTool' in registry
+        assert 'SearchIndexTool' in registry
+        assert 'GenericOpenSearchApiTool' in registry  # has GET
+
+        # Non-exempted write-only tool is removed
+        assert 'IndicesCreateTool' not in registry
+
+    def test_allow_write_categories_does_not_affect_generic_api_runtime(self):
+        """GenericOpenSearchApiTool still blocked at runtime when allow_write=false."""
+        from tools.tool_filter import get_allow_write_setting, set_allow_write_setting
+
+        set_allow_write_setting(False)
+        assert get_allow_write_setting() is False
+
+    def test_allow_write_categories_multiple_categories(self):
+        """Multiple categories can be specified in allow_write_categories."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'DataDistributionTool': {
+                'display_name': 'DataDistributionTool',
+                'http_methods': 'POST',
+            },
+            'IndicesCreateTool': {'display_name': 'IndicesCreateTool', 'http_methods': 'PUT'},
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=False,
+            allow_write_categories=['search_relevance', 'skills'],
+            enabled_categories='core_tools,search_relevance,skills',
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'CreateQuerySetTool' in registry  # search_relevance, exempted
+        assert 'DataDistributionTool' in registry  # skills, exempted
+        assert 'IndicesCreateTool' not in registry  # not in any exempted category
+
+    def test_allow_write_categories_empty_has_no_effect(self):
+        """Empty allow_write_categories doesn't exempt any tools."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=False,
+            allow_write_categories=[],
+            enabled_categories='core_tools,search_relevance',
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'CreateQuerySetTool' not in registry  # no exemption
+
+    def test_allow_write_categories_with_allow_write_true_is_noop(self):
+        """When allow_write=true, allow_write_categories has no effect (write filter not applied)."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'GenericOpenSearchApiTool': {
+                'display_name': 'GenericOpenSearchApiTool',
+                'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+            },
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            allow_write=True,
+            allow_write_categories=['search_relevance'],
+            enabled_categories='core_tools,search_relevance',
+        )
+
+        # All tools in enabled categories survive when allow_write=true
+        assert 'ListIndexTool' in registry
+        assert 'CreateQuerySetTool' in registry
+        assert 'GenericOpenSearchApiTool' in registry
 
 
 class TestAllowWriteSettings:
@@ -645,7 +916,7 @@ class TestAllowWriteSettings:
 
     def test_set_and_get_allow_write_setting(self):
         """Test basic set and get functionality for allow_write setting."""
-        from tools.tool_filter import set_allow_write_setting, get_allow_write_setting
+        from tools.tool_filter import get_allow_write_setting, set_allow_write_setting
 
         # Test setting to False
         set_allow_write_setting(False)
@@ -853,8 +1124,7 @@ class TestMultiOnlyFilter:
         mock_get_version, _ = mock_patches
         mock_get_version.return_value = Version.parse('2.5.0')
 
-        with patch('tools.tool_filter.TOOL_REGISTRY', registry_with_multi_only):
-            result = await get_tools(registry_with_multi_only)
+        result = await get_tools(registry_with_multi_only)
 
         assert 'ListIndexTool' in result
         assert 'ListClustersTool' not in result
@@ -888,7 +1158,6 @@ class TestMultiOnlyFilter:
             },
         }
 
-        with patch('tools.tool_filter.TOOL_REGISTRY', registry):
-            result = await get_tools(registry)
+        result = await get_tools(registry)
 
         assert 'ListIndexTool' in result

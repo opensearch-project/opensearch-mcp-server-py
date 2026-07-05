@@ -3,7 +3,7 @@
 
 import json
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestSRWSearchTools:
@@ -20,19 +20,20 @@ class TestSRWSearchTools:
         self.init_client_patcher.start()
 
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]
 
         from tools.tools import (
+            SearchExperimentsArgs,
+            SearchJudgmentsArgs,
             SearchQuerySetsArgs,
             SearchSearchConfigurationsArgs,
-            SearchJudgmentsArgs,
-            SearchExperimentsArgs,
+            search_experiments_tool,
+            search_judgments_tool,
             search_query_sets_tool,
             search_search_configurations_tool,
-            search_judgments_tool,
-            search_experiments_tool,
         )
 
         self.SearchQuerySetsArgs = SearchQuerySetsArgs
@@ -120,7 +121,10 @@ class TestSRWSearchTools:
         assert 'Search configuration search results' in result[0]['text']
 
         call_kwargs = self.mock_client.transport.perform_request.call_args
-        assert call_kwargs.kwargs['url'] == '/_plugins/_search_relevance/search_configurations/_search'
+        assert (
+            call_kwargs.kwargs['url']
+            == '/_plugins/_search_relevance/search_configurations/_search'
+        )
         body = json.loads(call_kwargs.kwargs['body'])
         assert body == {'query': {'match_all': {}}}
 
@@ -131,7 +135,7 @@ class TestSRWSearchTools:
         self.mock_client.transport.perform_request.return_value = mock_response
 
         query_body = {'query': {'match': {'name': 'bm25'}}, 'size': 10}
-        result = await self._search_search_configurations_tool(
+        await self._search_search_configurations_tool(
             self.SearchSearchConfigurationsArgs(opensearch_cluster_name='', query_body=query_body)
         )
 
@@ -179,7 +183,7 @@ class TestSRWSearchTools:
         self.mock_client.transport.perform_request.return_value = mock_response
 
         query_body = {'query': {'match': {'name': 'my-judgments'}}}
-        result = await self._search_judgments_tool(
+        await self._search_judgments_tool(
             self.SearchJudgmentsArgs(opensearch_cluster_name='', query_body=query_body)
         )
 
@@ -216,7 +220,7 @@ class TestSRWSearchTools:
         assert 'Experiment search results' in result[0]['text']
 
         call_kwargs = self.mock_client.transport.perform_request.call_args
-        assert call_kwargs.kwargs['url'] == '/_plugins/_search_relevance/experiment/_search'
+        assert call_kwargs.kwargs['url'] == '/_plugins/_search_relevance/experiments/_search'
         body = json.loads(call_kwargs.kwargs['body'])
         assert body == {'query': {'match_all': {}}}
 
@@ -227,7 +231,7 @@ class TestSRWSearchTools:
         self.mock_client.transport.perform_request.return_value = mock_response
 
         query_body = {'query': {'term': {'type.keyword': 'PAIRWISE_COMPARISON'}}, 'size': 10}
-        result = await self._search_experiments_tool(
+        await self._search_experiments_tool(
             self.SearchExperimentsArgs(opensearch_cluster_name='', query_body=query_body)
         )
 
@@ -253,6 +257,7 @@ class TestSRWSearchTools:
     async def test_srw_search_tools_registered_in_registry(self):
         """Test that all SRW search tools are registered in the TOOL_REGISTRY."""
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]

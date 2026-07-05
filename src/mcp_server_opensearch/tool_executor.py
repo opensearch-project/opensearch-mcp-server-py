@@ -1,8 +1,7 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Shared tool execution with structured logging for metrics.
+"""Shared tool execution with structured logging for metrics.
 
 Extracts the duplicated call_tool() logic from stdio_server.py and
 streaming_server.py into a single function that wraps tool invocation
@@ -18,17 +17,35 @@ tool invocation, enabling metric filters for:
 
 import logging
 import time
+from mcp.types import CallToolResult, TextContent
 
-from mcp.types import TextContent
 
 logger = logging.getLogger(__name__)
+
+
+def _build_call_tool_result(result: list, is_error: bool) -> CallToolResult:
+    # Convert a tool's raw content list into a CallToolResult.
+
+    content: list[TextContent] = []
+    for item in result or []:
+        if isinstance(item, dict):
+            content.append(
+                TextContent(
+                    type=item.get('type', 'text'),
+                    text=item.get('text', ''),
+                )
+            )
+        else:
+            content.append(item)
+
+    return CallToolResult(content=content, isError=is_error)
 
 
 async def execute_tool(
     name: str,
     arguments: dict,
     enabled_tools: dict,
-) -> list[TextContent]:
+) -> CallToolResult:
     """Execute an MCP tool with structured logging for metrics.
 
     Resolves the tool by display name, validates arguments, executes,
@@ -49,6 +66,7 @@ async def execute_tool(
     status = 'success'
     error_type = None
     found_tool_key = None
+    is_error = False
 
     try:
         # Resolve tool by display name
@@ -74,8 +92,9 @@ async def execute_tool(
         if result and len(result) > 0:
             if isinstance(result[0], dict) and result[0].get('is_error'):
                 status = 'error'
+                is_error = True
 
-        return result
+        return _build_call_tool_result(result, is_error)
 
     except ValueError:
         # For unknown tool, status/error_type were already set above.

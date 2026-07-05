@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestQuerySetTools:
@@ -24,19 +24,20 @@ class TestQuerySetTools:
         self.init_client_patcher.start()
 
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]
 
         from tools.tools import (
-            GetQuerySetArgs,
             CreateQuerySetArgs,
-            SampleQuerySetArgs,
             DeleteQuerySetArgs,
-            get_query_set_tool,
+            GetQuerySetArgs,
+            SampleQuerySetArgs,
             create_query_set_tool,
-            sample_query_set_tool,
             delete_query_set_tool,
+            get_query_set_tool,
+            sample_query_set_tool,
         )
 
         self.GetQuerySetArgs = GetQuerySetArgs
@@ -307,6 +308,7 @@ class TestQuerySetTools:
     async def test_query_set_tools_registered_in_registry(self):
         """Test that all query set tools are registered in the TOOL_REGISTRY."""
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]
@@ -318,7 +320,12 @@ class TestQuerySetTools:
         assert 'SampleQuerySetTool' in TOOL_REGISTRY
         assert 'DeleteQuerySetTool' in TOOL_REGISTRY
 
-        for tool_name in ['GetQuerySetTool', 'CreateQuerySetTool', 'SampleQuerySetTool', 'DeleteQuerySetTool']:
+        for tool_name in [
+            'GetQuerySetTool',
+            'CreateQuerySetTool',
+            'SampleQuerySetTool',
+            'DeleteQuerySetTool',
+        ]:
             tool = TOOL_REGISTRY[tool_name]
             assert 'description' in tool
             assert 'input_schema' in tool

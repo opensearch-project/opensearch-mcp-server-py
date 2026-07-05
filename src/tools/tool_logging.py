@@ -1,8 +1,7 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Structured error logging for tool functions.
+"""Structured error logging for tool functions.
 
 Provides a helper that extracts structured data from exceptions
 (status codes, error types, root causes) before they are stringified,
@@ -11,6 +10,7 @@ and emits a structured log event for metric extraction.
 
 import json
 import logging
+
 
 logger = logging.getLogger(__name__)
 

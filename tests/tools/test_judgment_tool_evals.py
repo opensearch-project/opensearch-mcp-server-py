@@ -1,10 +1,10 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import sys
-import pytest
 import anthropic
-from unittest.mock import patch, Mock, AsyncMock
+import pytest
+import sys
+from unittest.mock import AsyncMock, Mock, patch
 
 
 JUDGMENT_CREATE_TOOLS = [
@@ -59,7 +59,7 @@ class TestJudgmentToolRouting:
     def test_selects_import_tool_for_manual_ratings(self):
         """When a user has manually annotated ratings, the agent should use CreateJudgmentListTool."""
         tool_use = self.ask_agent(
-            "I have manually graded search results and want to store them as a judgment list "
+            'I have manually graded search results and want to store them as a judgment list '
             "called 'manual-judgments'. Here are my ratings: "
             '[{"query": "laptop", "ratings": [{"docId": "doc1", "rating": 3}, {"docId": "doc2", "rating": 1}]}]'
         )

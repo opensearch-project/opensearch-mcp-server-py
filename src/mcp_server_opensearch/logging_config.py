@@ -1,8 +1,7 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Structured logging configuration for metric extraction.
+"""Structured logging configuration for metric extraction.
 
 Provides a JSON formatter that outputs one JSON object per log line, making
 log events directly targetable by metric filters. Extra fields passed via
@@ -33,6 +32,7 @@ class JsonFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format a log record as a JSON string."""
         log_entry = {
             'timestamp': datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
                 '%Y-%m-%dT%H:%M:%S.%f'

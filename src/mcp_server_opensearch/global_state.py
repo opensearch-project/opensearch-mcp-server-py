@@ -1,8 +1,7 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-"""
-Global state management for the OpenSearch MCP Server.
+"""Global state management for the OpenSearch MCP Server.
 
 This module provides a centralized way to store and access the current server mode,
 profile, and config file path that need to be available throughout the application.
@@ -10,6 +9,7 @@ profile, and config file path that need to be available throughout the applicati
 
 import logging
 from typing import Optional
+
 
 # Global variables
 _current_mode: Optional[str] = None

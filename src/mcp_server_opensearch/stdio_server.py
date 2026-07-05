@@ -5,13 +5,14 @@ import asyncio
 import logging
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
-from mcp.types import TextContent, Tool
+from mcp.types import CallToolResult, Tool
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
-from mcp_server_opensearch.global_state import set_mode, set_profile, set_config_file_path
+from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
+from mcp_server_opensearch.server_instructions import get_server_instructions
+from tools.config import apply_custom_tool_config
 from tools.tool_filter import get_tools
 from tools.tool_generator import generate_tools_from_openapi
 from tools.tools import TOOL_REGISTRY
-from tools.config import apply_custom_tool_config
 
 
 # --- Server setup ---
@@ -21,6 +22,7 @@ async def serve(
     config_file_path: str = '',
     cli_tool_overrides: dict | None = None,
 ) -> None:
+    """Start the MCP server in stdio mode."""
     # Set the global mode
     set_mode(mode)
 
@@ -32,10 +34,12 @@ async def serve(
     if config_file_path:
         set_config_file_path(config_file_path)
 
-    server = Server('opensearch-mcp-server')
     # Load clusters from YAML file
     if mode == 'multi':
         await load_clusters_from_yaml(config_file_path)
+
+    # Server instructions guide the LLM on dynamic connection params (single mode only)
+    server = Server('opensearch-mcp-server', instructions=get_server_instructions())
 
     # Call tool generator
     await generate_tools_from_openapi()
@@ -63,7 +67,7 @@ async def serve(
         return tools
 
     @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict) -> CallToolResult:
         from mcp_server_opensearch.tool_executor import execute_tool
 
         return await execute_tool(name, arguments, enabled_tools)

@@ -3,14 +3,13 @@
 
 import json
 import logging
-import os
+from .tool_logging import log_tool_error
+from .tool_params import baseToolArgs
+from .utils import format_json
+from pydantic import Field
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode
 
-from .tool_logging import log_tool_error
-from .utils import format_json
-from .tool_params import baseToolArgs
-from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 

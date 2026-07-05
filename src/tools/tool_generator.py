@@ -3,9 +3,9 @@
 
 import aiohttp
 import json
-import yaml
-import ssl
 import os
+import ssl
+import yaml
 from .tool_logging import log_tool_error
 from .tool_params import baseToolArgs
 from .tools import TOOL_REGISTRY, check_tool_compatibility
@@ -212,7 +212,7 @@ def generate_tool_from_group(base_name: str, endpoints: List[Dict]) -> Dict[str,
     max_version = details.get('x-version-deprecated', '99.99.99')
 
     # Get the HTTP method(s) used by the endpoints
-    methods = set(endpoint['method'].upper() for endpoint in endpoints)
+    methods = {endpoint['method'].upper() for endpoint in endpoints}
     http_methods = ', '.join(sorted(methods))
 
     all_parameters, path_parameters, required_parameters = extract_parameters(endpoints)
@@ -228,6 +228,7 @@ def generate_tool_from_group(base_name: str, endpoints: List[Dict]) -> Dict[str,
         tool_name = f'{base_name.replace("_", "")}Tool'
         try:
             from opensearch.client import get_opensearch_client
+
             params_dict = params.model_dump() if hasattr(params, 'model_dump') else {}
 
             try:

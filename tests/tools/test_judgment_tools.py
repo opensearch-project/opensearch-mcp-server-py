@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestJudgmentTools:
@@ -23,21 +23,22 @@ class TestJudgmentTools:
         self.init_client_patcher.start()
 
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]
 
         from tools.tools import (
-            GetJudgmentListArgs,
             CreateJudgmentListArgs,
             CreateLLMJudgmentListArgs,
             CreateUBIJudgmentListArgs,
             DeleteJudgmentListArgs,
-            get_judgment_list_tool,
+            GetJudgmentListArgs,
             create_judgment_list_tool,
             create_llm_judgment_list_tool,
             create_ubi_judgment_list_tool,
             delete_judgment_list_tool,
+            get_judgment_list_tool,
         )
 
         self.GetJudgmentListArgs = GetJudgmentListArgs
@@ -64,7 +65,9 @@ class TestJudgmentTools:
             '_source': {
                 'name': 'my-judgments',
                 'type': 'IMPORT_JUDGMENT',
-                'judgmentRatings': [{'query': 'laptop', 'ratings': [{'docId': 'doc1', 'rating': 3}]}],
+                'judgmentRatings': [
+                    {'query': 'laptop', 'ratings': [{'docId': 'doc1', 'rating': 3}]}
+                ],
             },
         }
         self.mock_client.plugins.search_relevance.get_judgments.return_value = mock_response
@@ -379,6 +382,7 @@ class TestJudgmentTools:
     async def test_judgment_tools_registered_in_registry(self):
         """Test that all judgment tools are registered in the TOOL_REGISTRY."""
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]
@@ -391,7 +395,13 @@ class TestJudgmentTools:
         assert 'CreateLLMJudgmentListTool' in TOOL_REGISTRY
         assert 'DeleteJudgmentListTool' in TOOL_REGISTRY
 
-        for tool_name in ['GetJudgmentListTool', 'CreateJudgmentListTool', 'CreateUBIJudgmentListTool', 'CreateLLMJudgmentListTool', 'DeleteJudgmentListTool']:
+        for tool_name in [
+            'GetJudgmentListTool',
+            'CreateJudgmentListTool',
+            'CreateUBIJudgmentListTool',
+            'CreateLLMJudgmentListTool',
+            'DeleteJudgmentListTool',
+        ]:
             tool = TOOL_REGISTRY[tool_name]
             assert 'description' in tool
             assert 'input_schema' in tool

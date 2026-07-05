@@ -81,8 +81,8 @@ def initialize_client(args: baseToolArgs) -> AsyncOpenSearch:
         logger.info(f'Initializing OpenSearch client in {mode} mode')
 
         if mode == 'single':
-            # In single mode, always use environment variables, ignore cluster name
-            return _initialize_client_single_mode()
+            # In single mode, use environment variables with optional per-call overrides from args
+            return _initialize_client_single_mode(args)
         elif mode == 'multi':
             # In multi mode, cluster name must be provided
             if not args or not args.opensearch_cluster_name:
@@ -192,19 +192,28 @@ def _log_connection_event(
     )
 
 
-def _initialize_client_single_mode() -> AsyncOpenSearch:
-    """Initialize OpenSearch client for single mode using environment variables.
+def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch:
+    """Initialize OpenSearch client for single mode.
 
-    Single mode uses environment variables for connection, with optional header-based auth:
-    - OPENSEARCH_URL (required, or from headers if OPENSEARCH_HEADER_AUTH=true)
-    - OPENSEARCH_HEADER_AUTH: If true, prefer headers over env vars for auth
-    - OPENSEARCH_USERNAME / OPENSEARCH_PASSWORD
-    - AWS_PROFILE / AWS_REGION
-    - AWS_IAM_ARN
-    - OPENSEARCH_NO_AUTH
-    - AWS_OPENSEARCH_SERVERLESS
-    - OPENSEARCH_TIMEOUT
-    - BEARER
+    Uses environment variables for connection parameters, but any values provided
+    in the tool ``args`` take precedence.  This allows agents to dynamically
+    target different clusters on a per-call basis without reconfiguring the
+    server's environment.
+
+    Override-capable parameters (via ``args``):
+    - opensearch_url          → OPENSEARCH_URL
+    - opensearch_username     → OPENSEARCH_USERNAME
+    - opensearch_password     → OPENSEARCH_PASSWORD
+    - opensearch_no_auth      → OPENSEARCH_NO_AUTH
+    - aws_iam_arn             → AWS_IAM_ARN
+    - aws_profile             → AWS_PROFILE
+    - aws_opensearch_serverless → AWS_OPENSEARCH_SERVERLESS
+    - opensearch_timeout      → OPENSEARCH_TIMEOUT
+    - opensearch_ssl_verify   → OPENSEARCH_SSL_VERIFY
+    - aws_region              → AWS_REGION
+
+    Other parameters (header auth, mTLS certs, max response size, bearer) are
+    still sourced exclusively from environment variables / headers.
 
     Returns:
         OpenSearch: An initialized OpenSearch client instance
@@ -245,13 +254,39 @@ def _initialize_client_single_mode() -> AsyncOpenSearch:
                 logger.warning(
                     f'Invalid OPENSEARCH_MAX_RESPONSE_SIZE format: {max_response_size_str}, using default'
                 )
+
+        # Apply per-call overrides from tool args (if provided)
+        if args is not None:
+            if args.opensearch_url is not None:
+                opensearch_url = args.opensearch_url.strip()
+            if args.opensearch_username is not None:
+                opensearch_username = args.opensearch_username.strip()
+            if args.opensearch_password is not None:
+                # Intentionally not stripped: leading/trailing whitespace in
+                # passwords is valid and must be preserved exactly as provided.
+                opensearch_password = args.opensearch_password
+            if args.opensearch_no_auth is not None:
+                opensearch_no_auth = args.opensearch_no_auth
+            if args.aws_iam_arn is not None:
+                iam_arn = args.aws_iam_arn.strip()
+            if args.aws_profile is not None:
+                profile = args.aws_profile.strip()
+            if args.aws_opensearch_serverless is not None:
+                is_serverless_mode = args.aws_opensearch_serverless
+            if args.opensearch_timeout is not None:
+                opensearch_timeout = args.opensearch_timeout
+            if args.opensearch_ssl_verify is not None:
+                ssl_verify = args.opensearch_ssl_verify
+
         aws_access_key_id = None
         aws_secret_access_key = None
         aws_session_token = None
         bearer_auth_header = None
 
-        # Default to region from environment
+        # Default to region from environment, then apply override
         aws_region = get_aws_region_single_mode()
+        if args is not None and args.aws_region is not None:
+            aws_region = args.aws_region.strip()
 
         # Check if header auth is enabled and update variables accordingly
         use_header_auth = os.getenv('OPENSEARCH_HEADER_AUTH', '').lower() == 'true'
@@ -362,9 +397,7 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
         opensearch_client_cert_path = _normalize_path_value(
             cluster_info.opensearch_client_cert_path
         )
-        opensearch_client_key_path = _normalize_path_value(
-            cluster_info.opensearch_client_key_path
-        )
+        opensearch_client_key_path = _normalize_path_value(cluster_info.opensearch_client_key_path)
 
         # Get max response size from cluster config, fallback to environment variable
         max_response_size = cluster_info.max_response_size

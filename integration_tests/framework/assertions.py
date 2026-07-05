@@ -23,6 +23,7 @@ def assert_tool_success(result, *expected: str) -> str:
     Returns:
         The concatenated text content from the response.
     """
+    assert not result.isError
     text = _extract_texts(result)
     assert not text.startswith(_ERROR_PREFIXES), f'Tool returned error: {text[:500]}'
     for exp in expected:
@@ -44,6 +45,7 @@ def assert_tool_error(result, expected_substring: str | None = None) -> str:
     Returns:
         The concatenated text content from the error response.
     """
+    assert result.isError
     text = _extract_texts(result)
     assert text.startswith(_ERROR_PREFIXES), f'Expected error but got success: {text[:500]}'
     if expected_substring:

@@ -168,6 +168,8 @@ class TestMCPStarletteApp:
 
     def test_create_app(self, app_handler):
         """Test Starlette application creation and configuration."""
+        from starlette.routing import Mount, Route
+
         app = app_handler.create_app()
         assert len(app.routes) == 5
 
@@ -175,7 +177,28 @@ class TestMCPStarletteApp:
         assert app.routes[0].path == '/sse'
         assert app.routes[1].path == '/health'
         assert app.routes[2].path == '/messages'
-        assert app.routes[3].path == '/mcp'
+        # Bare '/mcp' is a Route (served directly, no 307); sub-paths go through the Mount.
+        assert app.routes[3].path == '/mcp' and isinstance(app.routes[3], Route)
+        assert app.routes[4].path == '/mcp' and isinstance(app.routes[4], Mount)
+
+    @pytest.mark.asyncio
+    async def test_mcp_endpoint_no_redirect(self, app_handler):
+        """Bare '/mcp' is served directly without a 307 redirect to '/mcp/' (issue #271)."""
+        from starlette.responses import PlainTextResponse
+        from starlette.testclient import TestClient
+
+        async def fake_handle_request(scope, receive, send):
+            await PlainTextResponse('ok')(scope, receive, send)
+
+        app_handler.session_manager.handle_request = fake_handle_request
+        app = app_handler.create_app()
+        app.router.lifespan_context = None  # skip the real session manager startup
+        client = TestClient(app)
+
+        for method in ('GET', 'POST', 'DELETE'):
+            response = client.request(method, '/mcp', follow_redirects=False)
+            assert response.status_code == 200
+            assert response.headers.get('location') is None
 
     def test_create_app_with_oauth(self, app_handler):
         """Test OAuth metadata and route protection for streaming transport."""

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
 
 class TestExperimentTools:
@@ -23,17 +23,18 @@ class TestExperimentTools:
         self.init_client_patcher.start()
 
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]
 
         from tools.tools import (
-            GetExperimentArgs,
             CreateExperimentArgs,
             DeleteExperimentArgs,
-            get_experiment_tool,
+            GetExperimentArgs,
             create_experiment_tool,
             delete_experiment_tool,
+            get_experiment_tool,
         )
 
         self.GetExperimentArgs = GetExperimentArgs
@@ -301,6 +302,7 @@ class TestExperimentTools:
     async def test_experiment_tools_registered_in_registry(self):
         """Test that all experiment tools are registered in the TOOL_REGISTRY."""
         import sys
+
         for module in ['tools.tools']:
             if module in sys.modules:
                 del sys.modules[module]

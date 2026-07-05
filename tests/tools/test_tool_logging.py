@@ -2,8 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import logging
-import pytest
-
 from tools.tool_logging import log_tool_error
 
 

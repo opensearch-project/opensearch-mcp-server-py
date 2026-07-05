@@ -4,6 +4,7 @@
 - [Installing opensearch-mcp-server-py](https://github.com/opensearch-project/opensearch-mcp-server-py#installing-opensearch-mcp-server-py)
 - [Available tools](https://github.com/opensearch-project/opensearch-mcp-server-py#available-tools)
 - [User Guide](https://github.com/opensearch-project/opensearch-mcp-server-py#user-guide)
+- [Agent Memory](https://github.com/opensearch-project/opensearch-mcp-server-py#agent-memory)
 - [Contributing](https://github.com/opensearch-project/opensearch-mcp-server-py#contributing)
 - [Code of Conduct](https://github.com/opensearch-project/opensearch-mcp-server-py#code-of-conduct)
 - [License](https://github.com/opensearch-project/opensearch-mcp-server-py#license)
@@ -18,6 +19,7 @@
 - Seamless integration with AI assistants and LLMs through the MCP protocol
 - Support for both stdio and streaming server transports (SSE and Streamable HTTP)
 - Built-in tools for common OpenSearch operations
+- Dynamic per-call connection parameters for targeting different clusters without server reconfiguration
 - Easy integration with Claude Desktop and LangChain
 - Secure authentication using basic auth, IAM roles, header-based auth, and OpenSearch mTLS
 
@@ -30,6 +32,23 @@ Opensearch-mcp-server-py can be installed from [PyPI](https://pypi.org/project/o
 ```
 pip install opensearch-mcp-server-py
 ```
+
+### Zero-Config Setup
+
+The server can be started with no environment variables at all. Agents provide connection details dynamically on each tool call:
+
+```json
+{
+  "mcpServers": {
+    "opensearch": {
+      "command": "uvx",
+      "args": ["opensearch-mcp-server-py"]
+    }
+  }
+}
+```
+
+With this setup, agents pass `opensearch_url` and authentication parameters directly when calling any tool. This is useful when agents discover endpoints from a knowledge base, runbook, or SOP, or when a single agent needs to work with multiple clusters in one session. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) for details.
 
 ## Available Tools
 
@@ -63,6 +82,24 @@ The following tools are available but disabled by default. To enable them, see t
 - [GetAllocationTool](https://docs.opensearch.org/latest/api-reference/cat/cat-allocation/): Gets information about shard allocation across nodes in the cluster from the /\_cat/allocation endpoint.
 - [GetLongRunningTasksTool](https://docs.opensearch.org/latest/api-reference/cat/cat-tasks/): Gets information about long-running tasks in the cluster, sorted by running time in descending order.
 
+### Agentic Memory Tools (Disabled by Default)
+
+The following tools expose the [OpenSearch Agentic Memory API](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/) — a server-side memory system built into OpenSearch itself. The OpenSearch cluster manages memory containers, sessions, and inference (LLM-based extraction of facts from conversations). These tools require OpenSearch **3.3.0 or later**.
+
+**When to use:** You want OpenSearch to own the full memory lifecycle — including LLM-based inference to extract facts from raw conversations, structured memory types (sessions, working, long-term, history), and server-managed namespacing. Best for production agentic pipelines where memory management should be centralized and not depend on the MCP client.
+
+**Setup:** You must create a memory container in OpenSearch before using these tools (one-time admin operation requiring LLM connector and embedding model configuration). See [Agentic Memory Tools](MEMORY.md#agentic-memory-tools) in the Agent Memory Guide.
+
+Enable with `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory`. When `memory_container_id` is configured via the `agentic_memory` config section or `OPENSEARCH_MEMORY_CONTAINER_ID` environment variable, it is automatically pre-filled in all tool calls.
+
+- [CreateAgenticMemorySessionTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/create-session/): Creates a new session within a memory container.
+- [AddAgenticMemoriesTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/add-memory/): Adds conversational or structured data memories to a container.
+- [GetAgenticMemoryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/get-memory/): Retrieves a specific memory by its ID and type.
+- [SearchAgenticMemoryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/search-memory/): Searches for memories using OpenSearch Query DSL.
+- [UpdateAgenticMemoryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/update-memory/): Updates an existing memory (supports specific fields based on memory type).
+- [DeleteAgenticMemoryByIDTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes a specific memory by its ID.
+- [DeleteAgenticMemoryByQueryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes multiple memories matching a query criteria.
+
 ### Search Relevance Workbench Tools (Disabled by Default)
 Search Relevance Workbench tools are grouped under the `search_relevance` category and can be enabled at once using `OPENSEARCH_ENABLED_CATEGORIES=search_relevance` or by adding `enabled_categories: [search_relevance]` or explicitly adding individual tools to their config file. See the [Tool Filter](USER_GUIDE.md#tool-filter) section in the User Guide for additional information about how to filter tools.
 
@@ -93,7 +130,38 @@ Skills tools are grouped under the `skills` category and can be enabled at once 
 - [DataDistributionTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/data-distribution-tool/): Analyzes data distribution patterns and field value frequencies within OpenSearch indices. Supports both single dataset analysis and comparative analysis between two time periods to identify distribution changes.
 - [LogPatternAnalysisTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/log-pattern-analysis-tool/): Detects anomalous log patterns and sequences through comparative analysis between baseline and selection time ranges. Supports log sequence analysis with trace correlation, log pattern difference analysis, and log insights analysis for error detection.
 
+### Memory Tools (Opt-in)
+
+Memory tools give the MCP agent itself persistent, cross-session memory backed by OpenSearch. The agent decides what to save as plain-text statements; OpenSearch stores and semantically indexes them. Enable with `MEMORY_TOOLS_ENABLED=true`. See the [Agent Memory Guide](MEMORY.md) for full setup instructions.
+
+**When to use:** You want a lightweight, agent-driven memory layer that works with any MCP-compatible IDE (Kiro, Claude Code, Cursor). The agent controls what gets remembered — no LLM connectors or embedding models to configure on the OpenSearch side. Requires Amazon OpenSearch Service (managed domain 2.19+ or Serverless) for automatic semantic enrichment. See the [Agent Memory Guide](MEMORY.md#memory-tools) for full setup instructions.
+
+- **SaveMemoryTool**: Saves facts, decisions, and preferences to persistent storage with automatic semantic enrichment.
+- **SearchMemoryTool**: Searches memories using natural language with recency-aware ranking.
+- **DeleteMemoryTool**: Removes outdated or incorrect memories by document ID.
+
 ### Tool Parameters
+
+All tools accept the following **optional connection parameters** that override the server's environment variable configuration on a per-call basis. When omitted, the server falls back to its configured environment variables or cluster config as usual.
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `opensearch_url` | string | OpenSearch endpoint URL. Overrides `OPENSEARCH_URL`. |
+| `opensearch_username` | string | Username for basic auth. Overrides `OPENSEARCH_USERNAME`. |
+| `opensearch_password` | string | Password for basic auth. Overrides `OPENSEARCH_PASSWORD`. |
+| `opensearch_no_auth` | boolean | Connect without authentication. Overrides `OPENSEARCH_NO_AUTH`. |
+| `aws_region` | string | AWS region. Overrides `AWS_REGION`. |
+| `aws_iam_arn` | string | IAM role ARN. Overrides `AWS_IAM_ARN`. |
+| `aws_profile` | string | AWS profile name. Overrides `AWS_PROFILE`. |
+| `aws_opensearch_serverless` | boolean | Use OpenSearch Serverless. Overrides `AWS_OPENSEARCH_SERVERLESS`. |
+| `opensearch_ssl_verify` | boolean | SSL certificate verification. Overrides `OPENSEARCH_SSL_VERIFY`. |
+| `opensearch_timeout` | integer | Connection timeout in seconds. Overrides `OPENSEARCH_TIMEOUT`. |
+
+This allows agents to dynamically target different clusters per tool call without reconfiguring the server (single mode only). See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) in the User Guide for details and examples.
+
+In addition to the common connection parameters above, each tool accepts its own specific parameters:
+
+> **Note:** The `opensearch_url` parameter listed under individual tools below is part of the common connection parameters described above. All common connection parameters (`opensearch_username`, `opensearch_password`, `aws_region`, etc.) are available on every tool but are not repeated in each tool's parameter list for brevity.
 
 - **ListIndexTool**
 
@@ -189,6 +257,71 @@ Skills tools are grouped under the `skills` category and can be enabled at once 
   - `opensearch_url` (optional): The OpenSearch cluster URL to connect to
   - `limit` (optional): The maximum number of tasks to return. Default is 10.
 
+- **CreateAgenticMemorySessionTool**
+
+  - `memory_container_id` (auto-populated): The ID of the memory container where the session will be created. Automatically set when configured via `agentic_memory` config or `OPENSEARCH_MEMORY_CONTAINER_ID` env var. *(Path Parameter)*
+  - `session_id` (optional): A custom session ID. If not provided, a random ID is generated. *(Body Parameter)*
+  - `summary` (optional): A session summary or description. *(Body Parameter)*
+  - `metadata` (optional): Additional metadata for the session provided as key-value pairs. *(Body Parameter)*
+  - `namespace` (optional): Namespace information for organizing the session. *(Body Parameter)*
+
+- **AddAgenticMemoriesTool**
+
+  - `memory_container_id` (auto-populated): The ID of the memory container to add the memory to. Automatically set when configured. *(Path Parameter)*
+  - `messages` (conditional): A list of messages. Required when `payload_type` is `conversational`. *(Body Parameter)*
+  - `structured_data` (conditional): Structured data content. Required when `payload_type` is `data`. *(Body Parameter)*
+  - `binary_data` (optional): 	Binary data content encoded as a Base64 string for binary payloads. *(Body Parameter)*
+  - `payload_type` (required): The type of payload. Valid values are `conversational` or `data`. See [Payload types](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/#payload-types). *(Body Parameter)*
+  - `namespace` (optional): The [namespace](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/#namespaces) context for organizing memories (for example, `user_id`, `session_id`, or `agent_id`). If `session_id` is not specified in the namespace field and `disable_session`: `false` (default is `true`), a new session with a new session ID is created. *(Body Parameter)*
+  - `metadata` (optional): Additional metadata for the memory (for example, `status`, `branch`, or custom fields). *(Body Parameter)*
+  - `tags` (optional): Tags for categorizing memories. *(Body Parameter)*
+  - `infer` (optional): Whether to use an LLM to extract key information (default: `false`). When `true`, the LLM extracts key information from the original text and stores it as a memory. See [Inference mode](https://docs.opensearch.org/latest/ml-commons-plugin/agentic-memory/#inference-mode). *(Body Parameter)*
+
+- **GetAgenticMemoryTool**
+
+  - `memory_container_id` (auto-populated): The ID of the memory container from which to retrieve the memory. Automatically set when configured. *(Path Parameter)*
+  - `type` (required): The memory type. Valid values are `sessions`, `working`, `long-term`, and `history`. *(Path Parameter)*
+  - `id` (required): The ID of the memory to retrieve. *(Path Parameter)*
+
+- **SearchAgenticMemoryTool**
+
+  - `memory_container_id` (auto-populated): The ID of the memory container. Automatically set when configured. *(Path Parameter)*
+  - `type` (required): The memory type. Valid values are `sessions`, `working`, `long-term`, and `history`. *(Path Parameter)*
+  - `query` (required): The search query using OpenSearch [query DSL](https://docs.opensearch.org/latest/query-dsl/). *(Body Parameter)*
+  - `sort` (optional): Sort specification for the search results. *(Body Parameter)*
+
+- **UpdateAgenticMemoryTool**
+
+  - `memory_container_id` (auto-populated): The ID of the memory container. Automatically set when configured. *(Path Parameter)*
+  - `type` (required): The memory type (`sessions`, `working`, or `long-term`).*(Path Parameter)*
+  - `id` (required): The ID of the memory to update.*(Path Parameter)*
+  - **Session memory request fields:**
+    - `summary` (optional): The summary of the session. *(Body Parameter)*
+    - `metadata` (optional): Additional metadata for the memory (for example, `status`, `branch`, or custom fields). *(Body Parameter)*
+    - `agents` (optional): Additional information about the agents. *(Body Parameter)*
+    - `additional_info` (optional): Additional metadata to associate with the session. *(Body Parameter)*
+  - **Working memory request fields**
+    - `messages` (optional): Updated conversation messages (for conversation type). *(Body Parameter)*
+    - `structured_data` (optional): Updated structured data content (for data memory payloads). *(Body Parameter)*
+    - `binary_data` (optional): Updated binary data content (for data memory payloads). *(Body Parameter)*
+    - `tags` (optional): Updated tags for categorization. *(Body Parameter)*
+    - `metadata` (optional): Additional metadata for the memory (for example, `status`, `branch`, or custom fields). *(Body Parameter)*
+  - **Long-term memory request fields**
+    - `memory` (optional): The updated memory content. *(Body Parameter)*
+    - `tags` (optional): Updated tags for categorization. *(Body Parameter)*
+
+- **DeleteAgenticMemoryByIDTool**
+
+  - `memory_container_id` (auto-populated): The ID of the memory container from which to delete the memory. Automatically set when configured. *(Path Parameter)*
+  - `type` (required): The type of memory to delete. Valid values are `sessions`, `working`, `long-term`, and `history`. *(Path Parameter)*
+  - `id` (required): The ID of the specific memory to delete. *(Path Parameter)*
+
+- **DeleteAgenticMemoryByQueryTool**
+
+  - `memory_container_id` (auto-populated): The ID of the memory container from which to delete the memory. Automatically set when configured. *(Path Parameter)*
+  - `type` (required): The type of memory to delete. Valid values are `sessions`, `working`, `long-term`, and `history`. *(Path Parameter)*
+  - `query` (required): The OpenSearch [DSL query](https://docs.opensearch.org/latest/query-dsl/) to match memories for deletion. *(Body Parameter)*
+
 - **DataDistributionTool**
 
   - `index` (required): Target OpenSearch index name.
@@ -215,6 +348,26 @@ Skills tools are grouped under the `skills` category and can be enabled at once 
 ## User Guide
 
 For detailed usage instructions, configuration options, and examples, please see the [User Guide](USER_GUIDE.md).
+
+## Agent Memory
+
+The OpenSearch MCP server includes two distinct memory systems. Both use OpenSearch as the storage backend but differ in who controls the memory lifecycle and what infrastructure they require.
+
+### Choosing the right approach
+
+| | Memory Tools (`MEMORY_TOOLS_ENABLED`) | Agentic Memory Tools (`agentic_memory` category) |
+|---|---|---|
+| **Who stores memories** | The MCP agent decides what to save as plain-text statements | OpenSearch processes raw conversations and extracts facts via LLM inference |
+| **Setup complexity** | Low — index is auto-created on first use | High — requires creating a memory container with LLM connector and embedding model |
+| **OpenSearch version** | Amazon OpenSearch Service 2.19+ or Serverless | OpenSearch 3.3.0+ |
+| **Semantic search** | Yes, via AWS automatic semantic enrichment | Yes, via configured embedding model |
+| **Memory structure** | Flat — each memory is a plain-text statement | Structured — sessions, working, long-term, and history types |
+| **LLM inference** | No — agent writes exactly what it wants to remember | Optional (`infer: true`) — OpenSearch uses an LLM to extract facts from conversations |
+| **Best for** | IDE agents (Kiro, Claude Code, Cursor) that need quick setup and cross-session continuity | Production agentic pipelines where memory management should be centralized and server-owned |
+
+**Use Memory Tools** when you want a lightweight, agent-driven memory layer that works out of the box with any MCP-compatible IDE. The agent controls what gets remembered. See the [Agent Memory Guide](MEMORY.md#memory-tools) for setup.
+
+**Use Agentic Memory Tools** when you want OpenSearch to own the full memory lifecycle — including LLM-based extraction of facts from raw conversations, structured memory types, and server-managed namespacing. See the [Agent Memory Guide](MEMORY.md#agentic-memory-tools) for setup.
 
 ## Contributing
 

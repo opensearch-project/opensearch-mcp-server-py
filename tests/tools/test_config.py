@@ -6,6 +6,7 @@ import os
 import yaml
 from tools.config import apply_custom_tool_config
 
+
 MOCK_TOOL_REGISTRY = {
     'ListIndexTool': {
         'display_name': 'ListIndexTool',

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""
-Simple test script to verify write protection logic in GenericOpenSearchApiTool
-"""
+"""Simple test script to verify write protection logic in GenericOpenSearchApiTool."""
 
 import os
 import sys
+
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -12,7 +11,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 def test_write_protection_logic():
     """Test the write protection logic directly."""
-
     print('Testing Write Protection Logic...')
 
     # Save original setting

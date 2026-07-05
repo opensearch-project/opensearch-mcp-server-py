@@ -1,8 +1,8 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import pytest
 import json
+import pytest
 from tools.tool_params import (
     GetIndexMappingArgs,
     GetShardsArgs,
@@ -10,7 +10,7 @@ from tools.tool_params import (
     SearchIndexArgs,
     baseToolArgs,
 )
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import AsyncMock, patch
 
 
 class TestOpenSearchHelper:
@@ -211,6 +211,7 @@ class TestOpenSearchHelper:
 
         # Ensure env var is not set
         import os
+
         os.environ.pop('OPENSEARCH_QUERY_TIMEOUT', None)
 
         result = await self.search_index(
@@ -375,218 +376,209 @@ class TestOpenSearchHelper:
         # Execute and assert
         result = await get_opensearch_version(args)
         assert result is None
-        
+
     def test_convert_search_results_to_csv_hits_only(self):
         """Test convert_search_results_to_csv with hits only."""
         import importlib.util
         import os
-        spec = importlib.util.spec_from_file_location("helper", os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py'))
+
+        spec = importlib.util.spec_from_file_location(
+            'helper', os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py')
+        )
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         convert_search_results_to_csv = helper.convert_search_results_to_csv
-        
+
         search_results = {
-            "hits": {
-                "total": {"value": 2, "relation": "eq"},
-                "hits": [
+            'hits': {
+                'total': {'value': 2, 'relation': 'eq'},
+                'hits': [
                     {
-                        "_index": "products",
-                        "_id": "1",
-                        "_score": 1.5,
-                        "_source": {
-                            "name": "Laptop",
-                            "price": 999.99,
-                            "category": "electronics"
-                        }
+                        '_index': 'products',
+                        '_id': '1',
+                        '_score': 1.5,
+                        '_source': {'name': 'Laptop', 'price': 999.99, 'category': 'electronics'},
                     },
                     {
-                        "_index": "products",
-                        "_id": "2",
-                        "_score": 1.2,
-                        "_source": {
-                            "name": "Phone",
-                            "price": 599.99,
-                            "category": "electronics"
-                        }
-                    }
-                ]
+                        '_index': 'products',
+                        '_id': '2',
+                        '_score': 1.2,
+                        '_source': {'name': 'Phone', 'price': 599.99, 'category': 'electronics'},
+                    },
+                ],
             }
         }
-        
+
         result = convert_search_results_to_csv(search_results)
-        assert "_id,_index,_score,category,name,price" in result
-        assert "1,products,1.5,electronics,Laptop,999.99" in result
-        assert "2,products,1.2,electronics,Phone,599.99" in result
+        assert '_id,_index,_score,category,name,price' in result
+        assert '1,products,1.5,electronics,Laptop,999.99' in result
+        assert '2,products,1.2,electronics,Phone,599.99' in result
 
     def test_convert_search_results_to_csv_aggregations_only(self):
         """Test convert_search_results_to_csv with aggregations only."""
         import importlib.util
         import os
-        spec = importlib.util.spec_from_file_location("helper", os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py'))
+
+        spec = importlib.util.spec_from_file_location(
+            'helper', os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py')
+        )
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         convert_search_results_to_csv = helper.convert_search_results_to_csv
-        
+
         search_results = {
-            "hits": {"total": {"value": 100}, "hits": []},
-            "aggregations": {
-                "categories": {
-                    "buckets": [
-                        {"key": "electronics", "doc_count": 45},
-                        {"key": "books", "doc_count": 30},
-                        {"key": "clothing", "doc_count": 25}
+            'hits': {'total': {'value': 100}, 'hits': []},
+            'aggregations': {
+                'categories': {
+                    'buckets': [
+                        {'key': 'electronics', 'doc_count': 45},
+                        {'key': 'books', 'doc_count': 30},
+                        {'key': 'clothing', 'doc_count': 25},
                     ]
                 },
-                "avg_price": {
-                    "value": 299.99
-                }
-            }
+                'avg_price': {'value': 299.99},
+            },
         }
-        
+
         result = convert_search_results_to_csv(search_results)
-        assert "categories" in result
-        assert "avg_price" in result
-        assert "electronics" in result
-        assert "299.99" in result
+        assert 'categories' in result
+        assert 'avg_price' in result
+        assert 'electronics' in result
+        assert '299.99' in result
 
     def test_convert_search_results_to_csv_hits_and_aggregations(self):
         """Test convert_search_results_to_csv with both hits and aggregations."""
         import importlib.util
         import os
-        spec = importlib.util.spec_from_file_location("helper", os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py'))
+
+        spec = importlib.util.spec_from_file_location(
+            'helper', os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py')
+        )
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         convert_search_results_to_csv = helper.convert_search_results_to_csv
-        
+
         search_results = {
-            "hits": {
-                "total": {"value": 1},
-                "hits": [
+            'hits': {
+                'total': {'value': 1},
+                'hits': [
                     {
-                        "_index": "products",
-                        "_id": "1",
-                        "_score": 1.0,
-                        "_source": {
-                            "name": "Laptop",
-                            "price": 999.99
-                        }
+                        '_index': 'products',
+                        '_id': '1',
+                        '_score': 1.0,
+                        '_source': {'name': 'Laptop', 'price': 999.99},
                     }
-                ]
+                ],
             },
-            "aggregations": {
-                "price_stats": {
-                    "min": 99.99,
-                    "max": 1999.99,
-                    "avg": 549.99
-                }
-            }
+            'aggregations': {'price_stats': {'min': 99.99, 'max': 1999.99, 'avg': 549.99}},
         }
-        
+
         result = convert_search_results_to_csv(search_results)
-        assert "SEARCH HITS:" in result
-        assert "AGGREGATIONS:" in result
-        assert "_id,_index,_score,name,price" in result
-        assert "1,products,1.0,Laptop,999.99" in result
-        assert "price_stats" in result
-        assert "549.99" in result
+        assert 'SEARCH HITS:' in result
+        assert 'AGGREGATIONS:' in result
+        assert '_id,_index,_score,name,price' in result
+        assert '1,products,1.0,Laptop,999.99' in result
+        assert 'price_stats' in result
+        assert '549.99' in result
 
     def test_convert_search_results_to_csv_nested_aggregations(self):
         """Test convert_search_results_to_csv with nested aggregations."""
         import importlib.util
         import os
-        spec = importlib.util.spec_from_file_location("helper", os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py'))
+
+        spec = importlib.util.spec_from_file_location(
+            'helper', os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py')
+        )
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         convert_search_results_to_csv = helper.convert_search_results_to_csv
-        
+
         search_results = {
-            "hits": {"total": {"value": 1000}, "hits": []},
-            "aggregations": {
-                "categories": {
-                    "buckets": [
+            'hits': {'total': {'value': 1000}, 'hits': []},
+            'aggregations': {
+                'categories': {
+                    'buckets': [
                         {
-                            "key": "electronics",
-                            "doc_count": 500,
-                            "avg_price": {"value": 299.99},
-                            "brands": {
-                                "buckets": [
-                                    {"key": "Apple", "doc_count": 200},
-                                    {"key": "Samsung", "doc_count": 150}
+                            'key': 'electronics',
+                            'doc_count': 500,
+                            'avg_price': {'value': 299.99},
+                            'brands': {
+                                'buckets': [
+                                    {'key': 'Apple', 'doc_count': 200},
+                                    {'key': 'Samsung', 'doc_count': 150},
                                 ]
-                            }
+                            },
                         },
                         {
-                            "key": "books",
-                            "doc_count": 300,
-                            "avg_price": {"value": 19.99},
-                            "genres": {
-                                "buckets": [
-                                    {"key": "fiction", "doc_count": 180},
-                                    {"key": "non-fiction", "doc_count": 120}
+                            'key': 'books',
+                            'doc_count': 300,
+                            'avg_price': {'value': 19.99},
+                            'genres': {
+                                'buckets': [
+                                    {'key': 'fiction', 'doc_count': 180},
+                                    {'key': 'non-fiction', 'doc_count': 120},
                                 ]
-                            }
-                        }
+                            },
+                        },
                     ]
                 },
-                "total_revenue": {
-                    "value": 125000.50
-                }
-            }
+                'total_revenue': {'value': 125000.50},
+            },
         }
-        
+
         result = convert_search_results_to_csv(search_results)
-        assert "categories" in result
-        assert "total_revenue" in result
-        assert "electronics" in result
-        assert "Apple" in result
-        assert "fiction" in result
-        assert "125000.5" in result
+        assert 'categories' in result
+        assert 'total_revenue' in result
+        assert 'electronics' in result
+        assert 'Apple' in result
+        assert 'fiction' in result
+        assert '125000.5' in result
 
     def test_convert_search_results_to_csv_nested_objects(self):
         """Test convert_search_results_to_csv with nested objects in hits."""
         import importlib.util
         import os
-        spec = importlib.util.spec_from_file_location("helper", os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py'))
+
+        spec = importlib.util.spec_from_file_location(
+            'helper', os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py')
+        )
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         convert_search_results_to_csv = helper.convert_search_results_to_csv
-        
+
         search_results = {
-            "hits": {
-                "hits": [
+            'hits': {
+                'hits': [
                     {
-                        "_index": "users",
-                        "_id": "1",
-                        "_score": 1.0,
-                        "_source": {
-                            "name": "John Doe",
-                            "address": {
-                                "street": "123 Main St",
-                                "city": "New York",
-                                "coordinates": {
-                                    "lat": 40.7128,
-                                    "lon": -74.0060
-                                }
+                        '_index': 'users',
+                        '_id': '1',
+                        '_score': 1.0,
+                        '_source': {
+                            'name': 'John Doe',
+                            'address': {
+                                'street': '123 Main St',
+                                'city': 'New York',
+                                'coordinates': {'lat': 40.7128, 'lon': -74.0060},
                             },
-                            "tags": ["developer", "python"],
-                            "skills": [
-                                {"name": "Python", "level": "expert"},
-                                {"name": "JavaScript", "level": "intermediate"}
-                            ]
-                        }
+                            'tags': ['developer', 'python'],
+                            'skills': [
+                                {'name': 'Python', 'level': 'expert'},
+                                {'name': 'JavaScript', 'level': 'intermediate'},
+                            ],
+                        },
                     }
                 ]
             }
         }
-        
+
         result = convert_search_results_to_csv(search_results)
         # Check flattened nested fields
-        assert "address.city" in result
-        assert "address.coordinates.lat" in result
-        assert "address.coordinates.lon" in result
-        assert "New York" in result
-        assert "40.7128" in result
-        assert "-74.006" in result
+        assert 'address.city' in result
+        assert 'address.coordinates.lat' in result
+        assert 'address.coordinates.lon' in result
+        assert 'New York' in result
+        assert '40.7128' in result
+        assert '-74.006' in result
         # Check arrays are JSON encoded (CSV escapes quotes)
         assert '"[""developer"", ""python""]"' in result
 
@@ -594,50 +586,43 @@ class TestOpenSearchHelper:
         """Test convert_search_results_to_csv with empty results."""
         import importlib.util
         import os
-        spec = importlib.util.spec_from_file_location("helper", os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py'))
+
+        spec = importlib.util.spec_from_file_location(
+            'helper', os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py')
+        )
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         convert_search_results_to_csv = helper.convert_search_results_to_csv
-        
+
         # Empty search results
-        assert convert_search_results_to_csv({}) == "No search results to convert"
-        assert convert_search_results_to_csv(None) == "No search results to convert"
-        
+        assert convert_search_results_to_csv({}) == 'No search results to convert'
+        assert convert_search_results_to_csv(None) == 'No search results to convert'
+
         # No hits
-        search_results = {"hits": {"hits": []}}
+        search_results = {'hits': {'hits': []}}
         result = convert_search_results_to_csv(search_results)
-        assert "No search results to convert" in result
-        
+        assert 'No search results to convert' in result
+
         # Only aggregations with empty hits
-        search_results = {
-            "hits": {"hits": []},
-            "aggregations": {"count": {"value": 0}}
-        }
+        search_results = {'hits': {'hits': []}, 'aggregations': {'count': {'value': 0}}}
         result = convert_search_results_to_csv(search_results)
-        assert "count" in result
-        assert "0" in result
+        assert 'count' in result
+        assert '0' in result
 
     def test_normalize_scientific_notation(self):
         import importlib.util
         import os
-        spec = importlib.util.spec_from_file_location("helper", os.path.join(os.path.dirname(__file__),
-                                                                             '../../src/opensearch/helper.py'))
+
+        spec = importlib.util.spec_from_file_location(
+            'helper', os.path.join(os.path.dirname(__file__), '../../src/opensearch/helper.py')
+        )
         helper = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(helper)
         normalize_scientific_notation = helper.normalize_scientific_notation
-        query_dsl = {
-            "query": {
-                "range": {
-                    "timestamp": {
-                        "gte": 1732693003E+3,
-                        "lte": 173.5
-                    }
-                }
-            }
-        }
+        query_dsl = {'query': {'range': {'timestamp': {'gte': 1732693003e3, 'lte': 173.5}}}}
         result = normalize_scientific_notation(query_dsl)
-        assert "1732693003000" in json.dumps(result)
-        assert "173.5" in json.dumps(result)
+        assert '1732693003000' in json.dumps(result)
+        assert '173.5' in json.dumps(result)
 
 
 class TestValidateJsonString:

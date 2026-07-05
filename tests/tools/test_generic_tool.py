@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""
-Simple test script for the GenericOpenSearchApiTool
-"""
+"""Simple test script for the GenericOpenSearchApiTool."""
 
 import asyncio
-import sys
 import os
 import pytest
+import sys
+
 
 # Add the src directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -17,7 +16,6 @@ from tools.generic_api_tool import GenericOpenSearchApiArgs, generic_opensearch_
 @pytest.mark.asyncio
 async def test_generic_tool():
     """Test the generic OpenSearch API tool with a simple cluster health check."""
-
     # Test 1: Simple cluster health check
     print('Test 1: Cluster Health Check')
     args = GenericOpenSearchApiArgs(

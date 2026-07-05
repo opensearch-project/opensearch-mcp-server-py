@@ -1,15 +1,14 @@
+import os
+import platform
 import pytest
 import tempfile
-import os
 import yaml
-import platform
-from unittest.mock import patch, MagicMock, AsyncMock
 from mcp_server_opensearch.clusters_information import (
     ClusterInfo,
     add_cluster,
+    cluster_registry,
     get_cluster,
     load_clusters_from_yaml,
-    cluster_registry,
 )
 
 

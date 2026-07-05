@@ -104,9 +104,7 @@ class MCPServerProcess:
         while asyncio.get_event_loop().time() < deadline:
             # Check if process died
             if self._process and self._process.poll() is not None:
-                raise RuntimeError(
-                    f'MCP server exited with code {self._process.returncode}'
-                )
+                raise RuntimeError(f'MCP server exited with code {self._process.returncode}')
 
             try:
                 async with aiohttp.ClientSession() as session:

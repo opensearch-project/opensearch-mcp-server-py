@@ -1,19 +1,21 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import json
 import logging
-from typing import Dict, Any
 from .tool_logging import log_tool_error
-from .utils import format_json
 from .tool_params import baseToolArgs
-from pydantic import Field
+from .utils import format_json
 from opensearch.client import get_opensearch_client
+from pydantic import Field
+from typing import Any, Dict
+
 
 logger = logging.getLogger(__name__)
 
 
 class DataDistributionToolArgs(baseToolArgs):
+    """Arguments for the DataDistributionTool."""
+
     index: str = Field(description='Target OpenSearch index name')
     selectionTimeRangeStart: str = Field(description='Start time for analysis period')
     selectionTimeRangeEnd: str = Field(description='End time for analysis period')
@@ -28,6 +30,8 @@ class DataDistributionToolArgs(baseToolArgs):
 
 
 class LogPatternAnalysisToolArgs(baseToolArgs):
+    """Arguments for the LogPatternAnalysisTool."""
+
     index: str = Field(description='Target OpenSearch index name containing log data')
     logFieldName: str = Field(description='Field containing raw log messages to analyze')
     selectionTimeRangeStart: str = Field(description='Start time for analysis target period')
@@ -47,7 +51,7 @@ class LogPatternAnalysisToolArgs(baseToolArgs):
 async def call_opensearch_tool(
     tool_name: str, parameters: Dict[str, Any], args: baseToolArgs
 ) -> list[dict]:
-    """Call OpenSearch ML tools API"""
+    """Call OpenSearch ML tools API."""
     try:
         async with get_opensearch_client(args) as client:
             # Call OpenSearch ML tools execute API
@@ -66,6 +70,7 @@ async def call_opensearch_tool(
 
 
 async def data_distribution_tool(args: DataDistributionToolArgs) -> list[dict]:
+    """Analyze data distribution over time ranges."""
     params = {
         'index': args.index,
         'timeField': args.timeField,
@@ -83,6 +88,7 @@ async def data_distribution_tool(args: DataDistributionToolArgs) -> list[dict]:
 
 
 async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[dict]:
+    """Analyze log patterns in the specified index."""
     params = {
         'index': args.index,
         'timeField': args.timeField,

@@ -406,4 +406,13 @@ uv run ruff check .
 uv run mypy src/
 ```
 
+#### Pre-commit Hooks
+
+Install [pre-commit](https://pre-commit.com/) to automatically run ruff format and lint on staged files before each commit:
+
+```bash
+uv tool install pre-commit
+pre-commit install
+```
+
 > **Note**: Make sure to run tests and code quality checks before submitting your changes.

@@ -1,15 +1,62 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
-import json
-import logging
 import csv
 import io
+import json
+import logging
 import math
 import os
 from decimal import Decimal
 from semver import Version
-from tools.tool_params import *
+from tools.agentic_memory.params import (
+    AddAgenticMemoriesArgs,
+    CreateAgenticMemorySessionArgs,
+    DeleteAgenticMemoryByIDArgs,
+    DeleteAgenticMemoryByQueryArgs,
+    GetAgenticMemoryArgs,
+    SearchAgenticMemoryArgs,
+    UpdateAgenticMemoryArgs,
+)
+from tools.tool_params import (
+    CatNodesArgs,
+    CreateExperimentArgs,
+    CreateJudgmentListArgs,
+    CreateLLMJudgmentListArgs,
+    CreateQuerySetArgs,
+    CreateSearchConfigurationArgs,
+    CreateUBIJudgmentListArgs,
+    DeleteExperimentArgs,
+    DeleteJudgmentListArgs,
+    DeleteQuerySetArgs,
+    DeleteSearchConfigurationArgs,
+    GetAllocationArgs,
+    GetClusterStateArgs,
+    GetExperimentArgs,
+    GetIndexInfoArgs,
+    GetIndexMappingArgs,
+    GetIndexStatsArgs,
+    GetJudgmentListArgs,
+    GetLongRunningTasksArgs,
+    GetNodesArgs,
+    GetNodesHotThreadsArgs,
+    GetQueryInsightsArgs,
+    GetQuerySetArgs,
+    GetSearchConfigurationArgs,
+    GetSegmentsArgs,
+    GetShardsArgs,
+    ListIndicesArgs,
+    SampleQuerySetArgs,
+    SearchExperimentsArgs,
+    SearchIndexArgs,
+    SearchJudgmentsArgs,
+    SearchQuerySetsArgs,
+    SearchSearchConfigurationsArgs,
+    baseToolArgs,
+)
+from typing import Any, Dict
+from urllib.parse import quote
+
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -18,6 +65,7 @@ logger = logging.getLogger(__name__)
 # List all the helper functions, these functions perform a single rest call to opensearch
 # these functions will be used in tools folder to eventually write more complex tools
 async def list_indices(args: ListIndicesArgs) -> json:
+    """List indices matching the given pattern."""
     from .client import get_opensearch_client
 
     async with get_opensearch_client(args) as client:
@@ -44,6 +92,7 @@ async def get_index(args: ListIndicesArgs) -> json:
 
 
 async def get_index_mapping(args: GetIndexMappingArgs) -> json:
+    """Get the mapping for a specific index."""
     from .client import get_opensearch_client
 
     async with get_opensearch_client(args) as client:
@@ -52,6 +101,7 @@ async def get_index_mapping(args: GetIndexMappingArgs) -> json:
 
 
 async def search_index(args: SearchIndexArgs) -> json:
+    """Execute a search query against an index."""
     from .client import get_opensearch_client
     from tools.tools import TOOL_REGISTRY
 
@@ -79,6 +129,7 @@ async def search_index(args: SearchIndexArgs) -> json:
 
 
 async def get_shards(args: GetShardsArgs) -> json:
+    """Get shard information for an index."""
     from .client import get_opensearch_client
 
     async with get_opensearch_client(args) as client:
@@ -331,7 +382,6 @@ async def create_query_set(args: CreateQuerySetArgs) -> json:
         json: Result of the creation operation with query set ID
     """
     import json as _json
-
     from .client import get_opensearch_client
 
     queries = _json.loads(args.queries) if isinstance(args.queries, str) else args.queries
@@ -374,7 +424,8 @@ async def sample_query_set(args: SampleQuerySetArgs) -> json:
 
     body = {
         'name': args.name,
-        'description': args.description or f'Query set: {args.name} ({args.sampling}, size={args.query_set_size})',
+        'description': args.description
+        or f'Query set: {args.name} ({args.sampling}, size={args.query_set_size})',
         'sampling': args.sampling,
         'querySetSize': args.query_set_size,
     }
@@ -426,7 +477,7 @@ async def _srw_search(args, entity: str) -> json:
     Args:
         args: Tool args containing the optional query_body
         entity: The SRW entity name, e.g. 'query_sets', 'search_configurations',
-                'judgments', or 'experiment'
+                'judgments', or 'experiments'
 
     Returns:
         json: OpenSearch search response
@@ -470,11 +521,16 @@ async def create_experiment(args: CreateExperimentArgs) -> json:
         else args.search_configuration_ids
     )
     if not isinstance(search_configuration_ids, list):
-        raise ValueError('search_configuration_ids must be a JSON array of configuration ID strings')
+        raise ValueError(
+            'search_configuration_ids must be a JSON array of configuration ID strings'
+        )
 
     if args.experiment_type == 'PAIRWISE_COMPARISON' and len(search_configuration_ids) != 2:
         raise ValueError('PAIRWISE_COMPARISON requires exactly 2 search configuration IDs')
-    if args.experiment_type in ('POINTWISE_EVALUATION', 'HYBRID_OPTIMIZER') and len(search_configuration_ids) != 1:
+    if (
+        args.experiment_type in ('POINTWISE_EVALUATION', 'HYBRID_OPTIMIZER')
+        and len(search_configuration_ids) != 1
+    ):
         raise ValueError(f'{args.experiment_type} requires exactly 1 search configuration ID')
 
     body: dict = {
@@ -497,7 +553,9 @@ async def create_experiment(args: CreateExperimentArgs) -> json:
             else args.judgment_list_ids
         )
         if not isinstance(judgment_list_ids, list) or len(judgment_list_ids) == 0:
-            raise ValueError('judgment_list_ids must be a non-empty JSON array of judgment list ID strings')
+            raise ValueError(
+                'judgment_list_ids must be a non-empty JSON array of judgment list ID strings'
+            )
         body['judgmentList'] = judgment_list_ids
 
     async with get_opensearch_client(args) as client:
@@ -568,7 +626,7 @@ async def search_experiments(args: SearchExperimentsArgs) -> json:
     Returns:
         json: OpenSearch search response
     """
-    return await _srw_search(args, 'experiment')
+    return await _srw_search(args, 'experiments')
 
 
 def convert_search_results_to_csv(search_results: dict) -> str:
@@ -581,7 +639,7 @@ def convert_search_results_to_csv(search_results: dict) -> str:
         str: CSV formatted string of the search results
     """
     if not search_results:
-        return "No search results to convert"
+        return 'No search results to convert'
 
     has_hits = 'hits' in search_results and search_results['hits']['hits']
     has_aggregations = 'aggregations' in search_results
@@ -598,9 +656,9 @@ def convert_search_results_to_csv(search_results: dict) -> str:
     if has_hits and has_aggregations:
         hits_csv = _convert_hits_to_csv(search_results['hits']['hits'])
         aggregations_json = json.dumps(search_results['aggregations'], separators=(',', ':'))
-        return f"SEARCH HITS:\n{hits_csv}\n\nAGGREGATIONS:\n{aggregations_json}"
+        return f'SEARCH HITS:\n{hits_csv}\n\nAGGREGATIONS:\n{aggregations_json}'
 
-    return "No search results to convert"
+    return 'No search results to convert'
 
 
 def _convert_hits_to_csv(hits: list) -> str:
@@ -613,7 +671,7 @@ def _convert_hits_to_csv(hits: list) -> str:
         str: CSV formatted string
     """
     if not hits:
-        return "No documents found in search results"
+        return 'No documents found in search results'
 
     # Extract all unique field names from all documents (flattened)
     all_fields = set()
@@ -624,7 +682,7 @@ def _convert_hits_to_csv(hits: list) -> str:
         all_fields.update(['_index', '_id', '_score'])
 
     # Convert to sorted list for consistent column order
-    fieldnames = sorted(list(all_fields))
+    fieldnames = sorted(all_fields)
 
     # Create CSV in memory
     output = io.StringIO()
@@ -708,6 +766,209 @@ async def get_opensearch_version(args: baseToolArgs) -> Version:
         logger.error(f'Error getting OpenSearch version: {e}')
         return None
 
+
+async def create_agentic_memory_session(
+    args: CreateAgenticMemorySessionArgs,
+) -> Dict[str, Any]:
+    """Create a new agentic memory session in the specified memory container.
+
+    Args:
+        args: CreateAgenticMemorySessionArgs containing memory_container_id and optional session_id, summary, metadata, namespace
+
+    Returns:
+        json: Response from the session creation endpoint
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        url_parts = [
+            '/_plugins/_ml/memory_containers',
+            quote(args.memory_container_id, safe=''),
+            'memories/sessions',
+        ]
+        url = '/'.join(url_parts)
+
+        body = args.model_dump(
+            exclude={'memory_container_id', 'opensearch_cluster_name'},
+            exclude_none=True,
+        )
+
+        return await client.transport.perform_request(method='POST', url=url, body=body)
+
+
+async def add_agentic_memories(args: AddAgenticMemoriesArgs) -> Dict[str, Any]:
+    """Add agentic memories to the specified memory container based on the payload type.
+
+    Args:
+        args: AddAgenticMemoriesArgs containing memory_container_id, payload_type, and content fields like messages or structured_data, plus optional namespace, metadata, tags, infer
+
+    Returns:
+        json: Response from the add memories endpoint
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        url_parts = [
+            '/_plugins/_ml/memory_containers',
+            quote(args.memory_container_id, safe=''),
+            'memories',
+        ]
+        url = '/'.join(url_parts)
+
+        body = args.model_dump(
+            exclude={'memory_container_id', 'opensearch_cluster_name'},
+            exclude_none=True,
+            by_alias=True,
+        )
+
+        return await client.transport.perform_request(method='POST', url=url, body=body)
+
+
+async def get_agentic_memory(args: GetAgenticMemoryArgs) -> Dict[str, Any]:
+    """Retrieve a specific agentic memory by its type and ID from the memory container.
+
+    Args:
+        args: GetAgenticMemoryArgs containing memory_container_id, memory_type, and id
+
+    Returns:
+        json: The retrieved memory information from the /_memory endpoint
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        url_parts = [
+            '/_plugins/_ml/memory_containers',
+            quote(args.memory_container_id, safe=''),
+            'memories',
+            quote(args.memory_type, safe=''),
+            quote(args.id, safe=''),
+        ]
+        url = '/'.join(url_parts)
+
+        return await client.transport.perform_request(method='GET', url=url)
+
+
+async def update_agentic_memory(args: UpdateAgenticMemoryArgs) -> Dict[str, Any]:
+    """Update a specific agentic memory by its type and ID in the memory container.
+
+    Args:
+        args: UpdateAgenticMemoryArgs containing memory_container_id, memory_type, id, and optional update fields based on type
+
+    Returns:
+        json: Response from the update memory endpoint
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        url_parts = [
+            '/_plugins/_ml/memory_containers',
+            quote(args.memory_container_id, safe=''),
+            'memories',
+            quote(args.memory_type, safe=''),
+            quote(args.id, safe=''),
+        ]
+        url = '/'.join(url_parts)
+
+        body = args.model_dump(
+            exclude={
+                'memory_container_id',
+                'memory_type',
+                'id',
+                'opensearch_cluster_name',
+            },
+            exclude_none=True,
+            by_alias=True,
+        )
+
+        return await client.transport.perform_request(method='PUT', url=url, body=body)
+
+
+async def delete_agentic_memory_by_id(
+    args: DeleteAgenticMemoryByIDArgs,
+) -> Dict[str, Any]:
+    """Delete a specific agentic memory by its type and ID from the memory container.
+
+    Args:
+        args: DeleteAgenticMemoryByIDArgs containing memory_container_id, memory_type, and id
+
+    Returns:
+        json: Response from the delete memory endpoint
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        url_parts = [
+            '/_plugins/_ml/memory_containers',
+            quote(args.memory_container_id, safe=''),
+            'memories',
+            quote(args.memory_type, safe=''),
+            quote(args.id, safe=''),
+        ]
+        url = '/'.join(url_parts)
+
+        return await client.transport.perform_request(method='DELETE', url=url)
+
+
+async def delete_agentic_memory_by_query(
+    args: DeleteAgenticMemoryByQueryArgs,
+) -> Dict[str, Any]:
+    """Delete agentic memories matching the provided query from the specified memory type in the container.
+
+    Args:
+        args: DeleteAgenticMemoryByQueryArgs containing memory_container_id, memory_type, and query
+
+    Returns:
+        json: Response from the delete memory by query endpoint
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        url_parts = [
+            '/_plugins/_ml/memory_containers',
+            quote(args.memory_container_id, safe=''),
+            'memories',
+            quote(args.memory_type, safe=''),
+            '_delete_by_query',
+        ]
+        url = '/'.join(url_parts)
+
+        body = args.model_dump(
+            exclude={'memory_container_id', 'memory_type', 'opensearch_cluster_name'},
+            exclude_none=True,
+        )
+
+        return await client.transport.perform_request(method='POST', url=url, body=body)
+
+
+async def search_agentic_memory(args: SearchAgenticMemoryArgs) -> Dict[str, Any]:
+    """Search for agentic memories of a specific type within the memory container using OpenSearch query DSL.
+
+    Args:
+        args: SearchAgenticMemoryArgs containing memory_container_id, memory_type, query, and optional sort
+
+    Returns:
+        json: Search memories results
+    """
+    from .client import get_opensearch_client
+
+    async with get_opensearch_client(args) as client:
+        url_parts = [
+            '/_plugins/_ml/memory_containers',
+            quote(args.memory_container_id, safe=''),
+            'memories',
+            quote(args.memory_type, safe=''),
+            '_search',
+        ]
+        url = '/'.join(url_parts)
+
+        body = args.model_dump(
+            exclude={'memory_container_id', 'memory_type', 'opensearch_cluster_name'},
+            exclude_none=True,
+        )
+
+        return await client.transport.perform_request(method='GET', url=url, body=body)
+
+
 def plain_float(value):
     """Convert a float to a non-scientific notation number.
 
@@ -733,13 +994,13 @@ def plain_float(value):
         return None
 
     d = Decimal(str(value)).normalize()
-    s = format(d, "f")
-    if "." in s:
-        s = s.rstrip("0").rstrip(".")
-    if s == "" or s == "-":
-        s = "0"
+    s = format(d, 'f')
+    if '.' in s:
+        s = s.rstrip('0').rstrip('.')
+    if s == '' or s == '-':
+        s = '0'
 
-    if "." not in s:
+    if '.' not in s:
         return int(s)
     else:
         return float(s)
@@ -933,7 +1194,9 @@ async def create_llm_judgment_list(args: CreateLLMJudgmentListArgs) -> json:
         else args.context_fields
     )
     if not isinstance(context_fields, list):
-        raise ValueError('context_fields must be a JSON array of field name strings, e.g. ["title", "description"]')
+        raise ValueError(
+            'context_fields must be a JSON array of field name strings, e.g. ["title", "description"]'
+        )
 
     body = {
         'name': args.name,
@@ -985,7 +1248,7 @@ def validate_json_string(value: str) -> None:
         json.loads(value)
     except json.JSONDecodeError as e:
         raise ValueError(
-            f"query is not valid JSON: {e.msg} (line {e.lineno}, col {e.colno})"
+            f'query is not valid JSON: {e.msg} (line {e.lineno}, col {e.colno})'
         ) from e
 
 
