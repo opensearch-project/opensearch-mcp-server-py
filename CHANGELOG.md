@@ -3,6 +3,17 @@
 Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Unreleased]
+
+### Added
+
+- Set MCP `CallToolResult.isError` when tool responses indicate failure (`is_error`), so clients can distinguish errors from successful tool calls ([#265](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/265))
+
+### Fixed
+- Fix Streamable HTTP `/mcp` endpoint issuing a 307 redirect to `/mcp/`, which broke strict proxies/clients that don't follow redirects mid-session. The bare `/mcp` path is now served directly via a `Route` ([#273](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/273))
+
+### Removed
+
+## [Released 0.10.0]
 ### Added
 - Add `PPLQueryTool` for executing PPL (Piped Processing Language) queries via `/_plugins/_ppl` endpoint, with support for `jdbc`, `csv`, and `raw` output formats. Tool is in the `observability` category. ([#257](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/257))
 - Add configurable server-side query timeout via `OPENSEARCH_QUERY_TIMEOUT` environment variable, passed as `cancel_after_time_interval` to OpenSearch search requests ([#228](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/228))
@@ -34,6 +45,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Dependencies
 - Bump `mcp` from 1.23.0 to 1.27.0, `python-dotenv` from 1.1.0 to 1.2.2 (CVE-2026-28684), and `python-multipart` from 0.0.22 to 0.0.27 (CVE-2026-40347) ([#233](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/233))
+- Bump `idna` to >=3.15, `urllib3` to >=2.7.0, and `pyjwt` to >=2.13.0 to address CVEs ([#262](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/262))
 
 ### Removed
 
