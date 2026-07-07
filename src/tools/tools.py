@@ -1312,6 +1312,7 @@ TOOL_REGISTRY = {
         'args_model': PplQueryArgs,
         'min_version': '2.0.0',
         'http_methods': 'POST',
+        'bypass_write_filter': True,
     },
     'ListClustersTool': {
         'display_name': 'ListClustersTool',

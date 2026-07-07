@@ -7,6 +7,8 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 
 - Set MCP `CallToolResult.isError` when tool responses indicate failure (`is_error`), so clients can distinguish errors from successful tool calls ([#265](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/265))
+- Add `PPLQueryTool` for executing PPL (Piped Processing Language) queries via `/_plugins/_ppl` endpoint, with support for `jdbc`, `csv`, and `raw` output formats. Tool is in the `observability` category. ([#257](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/257))
+
 
 ### Fixed
 - Fix Streamable HTTP `/mcp` endpoint issuing a 307 redirect to `/mcp/`, which broke strict proxies/clients that don't follow redirects mid-session. The bare `/mcp` path is now served directly via a `Route` ([#273](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/273))
@@ -15,7 +17,6 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Released 0.10.0]
 ### Added
-- Add `PPLQueryTool` for executing PPL (Piped Processing Language) queries via `/_plugins/_ppl` endpoint, with support for `jdbc`, `csv`, and `raw` output formats. Tool is in the `observability` category. ([#257](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/257))
 - Add configurable server-side query timeout via `OPENSEARCH_QUERY_TIMEOUT` environment variable, passed as `cancel_after_time_interval` to OpenSearch search requests ([#228](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/228))
 - Add dynamic per-call connection parameters for multi-tenant support, allowing agents to target different OpenSearch clusters without server reconfiguration ([#230](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/230))
 - Add agent memory tools (`SaveMemoryTool`, `SearchMemoryTool`, `DeleteMemoryTool`) with persistent cross-session memory backed by OpenSearch (automatic semantic enrichment, recency-aware ranking, shared memory across agents), `MEMORY.md` documentation, `install-hooks` CLI for Kiro, Claude Code, and Cursor, and `memory install` interactive setup command
