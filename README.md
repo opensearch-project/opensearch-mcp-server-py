@@ -100,6 +100,12 @@ Enable with `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory`. When `memory_contain
 - [DeleteAgenticMemoryByIDTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes a specific memory by its ID.
 - [DeleteAgenticMemoryByQueryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes multiple memories matching a query criteria.
 
+### Observability Tools (Disabled by Default)
+
+Observability tools are grouped under the `observability` category and can be enabled using `OPENSEARCH_ENABLED_CATEGORIES=observability` or by adding `enabled_categories: [observability]` to the config file.
+
+- [PPLQueryTool](https://docs.opensearch.org/latest/search-plugins/sql/ppl/index/): Executes a PPL (Piped Processing Language) query against OpenSearch. PPL provides a pipe-based syntax for querying data (`source=<index> | <command> | <command>`), supporting filtering, aggregation, sorting, deduplication, and field selection. Supports `jdbc`, `csv`, and `raw` output formats.
+
 ### Search Relevance Workbench Tools (Disabled by Default)
 Search Relevance Workbench tools are grouped under the `search_relevance` category and can be enabled at once using `OPENSEARCH_ENABLED_CATEGORIES=search_relevance` or by adding `enabled_categories: [search_relevance]` or explicitly adding individual tools to their config file. See the [Tool Filter](USER_GUIDE.md#tool-filter) section in the User Guide for additional information about how to filter tools.
 
@@ -129,6 +135,7 @@ Skills tools are grouped under the `skills` category and can be enabled at once 
 
 - [DataDistributionTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/data-distribution-tool/): Analyzes data distribution patterns and field value frequencies within OpenSearch indices. Supports both single dataset analysis and comparative analysis between two time periods to identify distribution changes.
 - [LogPatternAnalysisTool](https://docs.opensearch.org/latest/ml-commons-plugin/agents-tools/tools/log-pattern-analysis-tool/): Detects anomalous log patterns and sequences through comparative analysis between baseline and selection time ranges. Supports log sequence analysis with trace correlation, log pattern difference analysis, and log insights analysis for error detection.
+- **MetricChangeAnalysisTool**: Compares percentile distributions (P50, P90) of all numeric fields between a baseline and a selection time range, then returns the top fields ranked by change score. Useful for identifying which numeric metrics shifted most during an anomaly window.
 
 ### Memory Tools (Opt-in)
 
@@ -342,6 +349,17 @@ In addition to the common connection parameters above, each tool accepts its own
   - `traceFieldName` (optional): Field for trace/correlation ID.
   - `baseTimeRangeStart` (optional): Start time for baseline comparison period.
   - `baseTimeRangeEnd` (optional): End time for baseline comparison period.
+
+- **MetricChangeAnalysisTool**
+
+  - `index` (required): Target OpenSearch index name.
+  - `selectionTimeRangeStart` (required): Start of the selection (anomaly) period.
+  - `selectionTimeRangeEnd` (required): End of the selection (anomaly) period.
+  - `baselineTimeRangeStart` (required): Start of the baseline period.
+  - `baselineTimeRangeEnd` (required): End of the baseline period (should be at or before `selectionTimeRangeStart`).
+  - `timeField` (required): Date/time field for filtering.
+  - `topN` (optional): Number of top fields to return, ranked by change score. Default is 10.
+  - `size` (optional): Maximum number of documents to analyze. Default is 1000.
 
 > More tools coming soon. [Click here](DEVELOPER_GUIDE.md#contributing)
 

@@ -268,6 +268,17 @@ def process_tool_filter(
         # Add agentic_memory as a built-in category (not enabled by default)
         category_to_tools['agentic_memory'] = agentic_memory_display_names
 
+        # Initialize observability tool names
+        observability_tools = [
+            'PPLQueryTool',
+        ]
+        observability_display_names = []
+        for tool_name in observability_tools:
+            if tool_name in tool_registry:
+                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
+                observability_display_names.append(tool_display_name)
+        category_to_tools['observability'] = observability_display_names
+
         # Add skills as a built-in category (not enabled by default)
         skills_display_names = [
             info.get('display_name', name) for name, info in SKILLS_TOOLS_REGISTRY.items()

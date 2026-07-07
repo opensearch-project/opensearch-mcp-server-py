@@ -11,7 +11,7 @@ from integration_tests.framework.aws_helpers import (
     get_default_server_env,
 )
 from integration_tests.framework.client import mcp_client
-from integration_tests.framework.constants import TEST_INDEX
+from integration_tests.framework.constants import METRIC_TEST_INDEX, TEST_INDEX
 from integration_tests.framework.server import MCPServerProcess
 
 
@@ -128,6 +128,205 @@ async def seed_test_index():
         logger.info(f'Deleted test index: {TEST_INDEX}')
     except Exception as e:
         logger.warning(f'Failed to delete test index {TEST_INDEX}: {e}')
+
+
+# ---------------------------------------------------------------------------
+# Metric test index (numeric fields with baseline vs selection distributions)
+# ---------------------------------------------------------------------------
+
+
+@pytest_asyncio.fixture(scope='session')
+async def seed_metric_test_index():
+    """Create and seed a separate index with multiple numeric fields.
+
+    Used by MetricChangeAnalysisTool tests, which need:
+    - several numeric fields (to verify topN ranking),
+    - enough docs per window for P50/P90 to be meaningful,
+    - distinct baseline vs selection distributions on some fields and
+      stable distributions on others (to verify changeScore ordering).
+    """
+    client = _create_os_client()
+
+    if not client.indices.exists(index=METRIC_TEST_INDEX):
+        client.indices.create(
+            index=METRIC_TEST_INDEX,
+            body={
+                'mappings': {
+                    'properties': {
+                        'service': {'type': 'keyword'},
+                        'timestamp': {'type': 'date'},
+                        'latency': {'type': 'float'},
+                        'cpu': {'type': 'float'},
+                        'memory': {'type': 'integer'},
+                    }
+                },
+            },
+        )
+
+    # Baseline window: 2025-01-01 — low latency, low cpu, stable memory
+    baseline_docs = [
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-01T00:30:00Z',
+            'latency': 30,
+            'cpu': 0.20,
+            'memory': 110,
+        },
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-01T02:00:00Z',
+            'latency': 45,
+            'cpu': 0.22,
+            'memory': 120,
+        },
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-01T04:00:00Z',
+            'latency': 50,
+            'cpu': 0.25,
+            'memory': 130,
+        },
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-01T06:00:00Z',
+            'latency': 60,
+            'cpu': 0.27,
+            'memory': 140,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-01T08:00:00Z',
+            'latency': 70,
+            'cpu': 0.30,
+            'memory': 150,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-01T10:00:00Z',
+            'latency': 80,
+            'cpu': 0.32,
+            'memory': 160,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-01T12:00:00Z',
+            'latency': 90,
+            'cpu': 0.35,
+            'memory': 170,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-01T14:00:00Z',
+            'latency': 100,
+            'cpu': 0.37,
+            'memory': 180,
+        },
+        {
+            'service': 'svc-c',
+            'timestamp': '2025-01-01T16:00:00Z',
+            'latency': 110,
+            'cpu': 0.40,
+            'memory': 190,
+        },
+        {
+            'service': 'svc-c',
+            'timestamp': '2025-01-01T20:00:00Z',
+            'latency': 120,
+            'cpu': 0.42,
+            'memory': 200,
+        },
+    ]
+
+    # Selection window: 2025-01-02..04 — latency and cpu surge, memory stays stable
+    selection_docs = [
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-02T01:00:00Z',
+            'latency': 220,
+            'cpu': 0.72,
+            'memory': 115,
+        },
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-02T05:00:00Z',
+            'latency': 280,
+            'cpu': 0.75,
+            'memory': 125,
+        },
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-02T10:00:00Z',
+            'latency': 350,
+            'cpu': 0.78,
+            'memory': 135,
+        },
+        {
+            'service': 'svc-a',
+            'timestamp': '2025-01-02T15:00:00Z',
+            'latency': 420,
+            'cpu': 0.82,
+            'memory': 145,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-02T20:00:00Z',
+            'latency': 500,
+            'cpu': 0.85,
+            'memory': 155,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-03T02:00:00Z',
+            'latency': 600,
+            'cpu': 0.88,
+            'memory': 165,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-03T08:00:00Z',
+            'latency': 720,
+            'cpu': 0.90,
+            'memory': 175,
+        },
+        {
+            'service': 'svc-b',
+            'timestamp': '2025-01-03T14:00:00Z',
+            'latency': 820,
+            'cpu': 0.92,
+            'memory': 185,
+        },
+        {
+            'service': 'svc-c',
+            'timestamp': '2025-01-03T20:00:00Z',
+            'latency': 900,
+            'cpu': 0.93,
+            'memory': 195,
+        },
+        {
+            'service': 'svc-c',
+            'timestamp': '2025-01-04T01:00:00Z',
+            'latency': 1000,
+            'cpu': 0.95,
+            'memory': 205,
+        },
+    ]
+
+    for i, doc in enumerate(baseline_docs + selection_docs, start=1):
+        client.index(index=METRIC_TEST_INDEX, id=str(i), body=doc, refresh=True)  # type: ignore[call-arg]
+    client.close()
+
+    yield METRIC_TEST_INDEX
+
+    try:
+        teardown_client = _create_os_client()
+        try:
+            teardown_client.indices.delete(index=METRIC_TEST_INDEX)
+        except Exception:
+            pass
+        teardown_client.close()
+        logger.info(f'Deleted metric test index: {METRIC_TEST_INDEX}')
+    except Exception as e:
+        logger.warning(f'Failed to delete metric test index {METRIC_TEST_INDEX}: {e}')
 
 
 # ---------------------------------------------------------------------------
@@ -312,7 +511,7 @@ async def profile_env_server(seed_test_index, aws_profile_manager):
 
 
 @pytest_asyncio.fixture(scope='session')
-async def default_server(seed_test_index):
+async def default_server(seed_test_index, seed_metric_test_index):
     """MCP server using whichever auth is available (AWS creds preferred, then basic).
 
     Tool tests use this fixture so they work regardless of which auth the

@@ -40,6 +40,73 @@ Provide opensearch_url plus the appropriate auth parameters for your target clus
 Parameters not provided fall back to server environment variables (if any).\
 """
 
+_SKILLS_TOOLS_INSTRUCTIONS = """\
+This server provides advanced analysis tools for anomaly investigation. \
+These tools complement SearchIndexTool — use them together for best results:
+
+- DataDistributionTool: Discovers which categorical field values (service names, error codes, \
+status values) shifted most between a baseline and an anomaly window. Note: this tool analyzes \
+frequency distribution of field values, not latency or duration. For latency-based investigation, \
+use SearchIndexTool with sort by duration.
+
+- MetricChangeAnalysisTool: Use for metric investigation. Compares percentile distributions \
+of ALL numeric fields between a baseline and an anomaly window, returns top fields ranked \
+by change score. Replaces manual field-by-field comparison. ALWAYS pass timeField: discover \
+the time field and try the best to ensure it is correct. Omitting timeField, or passing a \
+field absent from the index, causes a "No data found" error and leads to a wrong conclusion.
+
+- LogPatternAnalysisTool: Clusters raw log messages into patterns using ML, highlights which \
+patterns are new or surging compared to a baseline period.
+
+Important: Always cross-validate findings from these tools against SearchIndexTool results \
+(e.g. traces sorted by duration, error logs) before drawing conclusions.\
+"""
+
+
+def _resolve_enabled_disabled_categories() -> tuple[list[str], list[str]]:
+    """Resolve enabled/disabled category names from config file or env vars.
+
+    Mirrors how ``process_tool_filter`` in ``tool_filter.py`` sources category
+    state so the instructions stay consistent with actual tool visibility: a
+    YAML config file takes precedence over environment variables (env vars are
+    ignored when a config file is present).
+
+    Returns:
+        tuple[list[str], list[str]]: (enabled_categories, disabled_categories),
+        lowercased.
+    """
+    from mcp_server_opensearch.global_state import get_config_file_path
+    from tools.utils import load_yaml_config, parse_comma_separated
+
+    config_file_path = get_config_file_path()
+    if config_file_path:
+        config = load_yaml_config(config_file_path)
+        tool_filters = (config or {}).get('tool_filters', {})
+        enabled = tool_filters.get('enabled_categories', []) or []
+        disabled = tool_filters.get('disabled_categories', []) or []
+    else:
+        enabled = parse_comma_separated(os.getenv('OPENSEARCH_ENABLED_CATEGORIES', ''))
+        disabled = parse_comma_separated(os.getenv('OPENSEARCH_DISABLED_CATEGORIES', ''))
+
+    return [c.lower() for c in enabled], [c.lower() for c in disabled]
+
+
+def are_skills_enabled() -> bool:
+    """Check whether skills tools are enabled based on environment/config.
+
+    Skills are enabled when 'skills' appears in the enabled categories and NOT
+    in the disabled categories. Category state is resolved from the YAML config
+    file when present, otherwise from the OPENSEARCH_ENABLED_CATEGORIES /
+    OPENSEARCH_DISABLED_CATEGORIES environment variables — matching how
+    ``process_tool_filter`` decides tool visibility.
+    """
+    enabled_cats, disabled_cats = _resolve_enabled_disabled_categories()
+    if 'skills' in disabled_cats:
+        return False
+    if 'skills' in enabled_cats:
+        return True
+    return False
+
 
 def is_dynamic_mode_enabled() -> bool:
     """Determine whether dynamic (per-call) connection mode is active.
@@ -96,13 +163,20 @@ def get_server_instructions() -> str | None:
     or ``OPENSEARCH_DYNAMIC_CONNECTION=true``), returns instructions explaining
     the per-call connection parameters. Otherwise returns None.
 
+    Skills tools instructions are appended when the ``skills`` category is
+    enabled (``OPENSEARCH_ENABLED_CATEGORIES=skills``).
+
     Returns:
-        str or None: Instructions text, or None if not needed.
+        str or None: Combined instructions text, or None if no section applies.
     """
     from mcp_server_opensearch.global_state import get_mode
 
-    if get_mode() != 'single':
-        return None
-    if not is_dynamic_mode_enabled():
-        return None
-    return _DYNAMIC_CONNECTION_INSTRUCTIONS
+    parts = []
+
+    if get_mode() == 'single' and is_dynamic_mode_enabled():
+        parts.append(_DYNAMIC_CONNECTION_INSTRUCTIONS)
+
+    if are_skills_enabled():
+        parts.append(_SKILLS_TOOLS_INSTRUCTIONS)
+
+    return '\n\n'.join(parts) if parts else None
