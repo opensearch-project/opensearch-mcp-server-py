@@ -100,6 +100,12 @@ Enable with `OPENSEARCH_ENABLED_CATEGORIES=agentic_memory`. When `memory_contain
 - [DeleteAgenticMemoryByIDTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes a specific memory by its ID.
 - [DeleteAgenticMemoryByQueryTool](https://docs.opensearch.org/latest/ml-commons-plugin/api/agentic-memory-apis/delete-memory/): Deletes multiple memories matching a query criteria.
 
+### Observability Tools (Disabled by Default)
+
+Observability tools are grouped under the `observability` category and can be enabled using `OPENSEARCH_ENABLED_CATEGORIES=observability` or by adding `enabled_categories: [observability]` to the config file.
+
+- [PPLQueryTool](https://docs.opensearch.org/latest/search-plugins/sql/ppl/index/): Executes a PPL (Piped Processing Language) query against OpenSearch. PPL provides a pipe-based syntax for querying data (`source=<index> | <command> | <command>`), supporting filtering, aggregation, sorting, deduplication, and field selection. Supports `jdbc`, `csv`, and `raw` output formats.
+
 ### Search Relevance Workbench Tools (Disabled by Default)
 Search Relevance Workbench tools are grouped under the `search_relevance` category and can be enabled at once using `OPENSEARCH_ENABLED_CATEGORIES=search_relevance` or by adding `enabled_categories: [search_relevance]` or explicitly adding individual tools to their config file. See the [Tool Filter](USER_GUIDE.md#tool-filter) section in the User Guide for additional information about how to filter tools.
 
