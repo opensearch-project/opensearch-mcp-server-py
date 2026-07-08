@@ -82,7 +82,7 @@ class TestOpenSearchHelper:
 
         assert result == [{'index': 'index1'}, {'index': 'index2'}]
         assert is_fallback is True
-        mock_client.indices.resolve_index.assert_called_once_with('*')
+        mock_client.indices.resolve_index.assert_called_once_with(name='*')
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
@@ -111,7 +111,7 @@ class TestOpenSearchHelper:
 
         assert result == [{'index': 'logs-2024'}]
         assert is_fallback is True
-        mock_client.indices.resolve_index.assert_called_once_with('logs-*')
+        mock_client.indices.resolve_index.assert_called_once_with(name='logs-*')
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
