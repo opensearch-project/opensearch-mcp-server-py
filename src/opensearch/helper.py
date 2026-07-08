@@ -85,7 +85,7 @@ async def list_indices(args: ListIndicesArgs) -> tuple[list, bool]:
             return response, False
         except AuthorizationException:
             resolve_pattern = index_param if index_param else '*'
-            resolve_response = await client.indices.resolve_index(resolve_pattern)
+            resolve_response = await client.indices.resolve_index(name=resolve_pattern)
             indices = [{'index': idx['name']} for idx in resolve_response.get('indices', [])]
             return indices, True
 
