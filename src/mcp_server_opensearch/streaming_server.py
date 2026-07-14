@@ -9,6 +9,7 @@ from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.types import CallToolResult, Tool
+from mcp_server_opensearch.client_context import ClientNameMiddleware
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
 from mcp_server_opensearch.server_instructions import get_server_instructions
@@ -155,7 +156,7 @@ class MCPStarletteApp:
         """Create the Starlette application with routes."""
         # Serve bare '/mcp' via Route (a Mount alone 307-redirects '/mcp' to '/mcp/'); Mount handles sub-paths.
         streamable_http_app = _ASGIApp(self.handle_streamable_http)
-        return Starlette(
+        app = Starlette(
             routes=[
                 Route('/sse', endpoint=self.handle_sse, methods=['GET']),
                 Route('/health', endpoint=self.handle_health, methods=['GET']),
@@ -165,6 +166,8 @@ class MCPStarletteApp:
             ],
             lifespan=self.lifespan,
         )
+        app.add_middleware(ClientNameMiddleware)
+        return app
 
 
 async def serve(

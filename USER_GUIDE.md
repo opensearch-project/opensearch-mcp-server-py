@@ -987,6 +987,34 @@ python -m mcp_server_opensearch --log-format json
 
 For a complete RFC with detailed field references, metric filter patterns, and integration test results, see [RFC: Structured JSON Logging for Monitoring and Metrics](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/177).
 
+### Client Attribution
+
+When multiple clients share a single MCP server instance, you can identify each client in the structured logs by sending an `X-MCP-Client-Name` HTTP header. The server includes the header value as a `client_name` field in every `tool_execution` log event, enabling per-client metric filtering (e.g., CloudWatch MetricFilter dimensions, Datadog tags, or Grafana label selectors).
+
+**Setup:** Set the header on your HTTP client. For example, with Python's httpx:
+
+```python
+import httpx
+
+http_client = httpx.AsyncClient(
+    headers={"X-MCP-Client-Name": "my-agent"},
+)
+```
+
+All MCP requests made through this client will carry the header automatically.
+
+**Example log output:**
+
+```json
+{"timestamp": "2026-07-14T20:18:28.004Z", "level": "INFO", "event_type": "tool_execution", "tool_name": "SearchIndexTool", "status": "success", "duration_ms": 142.0, "client_name": "my-agent"}
+```
+
+**Behavior:**
+
+- If the header is absent, `client_name` defaults to `"unknown"`.
+- The value is sanitized: only alphanumeric characters, hyphens, underscores, and dots are allowed, with a maximum length of 64 characters. Invalid values fall back to `"unknown"`.
+- The middleware runs on all HTTP requests regardless of transport (Streamable HTTP `POST /mcp`, SSE `GET /sse`, and `POST /messages/`). Clients that set the header at the HTTP client level include it on every request automatically.
+
 ## LangChain Integration
 
 The OpenSearch MCP server can be easily integrated with LangChain using the SSE server transport.

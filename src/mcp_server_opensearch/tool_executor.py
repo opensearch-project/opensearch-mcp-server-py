@@ -18,6 +18,7 @@ tool invocation, enabling metric filters for:
 import logging
 import time
 from mcp.types import CallToolResult, TextContent
+from mcp_server_opensearch.client_context import client_name_var
 
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,7 @@ async def execute_tool(
             'tool_name': name,
             'status': status,
             'duration_ms': duration_ms,
+            'client_name': client_name_var.get('unknown'),
         }
         if found_tool_key:
             log_extra['tool_key'] = found_tool_key

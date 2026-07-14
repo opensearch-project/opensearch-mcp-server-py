@@ -4,6 +4,7 @@
 import logging
 import pytest
 from mcp.types import CallToolResult
+from mcp_server_opensearch.client_context import client_name_var
 from mcp_server_opensearch.tool_executor import execute_tool
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -180,3 +181,44 @@ class TestExecuteTool:
         records = [r for r in caplog.records if hasattr(r, 'tool_key')]
         assert len(records) == 1
         assert records[0].tool_key == 'SearchIndexTool'
+
+    @pytest.mark.asyncio
+    @patch('tools.tool_params.validate_args_for_mode')
+    async def test_client_name_field_logged_from_contextvar(self, mock_validate, caplog):
+        """The 'client_name' field in the log reflects the client_name_var contextvar."""
+        mock_validate.return_value = Mock()
+        enabled_tools = make_enabled_tools()
+
+        # Simulate middleware having set the client name
+        token = client_name_var.set('test-agent')
+        try:
+            with caplog.at_level(logging.INFO):
+                await execute_tool('TestTool', {}, enabled_tools)
+        finally:
+            client_name_var.reset(token)
+
+        records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
+        assert len(records) == 1
+        assert records[0].client_name == 'test-agent'
+
+    @pytest.mark.asyncio
+    @patch('tools.tool_params.validate_args_for_mode')
+    async def test_client_name_defaults_to_unknown(self, mock_validate, caplog):
+        """Without middleware, client name defaults to 'unknown'."""
+        mock_validate.return_value = Mock()
+        enabled_tools = make_enabled_tools()
+
+        with caplog.at_level(logging.INFO):
+            await execute_tool('TestTool', {}, enabled_tools)
+
+        records = [
+            r
+            for r in caplog.records
+            if hasattr(r, 'event_type') and r.event_type == 'tool_execution'
+        ]
+        assert len(records) == 1
+        assert records[0].client_name == 'unknown'
