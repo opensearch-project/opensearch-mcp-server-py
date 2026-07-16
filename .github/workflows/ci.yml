@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   lint:
-    if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
+    if: true
     name: Code Quality
     runs-on: ubuntu-latest
     steps:
@@ -44,7 +44,7 @@ jobs:
         run: uv run ruff check .
 
   test:
-    if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
+    if: true
     name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
