@@ -6,6 +6,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added
 
+- Add OAuth protected-resource support for the streaming MCP server, including bearer-token validation, scope enforcement, protected-resource metadata, and bearer-token forwarding to OpenSearch ([#98](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/98))
 - Set MCP `CallToolResult.isError` when tool responses indicate failure (`is_error`), so clients can distinguish errors from successful tool calls ([#265](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/265))
 - `ListIndexTool` now falls back to `GET /_resolve/index/*` when `_cat/indices` returns 403, allowing users with only index-level read permissions to list indices. The response is annotated when the fallback is used to indicate that health, size, and doc count are unavailable ([#279](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/279))
 - Add skills tools for root-cause analysis (`DataDistributionTool`, `LogPatternAnalysisTool`, `MetricChangeAnalysisTool`) that surface categorical value shifts, ML-clustered log patterns, and percentile changes between a baseline and an anomaly window. Skills tools are in the `skills_tools` category and can be enabled via `enabled_categories: ["skills_tools"]` ([#259](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/259))

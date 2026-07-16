@@ -368,6 +368,57 @@ For Bearer authentication:
 
 **Note:** When `OPENSEARCH_HEADER_AUTH=true` (single mode) or `opensearch_header_auth: true` (multi mode), headers take priority over environment variables or cluster configuration values. If a header is not provided, the system falls back to the corresponding environment variable (single mode) or cluster configuration value (multi mode).
 
+#### OAuth-Protected MCP Server
+
+For streaming transport, the MCP server can act as an OAuth protected resource. In this mode, the MCP endpoint publishes OAuth Protected Resource Metadata, challenges unauthenticated requests with `WWW-Authenticate`, validates incoming bearer tokens, and then forwards the same bearer token to OpenSearch when header-based authentication is enabled.
+
+This is useful when OpenSearch Security is already configured for OIDC and you want the same end-user token to flow through:
+
+```text
+MCP client -> OpenSearch MCP server -> OpenSearch
+```
+
+Enable OAuth protection:
+
+```bash
+export MCP_OAUTH_ENABLED="true"
+export MCP_OAUTH_ISSUER_URL="http://localhost:8080/realms/opensearch"
+export MCP_OAUTH_RESOURCE_URL="http://127.0.0.1:9900/mcp/"
+export MCP_OAUTH_JWKS_URL="http://localhost:8080/realms/opensearch/protocol/openid-connect/certs"
+export MCP_OAUTH_REQUIRED_SCOPES="openid profile email"
+
+export OPENSEARCH_URL="https://localhost:9200"
+export OPENSEARCH_SSL_VERIFY="false"
+export OPENSEARCH_HEADER_AUTH="true"
+```
+
+Start the streaming server:
+
+```bash
+python -m mcp_server_opensearch --transport stream --host 127.0.0.1 --port 9900
+```
+
+The protected resource metadata is available at:
+
+```text
+http://127.0.0.1:9900/.well-known/oauth-protected-resource/mcp/
+```
+
+If the OAuth access token includes an audience claim for this MCP resource/client, set:
+
+```bash
+export MCP_OAUTH_AUDIENCE="opensearch-mcp"
+```
+
+For local OpenSearch development, you can keep basic auth credentials as a startup fallback while still using bearer tokens for MCP requests:
+
+```bash
+export OPENSEARCH_USERNAME="admin"
+export OPENSEARCH_PASSWORD="myStrongPassword123!"
+```
+
+When `OPENSEARCH_HEADER_AUTH=true`, request bearer tokens take priority over these fallback credentials.
+
 #### IAM Role Authentication
 ```bash
 export OPENSEARCH_URL="<your_opensearch_domain_url>"
@@ -603,6 +654,12 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 | `OPENSEARCH_HEADER_AUTH` | No | `''` | Set to `"true"` to enable header-based authentication (headers take priority over env vars) |
 | `OPENSEARCH_TIMEOUT` | No | `''` | Connection timeout in seconds for OpenSearch operations |
 | `OPENSEARCH_QUERY_TIMEOUT` | No | `''` | Server-side query timeout passed as `cancel_after_time_interval` to search requests (e.g., `"10s"`). Cancels long-running queries after the specified duration. |
+| `MCP_OAUTH_ENABLED` | No | `''` | Set to `"true"` to require OAuth bearer tokens on streaming MCP endpoints |
+| `MCP_OAUTH_ISSUER_URL` | Required when OAuth is enabled | `''` | OAuth/OIDC issuer URL that issues tokens for this MCP resource |
+| `MCP_OAUTH_RESOURCE_URL` | No | `http://<host>:<port>/mcp/` | Public MCP resource URL used in protected resource metadata |
+| `MCP_OAUTH_JWKS_URL` | No | `<issuer>/protocol/openid-connect/certs` | JWKS endpoint used to verify bearer token signatures |
+| `MCP_OAUTH_REQUIRED_SCOPES` | No | `''` | Space- or comma-separated scopes required for MCP access |
+| `MCP_OAUTH_AUDIENCE` | No | `''` | Optional audience value to require in access tokens |
 
 ### SSL & Security Variables
 
