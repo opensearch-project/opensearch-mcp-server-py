@@ -111,6 +111,16 @@ class TestAgenticMemoryTools:
         """Fixture for a common memory container ID."""
         return 'HudqiJkB1SltqOcZusVU'
 
+    def test_registry_read_only_hints_match_tool_behavior(self):
+        """Agentic memory tools should declare explicit read_only_hint metadata."""
+        assert self.TOOL_REGISTRY['CreateAgenticMemorySessionTool']['read_only_hint'] is False
+        assert self.TOOL_REGISTRY['AddAgenticMemoriesTool']['read_only_hint'] is False
+        assert self.TOOL_REGISTRY['GetAgenticMemoryTool']['read_only_hint'] is True
+        assert self.TOOL_REGISTRY['UpdateAgenticMemoryTool']['read_only_hint'] is False
+        assert self.TOOL_REGISTRY['DeleteAgenticMemoryByIDTool']['read_only_hint'] is False
+        assert self.TOOL_REGISTRY['DeleteAgenticMemoryByQueryTool']['read_only_hint'] is False
+        assert self.TOOL_REGISTRY['SearchAgenticMemoryTool']['read_only_hint'] is True
+
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
         'payload, mock_response', agentic_memory_data.CREATE_SESSION_HAPPY_PATH_CASES

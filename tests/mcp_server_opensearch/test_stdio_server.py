@@ -166,6 +166,87 @@ async def test_list_tools(mock_server, mock_stdio, mock_tool_registry, mock_gene
 
 
 @pytest.mark.asyncio
+async def test_list_tools_readonly_hint(mock_generate_tools):
+    """Test that list_tools uses explicit read_only_hint metadata."""
+    from mcp.server import Server as RealServer
+    from mcp.types import ListToolsRequest
+
+    registry = {
+        'ReadOnlyTool': {
+            'display_name': 'ReadOnlyTool',
+            'description': 'A read-only tool',
+            'input_schema': {'type': 'object'},
+            'args_model': Mock(),
+            'function': AsyncMock(return_value=[TextContent(type='text', text='ok')]),
+            'http_methods': 'GET',
+            'read_only_hint': True,
+        },
+        'ReadOnlySearchTool': {
+            'display_name': 'ReadOnlySearchTool',
+            'description': 'A search tool that accepts request bodies over POST',
+            'input_schema': {'type': 'object'},
+            'args_model': Mock(),
+            'function': AsyncMock(return_value=[TextContent(type='text', text='ok')]),
+            'http_methods': 'GET, POST',
+            'read_only_hint': True,
+        },
+        'WriteTool': {
+            'display_name': 'WriteTool',
+            'description': 'A write tool',
+            'input_schema': {'type': 'object'},
+            'args_model': Mock(),
+            'function': AsyncMock(return_value=[TextContent(type='text', text='ok')]),
+            'http_methods': 'POST',
+            'read_only_hint': False,
+        },
+    }
+
+    async def mock_get_tools(*args, **kwargs):
+        return registry
+
+    captured_server = None
+
+    async def capturing_run(self, *args, **kwargs):
+        nonlocal captured_server
+        captured_server = self
+
+    with (
+        patch('mcp_server_opensearch.stdio_server.Server', RealServer),
+        patch('mcp_server_opensearch.stdio_server.get_tools', side_effect=mock_get_tools),
+        patch(
+            'mcp_server_opensearch.stdio_server.apply_custom_tool_config', return_value=registry
+        ),
+        patch('mcp_server_opensearch.stdio_server.load_clusters_from_yaml'),
+        patch('mcp_server_opensearch.stdio_server.stdio_server') as mock_stdio_ctx,
+        patch('mcp_server_opensearch.logging_config.start_memory_monitor') as mock_monitor,
+        patch.object(RealServer, 'run', capturing_run),
+    ):
+        reader = AsyncMock()
+        writer = AsyncMock()
+
+        @asynccontextmanager
+        async def mock_ctx():
+            yield reader, writer
+
+        mock_stdio_ctx.return_value = mock_ctx()
+        mock_monitor.return_value = asyncio.create_task(asyncio.sleep(0))
+
+        from mcp_server_opensearch.stdio_server import serve
+
+        await serve()
+
+    assert captured_server is not None
+    result = await captured_server.request_handlers[ListToolsRequest](
+        ListToolsRequest(method='tools/list', params=None)
+    )
+    tools = {t.name: t for t in result.root.tools}
+
+    assert tools['ReadOnlyTool'].annotations.readOnlyHint is True
+    assert tools['ReadOnlySearchTool'].annotations.readOnlyHint is True
+    assert tools['WriteTool'].annotations.readOnlyHint is False
+
+
+@pytest.mark.asyncio
 async def test_call_tool(mock_server, mock_stdio, mock_tool_registry, mock_generate_tools):
     """Test call_tool functionality."""
     reader, writer = mock_stdio

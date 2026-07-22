@@ -772,6 +772,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'args_model': SaveMemoryArgs,
             'min_version': '1.0.0',
             'http_methods': 'GET, POST, PUT',
+            'read_only_hint': False,
             'bypass_write_filter': True,
             'memory_tool': True,
         },
@@ -794,6 +795,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'args_model': SearchMemoryArgs,
             'min_version': '1.0.0',
             'http_methods': 'GET',
+            'read_only_hint': True,
             'memory_tool': True,
         },
         'DeleteMemoryTool': {
@@ -808,6 +810,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'args_model': DeleteMemoryArgs,
             'min_version': '1.0.0',
             'http_methods': 'GET, DELETE',
+            'read_only_hint': False,
             'bypass_write_filter': True,
             'memory_tool': True,
         },

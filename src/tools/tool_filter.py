@@ -8,6 +8,7 @@ import re
 from .skills_tools import SKILLS_TOOLS_REGISTRY
 from .tool_params import baseToolArgs
 from .utils import (
+    is_read_only_tool,
     is_tool_compatible,
     load_yaml_config,
     parse_comma_separated,
@@ -103,7 +104,7 @@ def _resolve_allow_write_setting(config_file_path: str = None) -> bool:
 def apply_write_filter(registry, exempt_tools=None):
     """Apply allow_write filters to the registry.
 
-    Removes tools that only have write HTTP methods, unless the tool
+    Removes tools that are not explicitly marked read-only, unless the tool
     has ``bypass_write_filter`` set to True (e.g. memory tools) or in the exempt_tools set.
 
     Args:
@@ -115,8 +116,7 @@ def apply_write_filter(registry, exempt_tools=None):
     for tool_name in list(registry.keys()):
         if registry[tool_name].get('bypass_write_filter') or tool_name in exempt_tools:
             continue
-        http_methods = registry[tool_name].get('http_methods', [])
-        if 'GET' not in http_methods:
+        if not is_read_only_tool(registry[tool_name]):
             registry.pop(tool_name, None)
 
 
@@ -154,7 +154,7 @@ def process_tool_filter(
         disabled_categories: Comma-separated list of disabled category names
         enabled_tools_regex: Comma-separates list of enabled tools regex
         disabled_tools_regex: Comma-separated list of disabled tools regex
-        allow_write: If True, allow tools with PUT/POST methods
+        allow_write: If True, allow tools without read_only_hint
         allow_write_categories: List of category names whose tools are exempt from the write filter
         filter_path: Path to the YAML filter configuration file
         tool_registry: The tool registry to filter.
@@ -331,7 +331,7 @@ def process_tool_filter(
             disabled_tools_regex_list.extend(parse_comma_separated(disabled_tools_regex))
 
         # Apply allow_write filter first
-        if not allow_write:
+        if allow_write is False:
             exempt_tools = set()
             if allow_write_categories:
                 display_to_key = {

@@ -210,7 +210,16 @@ class TestToolGenerator:
                     'x-operation-group': 'count',
                     'requestBody': {'content': {'application/json': {'schema': {}}}},
                 },
-            }
+            },
+            {
+                'path': '/_count',
+                'method': 'post',
+                'details': {
+                    'description': 'Returns count of documents',
+                    'x-operation-group': 'count',
+                    'requestBody': {'content': {'application/json': {'schema': {}}}},
+                },
+            },
         ]
 
         # Mock initialize_client to return our mock client
@@ -223,6 +232,8 @@ class TestToolGenerator:
             assert 'input_schema' in tool
             assert 'function' in tool
             assert 'args_model' in tool
+            assert tool['http_methods'] == 'GET, POST'
+            assert tool['read_only_hint'] is True
 
             # Test the tool function with proper Pydantic model
             class MockParams(BaseModel):
@@ -265,18 +276,21 @@ class TestToolGenerator:
         }
 
         # Mock fetch_github_spec to return our mock spec
-        with patch.object(self, 'fetch_github_spec', AsyncMock(return_value=mock_spec)):
+        with patch('tools.tool_generator.fetch_github_spec', AsyncMock(return_value=mock_spec)):
             # Mock TOOL_REGISTRY
             mock_registry = {}
-            with patch('tools.tools.TOOL_REGISTRY', mock_registry):
+            with patch('tools.tool_generator.TOOL_REGISTRY', mock_registry):
                 # Mock generate_tool_from_group
                 mock_tool = {
                     'description': 'Test description',
                     'input_schema': {},
                     'function': AsyncMock(),
                     'args_model': Mock(),
+                    'read_only_hint': True,
                 }
-                with patch.object(self, 'generate_tool_from_group', return_value=mock_tool):
+                with patch(
+                    'tools.tool_generator.generate_tool_from_group', return_value=mock_tool
+                ):
                     # Call the function
                     result = await self.generate_tools_from_openapi()
 
@@ -289,3 +303,5 @@ class TestToolGenerator:
                     assert 'input_schema' in result['ClusterHealthTool']
                     assert 'function' in result['ClusterHealthTool']
                     assert 'args_model' in result['ClusterHealthTool']
+                    assert 'read_only_hint' in result['ClusterHealthTool']
+                    assert result['ClusterHealthTool']['read_only_hint'] is True

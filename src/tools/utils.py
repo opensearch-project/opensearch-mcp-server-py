@@ -61,6 +61,22 @@ def load_yaml_config(filter_path):
         return None
 
 
+def is_read_only_tool(tool_info: dict) -> bool:
+    """Determine if a tool is semantically read-only.
+
+    The explicit read_only_hint metadata is the single source of truth. HTTP
+    methods are transport details and are not reliable because some read-only
+    OpenSearch APIs accept POST bodies for search or analysis requests.
+
+    Args:
+        tool_info (dict): Tool metadata containing an optional 'read_only_hint' key.
+
+    Returns:
+        bool: True if the tool is explicitly marked read-only, False otherwise.
+    """
+    return bool(tool_info.get('read_only_hint', False))
+
+
 def validate_tools(tool_list, display_lookup, source_name):
     """Validate tools against registry and return valid tools."""
     valid_tools = set()

@@ -1332,6 +1332,11 @@ class TestTools:
             assert 'input_schema' in self.TOOL_REGISTRY[tool]
             assert 'function' in self.TOOL_REGISTRY[tool]
             assert 'args_model' in self.TOOL_REGISTRY[tool]
+            assert 'read_only_hint' in self.TOOL_REGISTRY[tool]
+
+        assert self.TOOL_REGISTRY['SearchIndexTool']['read_only_hint'] is True
+        assert self.TOOL_REGISTRY['CreateSearchConfigurationTool']['read_only_hint'] is False
+        assert self.TOOL_REGISTRY['GenericOpenSearchApiTool']['read_only_hint'] is False
 
     def test_input_models(self):
         """Test input models validation."""

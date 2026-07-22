@@ -85,6 +85,18 @@ class TestMemoryToolsRegistry:
 
             assert MEMORY_TOOLS_REGISTRY['SearchMemoryTool'].get('bypass_write_filter') is None
 
+    def test_registry_read_only_hints_match_tool_behavior(self):
+        """Memory tools should declare explicit read_only_hint metadata."""
+        env = {'MEMORY_TOOLS_ENABLED': 'true'}
+        with patch.dict(os.environ, env, clear=True):
+            if 'tools.memory_tools' in sys.modules:
+                del sys.modules['tools.memory_tools']
+            from tools.memory_tools import MEMORY_TOOLS_REGISTRY
+
+            assert MEMORY_TOOLS_REGISTRY['SaveMemoryTool']['read_only_hint'] is False
+            assert MEMORY_TOOLS_REGISTRY['SearchMemoryTool']['read_only_hint'] is True
+            assert MEMORY_TOOLS_REGISTRY['DeleteMemoryTool']['read_only_hint'] is False
+
 
 class TestMemoryToolArgs:
     """Tests for argument model validation."""
@@ -725,9 +737,11 @@ class TestWriteFilterBypass:
             },
             'SearchMemoryTool': {
                 'http_methods': 'GET',
+                'read_only_hint': True,
             },
             'SomeWriteTool': {
                 'http_methods': 'POST',
+                'read_only_hint': False,
             },
         }
 

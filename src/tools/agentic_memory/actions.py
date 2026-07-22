@@ -134,6 +134,7 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': CreateAgenticMemorySessionArgs,
         'min_version': '3.3.0',
         'http_methods': 'POST',
+        'read_only_hint': False,
     },
     'AddAgenticMemoriesTool': {
         'display_name': 'AddAgenticMemoriesTool',
@@ -143,6 +144,7 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': AddAgenticMemoriesArgs,
         'min_version': '3.3.0',
         'http_methods': 'POST',
+        'read_only_hint': False,
     },
     'GetAgenticMemoryTool': {
         'display_name': 'GetAgenticMemoryTool',
@@ -152,6 +154,7 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': GetAgenticMemoryArgs,
         'min_version': '3.3.0',
         'http_methods': 'GET',
+        'read_only_hint': True,
     },
     'UpdateAgenticMemoryTool': {
         'display_name': 'UpdateAgenticMemoryTool',
@@ -161,6 +164,7 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': UpdateAgenticMemoryArgs,
         'min_version': '3.3.0',
         'http_methods': 'PUT',
+        'read_only_hint': False,
     },
     'DeleteAgenticMemoryByIDTool': {
         'display_name': 'DeleteAgenticMemoryByIDTool',
@@ -170,6 +174,7 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': DeleteAgenticMemoryByIDArgs,
         'min_version': '3.3.0',
         'http_methods': 'DELETE',
+        'read_only_hint': False,
     },
     'DeleteAgenticMemoryByQueryTool': {
         'display_name': 'DeleteAgenticMemoryByQueryTool',
@@ -179,6 +184,7 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': DeleteAgenticMemoryByQueryArgs,
         'min_version': '3.3.0',
         'http_methods': 'POST',
+        'read_only_hint': False,
     },
     'SearchAgenticMemoryTool': {
         'display_name': 'SearchAgenticMemoryTool',
@@ -188,5 +194,6 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': SearchAgenticMemoryArgs,
         'min_version': '3.3.0',
         'http_methods': 'GET',
+        'read_only_hint': True,
     },
 }

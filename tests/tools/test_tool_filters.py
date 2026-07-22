@@ -415,6 +415,41 @@ class TestProcessToolFilter:
         assert 'ClusterHealthTool' not in self.tool_registry
         assert 'ExplainTool' not in self.tool_registry
 
+    def test_allow_write_filter_uses_read_only_hint_only(self):
+        """allow_write=False keeps semantically read-only POST tools."""
+        registry = {
+            'SemanticSearchTool': {
+                'display_name': 'SemanticSearchTool',
+                'http_methods': 'GET, POST',
+                'read_only_hint': True,
+            },
+            'PostAnalysisTool': {
+                'display_name': 'PostAnalysisTool',
+                'http_methods': 'POST',
+                'read_only_hint': True,
+            },
+            'MutatingGetTool': {
+                'display_name': 'MutatingGetTool',
+                'http_methods': 'GET',
+                'read_only_hint': False,
+            },
+            'MissingHintTool': {
+                'display_name': 'MissingHintTool',
+                'http_methods': 'GET',
+            },
+        }
+
+        process_tool_filter(
+            tool_registry=registry,
+            enabled_tools='SemanticSearchTool,PostAnalysisTool,MutatingGetTool,MissingHintTool',
+            allow_write=False,
+        )
+
+        assert 'SemanticSearchTool' in registry
+        assert 'PostAnalysisTool' in registry
+        assert 'MutatingGetTool' not in registry
+        assert 'MissingHintTool' not in registry
+
     def test_skills_category_is_not_enabled_by_default(self):
         """Skills tools are not enabled unless the category is explicitly enabled."""
         registry = {
@@ -472,7 +507,6 @@ class TestProcessToolFilter:
             },
         }
         process_tool_filter(tool_registry=registry, allow_write=True)
-
         assert 'ListIndexTool' in registry
         assert 'ClusterHealthTool' in registry
         assert 'DataDistributionTool' not in registry
@@ -728,7 +762,11 @@ class TestProcessToolFilter:
     def test_memory_tools_survive_write_filter(self):
         """Memory tools with bypass_write_filter survive when allow_write is False."""
         registry = {
-            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'http_methods': 'GET',
+                'read_only_hint': True,
+            },
             'SaveMemoryTool': {
                 'display_name': 'SaveMemoryTool',
                 'http_methods': 'GET, POST, PUT',
@@ -737,6 +775,7 @@ class TestProcessToolFilter:
             'SearchMemoryTool': {
                 'display_name': 'SearchMemoryTool',
                 'http_methods': 'GET',
+                'read_only_hint': True,
             },
             'DeleteMemoryTool': {
                 'display_name': 'DeleteMemoryTool',
@@ -764,36 +803,82 @@ class TestAllowWriteCategories:
     def test_allow_write_false_removes_write_only_tools(self):
         """When allow_write is false, write-only tools are removed."""
         registry = {
-            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
-            'SearchIndexTool': {'display_name': 'SearchIndexTool', 'http_methods': 'GET, POST'},
-            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
-            'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'http_methods': 'GET',
+                'read_only_hint': True,
+            },
+            'SearchIndexTool': {
+                'display_name': 'SearchIndexTool',
+                'http_methods': 'GET, POST',
+                'read_only_hint': True,
+            },
+            'CreateQuerySetTool': {
+                'display_name': 'CreateQuerySetTool',
+                'http_methods': 'PUT',
+                'read_only_hint': False,
+            },
+            'DeleteQuerySetTool': {
+                'display_name': 'DeleteQuerySetTool',
+                'http_methods': 'DELETE',
+                'read_only_hint': False,
+            },
             'GenericOpenSearchApiTool': {
                 'display_name': 'GenericOpenSearchApiTool',
                 'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+                'read_only_hint': False,
+                'bypass_write_filter': True,
             },
         }
         process_tool_filter(tool_registry=registry, allow_write=False)
 
         assert 'ListIndexTool' in registry
         assert 'SearchIndexTool' in registry
-        assert 'GenericOpenSearchApiTool' in registry  # has GET, so survives
+        assert (
+            'GenericOpenSearchApiTool' in registry
+        )  # mixed-mode tool bypasses filter, runtime still blocks writes
         assert 'CreateQuerySetTool' not in registry  # PUT only, removed
         assert 'DeleteQuerySetTool' not in registry  # DELETE only, removed
 
     def test_allow_write_categories_exempts_category_from_write_filter(self):
         """Tools in allow_write_categories survive the write filter even with allow_write=false."""
         registry = {
-            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
-            'SearchIndexTool': {'display_name': 'SearchIndexTool', 'http_methods': 'GET, POST'},
-            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
-            'DeleteQuerySetTool': {'display_name': 'DeleteQuerySetTool', 'http_methods': 'DELETE'},
-            'GetQuerySetTool': {'display_name': 'GetQuerySetTool', 'http_methods': 'GET'},
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'http_methods': 'GET',
+                'read_only_hint': True,
+            },
+            'SearchIndexTool': {
+                'display_name': 'SearchIndexTool',
+                'http_methods': 'GET, POST',
+                'read_only_hint': True,
+            },
+            'CreateQuerySetTool': {
+                'display_name': 'CreateQuerySetTool',
+                'http_methods': 'PUT',
+                'read_only_hint': False,
+            },
+            'DeleteQuerySetTool': {
+                'display_name': 'DeleteQuerySetTool',
+                'http_methods': 'DELETE',
+                'read_only_hint': False,
+            },
+            'GetQuerySetTool': {
+                'display_name': 'GetQuerySetTool',
+                'http_methods': 'GET',
+                'read_only_hint': True,
+            },
             'GenericOpenSearchApiTool': {
                 'display_name': 'GenericOpenSearchApiTool',
                 'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+                'read_only_hint': False,
+                'bypass_write_filter': True,
             },
-            'IndicesCreateTool': {'display_name': 'IndicesCreateTool', 'http_methods': 'PUT'},
+            'IndicesCreateTool': {
+                'display_name': 'IndicesCreateTool',
+                'http_methods': 'PUT',
+                'read_only_hint': False,
+            },
         }
         process_tool_filter(
             tool_registry=registry,
@@ -807,10 +892,11 @@ class TestAllowWriteCategories:
         assert 'DeleteQuerySetTool' in registry
         assert 'GetQuerySetTool' in registry
 
-        # core_tools with GET survive normally
+        # core_tools with GET survive normally; GenericOpenSearchApiTool also survives
+        # because it bypasses registry filtering and enforces write protection at runtime.
         assert 'ListIndexTool' in registry
         assert 'SearchIndexTool' in registry
-        assert 'GenericOpenSearchApiTool' in registry  # has GET
+        assert 'GenericOpenSearchApiTool' in registry
 
         # Non-exempted write-only tool is removed
         assert 'IndicesCreateTool' not in registry
@@ -825,13 +911,26 @@ class TestAllowWriteCategories:
     def test_allow_write_categories_multiple_categories(self):
         """Multiple categories can be specified in allow_write_categories."""
         registry = {
-            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
-            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'http_methods': 'GET',
+                'read_only_hint': True,
+            },
+            'CreateQuerySetTool': {
+                'display_name': 'CreateQuerySetTool',
+                'http_methods': 'PUT',
+                'read_only_hint': False,
+            },
             'DataDistributionTool': {
                 'display_name': 'DataDistributionTool',
                 'http_methods': 'POST',
+                'read_only_hint': True,
             },
-            'IndicesCreateTool': {'display_name': 'IndicesCreateTool', 'http_methods': 'PUT'},
+            'IndicesCreateTool': {
+                'display_name': 'IndicesCreateTool',
+                'http_methods': 'PUT',
+                'read_only_hint': False,
+            },
         }
         process_tool_filter(
             tool_registry=registry,
@@ -848,8 +947,16 @@ class TestAllowWriteCategories:
     def test_allow_write_categories_empty_has_no_effect(self):
         """Empty allow_write_categories doesn't exempt any tools."""
         registry = {
-            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
-            'CreateQuerySetTool': {'display_name': 'CreateQuerySetTool', 'http_methods': 'PUT'},
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'http_methods': 'GET',
+                'read_only_hint': True,
+            },
+            'CreateQuerySetTool': {
+                'display_name': 'CreateQuerySetTool',
+                'http_methods': 'PUT',
+                'read_only_hint': False,
+            },
         }
         process_tool_filter(
             tool_registry=registry,

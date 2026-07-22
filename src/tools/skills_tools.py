@@ -288,3 +288,11 @@ SKILLS_TOOLS_REGISTRY = {
         'http_methods': 'POST',
     },
 }
+
+SKILLS_TOOLS_READ_ONLY_HINTS = {
+    'DataDistributionTool': True,
+    'LogPatternAnalysisTool': True,
+}
+
+for tool_name, read_only_hint in SKILLS_TOOLS_READ_ONLY_HINTS.items():
+    SKILLS_TOOLS_REGISTRY[tool_name]['read_only_hint'] = read_only_hint

@@ -1233,6 +1233,7 @@ TOOL_REGISTRY = {
         'args_model': GenericOpenSearchApiArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+        'bypass_write_filter': True,
     },
     'CreateSearchConfigurationTool': {
         'display_name': 'CreateSearchConfigurationTool',
@@ -1334,3 +1335,44 @@ TOOL_REGISTRY = {
         'multi_only': True,
     },
 }
+
+TOOL_READ_ONLY_HINTS = {
+    'ListIndexTool': True,
+    'IndexMappingTool': True,
+    'SearchIndexTool': True,
+    'GetShardsTool': True,
+    'GetClusterStateTool': True,
+    'GetSegmentsTool': True,
+    'CatNodesTool': True,
+    'GetIndexInfoTool': True,
+    'GetIndexStatsTool': True,
+    'GetQueryInsightsTool': True,
+    'GetNodesHotThreadsTool': True,
+    'GetAllocationTool': True,
+    'GetLongRunningTasksTool': True,
+    'GetNodesTool': True,
+    'GetQuerySetTool': True,
+    'CreateQuerySetTool': False,
+    'SampleQuerySetTool': False,
+    'DeleteQuerySetTool': False,
+    'GetExperimentTool': True,
+    'CreateExperimentTool': False,
+    'DeleteExperimentTool': False,
+    'SearchQuerySetsTool': True,
+    'SearchSearchConfigurationsTool': True,
+    'SearchJudgmentsTool': True,
+    'SearchExperimentsTool': True,
+    'GenericOpenSearchApiTool': False,
+    'CreateSearchConfigurationTool': False,
+    'GetSearchConfigurationTool': True,
+    'DeleteSearchConfigurationTool': False,
+    'GetJudgmentListTool': True,
+    'CreateJudgmentListTool': False,
+    'CreateUBIJudgmentListTool': False,
+    'DeleteJudgmentListTool': False,
+    'CreateLLMJudgmentListTool': False,
+    'ListClustersTool': True,
+}
+
+for tool_name, read_only_hint in TOOL_READ_ONLY_HINTS.items():
+    TOOL_REGISTRY[tool_name]['read_only_hint'] = read_only_hint

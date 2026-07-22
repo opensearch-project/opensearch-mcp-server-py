@@ -18,6 +18,7 @@ from typing import Any, Dict, List
 BASE_URL = 'https://raw.githubusercontent.com/opensearch-project/opensearch-api-specification/refs/heads/main/spec/namespaces'
 SPEC_FILES = ['cluster.yaml', '_core.yaml']
 SUPPORTED_OPERATIONS = ['msearch', 'explain', 'count', 'cluster.health']
+READ_ONLY_OPERATION_GROUPS = {'msearch', 'explain', 'count', 'cluster.health'}
 
 BODY_DESCRIPTIONS = {
     'msearch': 'Request body as NDJSON format: alternating lines of header and query objects ending with \\n. Alternatively, pass a JSON array [header, query, header, query, ...] and the tool will convert it to NDJSON for you.',
@@ -214,6 +215,10 @@ def generate_tool_from_group(base_name: str, endpoints: List[Dict]) -> Dict[str,
     # Get the HTTP method(s) used by the endpoints
     methods = {endpoint['method'].upper() for endpoint in endpoints}
     http_methods = ', '.join(sorted(methods))
+    read_only_hint = all(
+        endpoint['details'].get('x-operation-group') in READ_ONLY_OPERATION_GROUPS
+        for endpoint in endpoints
+    )
 
     all_parameters, path_parameters, required_parameters = extract_parameters(endpoints)
     # Create Pydantic model for arguments
@@ -296,6 +301,7 @@ def generate_tool_from_group(base_name: str, endpoints: List[Dict]) -> Dict[str,
         'min_version': min_version,
         'max_version': max_version,
         'http_methods': http_methods,
+        'read_only_hint': read_only_hint,
     }
 
 
