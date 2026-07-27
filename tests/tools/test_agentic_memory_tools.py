@@ -112,6 +112,35 @@ class TestAgenticMemoryTools:
         return 'HudqiJkB1SltqOcZusVU'
 
     @pytest.mark.asyncio
+    async def test_connection_credentials_never_serialize_into_body(self, memory_container_id):
+        """Caller-supplied connection fields must not leak into the request body."""
+        self.mock_client.transport.perform_request.return_value = {'session_id': 's1'}
+
+        args = self.CreateAgenticMemorySessionArgs(
+            opensearch_cluster_name='',
+            memory_container_id=memory_container_id,
+            opensearch_url='https://caller.example:9200',
+            opensearch_username='caller',
+            opensearch_password='secret',
+            aws_iam_arn='arn:aws:iam::123456789012:role/Caller',
+            aws_profile='caller-profile',
+            summary='hello',
+        )
+        await self._create_agentic_memory_session_tool(args)
+
+        _, kwargs = self.mock_client.transport.perform_request.call_args
+        body = kwargs['body']
+        for leaked in (
+            'opensearch_url',
+            'opensearch_username',
+            'opensearch_password',
+            'aws_iam_arn',
+            'aws_profile',
+        ):
+            assert leaked not in body
+        assert body == {'summary': 'hello'}
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         'payload, mock_response', agentic_memory_data.CREATE_SESSION_HAPPY_PATH_CASES
     )

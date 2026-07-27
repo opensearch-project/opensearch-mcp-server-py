@@ -782,6 +782,17 @@ async def get_opensearch_version(args: baseToolArgs) -> Version:
         return None
 
 
+def _memory_request_body(args: baseToolArgs, *routing_fields: str) -> Dict[str, Any]:
+    """Serialize a memory tool's payload, excluding every connection field.
+
+    Excludes the inherited connection fields plus the given routing fields, so no
+    caller credential can reach the request body or be stored as a memory document.
+    Deriving the set from ``model_fields`` keeps it correct as the base model grows.
+    """
+    exclude = set(baseToolArgs.model_fields) | set(routing_fields)
+    return args.model_dump(exclude=exclude, exclude_none=True, by_alias=True)
+
+
 async def create_agentic_memory_session(
     args: CreateAgenticMemorySessionArgs,
 ) -> Dict[str, Any]:
@@ -803,10 +814,7 @@ async def create_agentic_memory_session(
         ]
         url = '/'.join(url_parts)
 
-        body = args.model_dump(
-            exclude={'memory_container_id', 'opensearch_cluster_name'},
-            exclude_none=True,
-        )
+        body = _memory_request_body(args, 'memory_container_id')
 
         return await client.transport.perform_request(method='POST', url=url, body=body)
 
@@ -830,11 +838,7 @@ async def add_agentic_memories(args: AddAgenticMemoriesArgs) -> Dict[str, Any]:
         ]
         url = '/'.join(url_parts)
 
-        body = args.model_dump(
-            exclude={'memory_container_id', 'opensearch_cluster_name'},
-            exclude_none=True,
-            by_alias=True,
-        )
+        body = _memory_request_body(args, 'memory_container_id')
 
         return await client.transport.perform_request(method='POST', url=url, body=body)
 
@@ -884,16 +888,7 @@ async def update_agentic_memory(args: UpdateAgenticMemoryArgs) -> Dict[str, Any]
         ]
         url = '/'.join(url_parts)
 
-        body = args.model_dump(
-            exclude={
-                'memory_container_id',
-                'memory_type',
-                'id',
-                'opensearch_cluster_name',
-            },
-            exclude_none=True,
-            by_alias=True,
-        )
+        body = _memory_request_body(args, 'memory_container_id', 'memory_type', 'id')
 
         return await client.transport.perform_request(method='PUT', url=url, body=body)
 
@@ -947,10 +942,7 @@ async def delete_agentic_memory_by_query(
         ]
         url = '/'.join(url_parts)
 
-        body = args.model_dump(
-            exclude={'memory_container_id', 'memory_type', 'opensearch_cluster_name'},
-            exclude_none=True,
-        )
+        body = _memory_request_body(args, 'memory_container_id', 'memory_type')
 
         return await client.transport.perform_request(method='POST', url=url, body=body)
 
@@ -976,10 +968,7 @@ async def search_agentic_memory(args: SearchAgenticMemoryArgs) -> Dict[str, Any]
         ]
         url = '/'.join(url_parts)
 
-        body = args.model_dump(
-            exclude={'memory_container_id', 'memory_type', 'opensearch_cluster_name'},
-            exclude_none=True,
-        )
+        body = _memory_request_body(args, 'memory_container_id', 'memory_type')
 
         return await client.transport.perform_request(method='GET', url=url, body=body)
 

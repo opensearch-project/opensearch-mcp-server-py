@@ -9,6 +9,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 
 ### Fixed
+- Bind per-call connection credentials to the caller that supplied the URL. A tool-argument or request-header `opensearch_url` no longer picks up the server's environment basic auth, mTLS client identity, ambient AWS credentials, or an unnamed profile, so supplying a URL without credentials in the same call is now an error. Request headers are filtered to an allowlist, connection URLs are reduced to host, port and path before use or logging, and agentic-memory request bodies no longer carry connection fields into stored documents. An opt-in `OPENSEARCH_SSRF_GUARD` restricts caller URLs to public addresses, and while it is enabled a caller URL no longer follows redirects. A tool call may raise `opensearch_ssl_verify` but no longer lower it, leaving `OPENSEARCH_SSL_VERIFY` as the only way to disable certificate verification ([#287](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/287))
 
 ### Removed
 

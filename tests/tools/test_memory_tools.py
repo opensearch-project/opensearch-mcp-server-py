@@ -627,6 +627,36 @@ class TestHelperFunctions:
         assert _is_serverless('http://localhost:9200') is False
         assert _is_serverless(None) is False
         assert _is_serverless('') is False
+        # A spoofed suffix host must not be misclassified as AOSS.
+        assert _is_serverless('https://abc.aoss.amazonaws.com.attacker.example') is False
+
+    def test_domain_classification_rejects_spoofed_suffix(self):
+        """'...es.amazonaws.com.evil.com' must not parse as an AWS domain."""
+        from tools.memory_tools import _get_domain_name_from_url
+
+        with patch.dict(os.environ, {}, clear=True):
+            spoof = 'https://search-x-abc123def456.us-east-1.es.amazonaws.com.attacker.example'
+            assert _get_domain_name_from_url(spoof) is None
+
+    def test_collection_classification_rejects_spoofed_suffix(self):
+        """'...aoss.amazonaws.com.evil.com' must not parse as an AOSS host."""
+        from tools.memory_tools import _get_collection_id_from_url
+
+        with patch.dict(os.environ, {}, clear=True):
+            spoof = 'https://abc123def.us-east-1.aoss.amazonaws.com.attacker.example'
+            assert _get_collection_id_from_url(spoof) is None
+
+    def test_control_plane_env_override_wins(self):
+        """The operator env override is authoritative for the control-plane target."""
+        from tools.memory_tools import (
+            _get_collection_id_from_url,
+            _get_domain_name_from_url,
+        )
+
+        with patch.dict(os.environ, {'AWS_OPENSEARCH_COLLECTION_ID': 'op-col'}):
+            assert _get_collection_id_from_url('https://x.aoss.amazonaws.com') == 'op-col'
+        with patch.dict(os.environ, {'AWS_OPENSEARCH_DOMAIN_NAME': 'op-domain'}):
+            assert _get_domain_name_from_url('https://x.es.amazonaws.com') == 'op-domain'
 
     def test_is_memory_enabled(self):
         """Test memory enabled check."""

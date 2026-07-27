@@ -81,7 +81,10 @@ def _get_default_agent_id() -> Optional[str]:
 
 def _is_serverless(opensearch_url: str) -> bool:
     """Detect whether the OpenSearch URL points to AOSS."""
-    return 'aoss.' in (opensearch_url or '')
+    from urllib.parse import urlparse
+
+    hostname = urlparse(opensearch_url or '').hostname or ''
+    return hostname.endswith('.aoss.amazonaws.com')
 
 
 def _get_boto3_session(profile_override: Optional[str] = None):
@@ -120,7 +123,7 @@ def _get_domain_name_from_url(opensearch_url: str) -> Optional[str]:
     hostname = parsed.hostname or ''
 
     # Pattern: search-<domain>-<hash>.<region>.es.amazonaws.com
-    if '.es.amazonaws.com' in hostname:
+    if hostname.endswith('.es.amazonaws.com'):
         # hostname = search-my-domain-abc123.us-east-1.es.amazonaws.com
         prefix = hostname.split('.')[0]  # search-my-domain-abc123
         if prefix.startswith('search-'):
@@ -151,7 +154,7 @@ def _get_collection_id_from_url(opensearch_url: str) -> Optional[str]:
     hostname = parsed.hostname or ''
 
     # Pattern: <collection-id>.<region>.aoss.amazonaws.com
-    if '.aoss.amazonaws.com' in hostname:
+    if hostname.endswith('.aoss.amazonaws.com'):
         return hostname.split('.')[0]
 
     return None

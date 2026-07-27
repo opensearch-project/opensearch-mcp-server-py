@@ -255,7 +255,7 @@ In single mode:
 | `aws_iam_arn` | string | `AWS_IAM_ARN` | IAM role ARN for role-based auth |
 | `aws_profile` | string | `AWS_PROFILE` | AWS profile name |
 | `aws_opensearch_serverless` | boolean | `AWS_OPENSEARCH_SERVERLESS` | Use OpenSearch Serverless service |
-| `opensearch_ssl_verify` | boolean | `OPENSEARCH_SSL_VERIFY` | SSL certificate verification |
+| `opensearch_ssl_verify` | boolean | `OPENSEARCH_SSL_VERIFY` | Set true to require verification. A false value is ignored, since only the operator env var may disable it |
 | `opensearch_timeout` | integer | `OPENSEARCH_TIMEOUT` | Connection timeout in seconds |
 
 ### Use Cases
@@ -287,14 +287,16 @@ In single mode:
 }
 ```
 
-**3. Partial overrides:** Override only the URL while keeping credentials from environment variables:
+**3. A per-call URL must come with its own credentials:** supplying `opensearch_url` without credentials is rejected, rather than reusing the server's:
 ```json
 {
   "opensearch_url": "https://other-cluster.example.com",
+  "opensearch_username": "user-b",
+  "opensearch_password": "password-b",
   "index": "my-index"
 }
 ```
-In this example, `opensearch_username` and `opensearch_password` are not provided, so they fall back to `OPENSEARCH_USERNAME` and `OPENSEARCH_PASSWORD` environment variables.
+The server will not pair a URL you supply with its own credentials, since that would let any caller borrow the server's access against a host of their choosing. Omitting the credentials above fails with a message telling you to provide auth in the same call. Any of basic auth, AWS keys plus region, `aws_iam_arn` together with `aws_profile`, or `opensearch_no_auth` satisfies this.
 
 **4. MCP client configuration with no environment variables:** The server can be started with no connection environment variables at all. Agents provide everything at call time:
 ```json
@@ -313,7 +315,7 @@ In this example, `opensearch_username` and `opensearch_password` are not provide
 
 - Dynamic connection parameters are available in **single mode only**. In multi mode, override fields are always hidden from schemas — use `opensearch_cluster_name` to select a pre-configured cluster instead.
 - In single mode, override fields are **conditionally exposed** based on whether a connection is pre-configured (see Schema Exposure Rules above).
-- These parameters are optional on every tool. Omitting them falls back to the server's environment variable configuration.
+- These parameters are optional on every tool. Omitting them all uses the server's environment configuration. Supplying `opensearch_url`, however, means the credentials must come from that same call, since the server will not use its own against a caller-supplied URL.
 - Each tool call creates a fresh client connection using the resolved parameters, so there is no cross-contamination between calls with different overrides.
 
 ## Authentication
@@ -321,11 +323,14 @@ In this example, `opensearch_username` and `opensearch_password` are not provide
 ### Authentication Methods
 
 The server supports multiple authentication methods with the following priority order:
-1. **No Authentication** (only if `OPENSEARCH_NO_AUTH=true` environment variable is set, or `opensearch_no_auth: true` in multi mode config)
-2. **Header-Based Authentication** (only if `OPENSEARCH_HEADER_AUTH=true` environment variable is set in single mode, or `opensearch_header_auth: true` in multi mode config)
-3. **IAM Role Authentication**
-4. **Basic Authentication**
-5. **AWS Credentials Authentication**
+1. **No Authentication** (only if `OPENSEARCH_NO_AUTH=true` environment variable is set, `opensearch_no_auth: true` is passed per call, or `opensearch_no_auth: true` in multi mode config)
+2. **Bearer Token** from the request `Authorization` header (requires header auth enabled)
+3. **Header-Based AWS Credentials** (requires header auth enabled)
+4. **IAM Role Authentication**
+5. **Basic Authentication**
+6. **AWS Credentials Authentication** (profile or ambient credentials)
+
+No authentication is checked first, so when it is set the server attaches no credentials at all, whatever the request carried.
 
 **Note:** In multi mode, both `opensearch_no_auth` and `opensearch_header_auth` can be configured per-cluster in the YAML configuration file.
 
@@ -475,8 +480,9 @@ clusters:
 2. **Header-Based Authentication:**
    - Requires: `opensearch_url`, `opensearch_header_auth: true`
    - **Process**: When enabled, authentication parameters are read from HTTP request headers
-   - **Headers**: `opensearch-url`, `aws-region`, `aws-access-key-id`, `aws-secret-access-key`, `aws-session-token` (optional), `aws-service-name` (optional)
+   - **Headers**: `aws-region`, `aws-access-key-id`, `aws-secret-access-key`, `aws-session-token` (optional), `aws-service-name` (optional)
    - **Priority**: Headers take priority over cluster configuration values
+   - **Note**: an `opensearch-url` header is ignored in multi mode. The registered cluster's URL is authoritative, so it cannot be redirected per request.
    - **Use Case**: Useful for dynamic authentication in streaming/server environments where credentials are provided per-request
 
 3. **IAM Role Authentication:**
