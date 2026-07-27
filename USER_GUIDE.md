@@ -311,6 +311,18 @@ The server will not pair a URL you supply with its own credentials, since that w
 }
 ```
 
+### Restricting caller-supplied URLs
+
+By default a caller may name any reachable host in `opensearch_url`, including `localhost` and private addresses. That is deliberate, since development clusters on localhost and production clusters inside a VPC are both normal.
+
+If your callers should only ever reach clusters on the public internet, set `OPENSEARCH_SSRF_GUARD=true`. A caller-supplied URL must then use HTTPS and must not resolve to a loopback, link-local, or private address, so the server cannot be used to probe your internal network. The hostname is resolved before the check, so an encoded IP or a DNS name pointing inward is rejected too. While the guard is enabled, a caller-supplied URL also stops following redirects, since a redirect would otherwise reach an address the guard never checked.
+
+```bash
+export OPENSEARCH_SSRF_GUARD="true"
+```
+
+The guard applies only to URLs supplied by a caller. Your own `OPENSEARCH_URL` and any cluster in a multi-mode config file are unaffected, so enabling it does not stop the server from reaching a private cluster you configured.
+
 ### Notes
 
 - Dynamic connection parameters are available in **single mode only**. In multi mode, override fields are always hidden from schemas — use `opensearch_cluster_name` to select a pre-configured cluster instead.
@@ -615,6 +627,7 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `OPENSEARCH_SSL_VERIFY` | No | `"true"` | Control SSL certificate verification (`"true"` or `"false"`) |
+| `OPENSEARCH_SSRF_GUARD` | No | `''` | Set to `"true"` to restrict caller-supplied `opensearch_url` values to public HTTPS addresses. See [Restricting caller-supplied URLs](#restricting-caller-supplied-urls) |
 | `OPENSEARCH_CA_CERT_PATH` | No | `''` | Path to the CA certificate bundle used to verify the OpenSearch server |
 | `OPENSEARCH_CLIENT_CERT_PATH` | No | `''` | Path to the client certificate used for OpenSearch mTLS |
 | `OPENSEARCH_CLIENT_KEY_PATH` | No | `''` | Path to the client private key used for OpenSearch mTLS |
