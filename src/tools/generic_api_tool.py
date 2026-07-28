@@ -13,22 +13,6 @@ from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
-# `headers` is free-form, so without this a caller could inject `Authorization` or
-# `es-security-runas-user` and act as someone else. An allowlist, because a denylist
-# cannot anticipate every privilege-bearing header.
-_ALLOWED_REQUEST_HEADERS = frozenset(
-    {
-        'accept',
-        'content-type',
-        'x-opaque-id',
-    }
-)
-
-
-def _filter_caller_headers(headers: Dict[str, str]) -> Dict[str, str]:
-    """Return only the caller headers on the benign allowlist, matched case-insensitively."""
-    return {k: v for k, v in headers.items() if k.lower() in _ALLOWED_REQUEST_HEADERS}
-
 
 class GenericOpenSearchApiArgs(baseToolArgs):
     """Arguments for the generic OpenSearch API tool."""
@@ -157,16 +141,9 @@ async def generic_opensearch_api_tool(args: GenericOpenSearchApiArgs) -> list[di
                 else:
                     request_params['body'] = args.body
 
-            # Add custom headers if provided, minus any that could escalate
+            # Add custom headers if provided
             if args.headers:
-                safe_headers = _filter_caller_headers(args.headers)
-                dropped = set(args.headers) - set(safe_headers)
-                if dropped:
-                    logger.warning(
-                        f'Dropped disallowed request header(s): {", ".join(sorted(dropped))}'
-                    )
-                if safe_headers:
-                    request_params['headers'] = safe_headers
+                request_params['headers'] = args.headers
 
             # Make the API request using the transport layer
             logger.info(f'Making {method} request to {url}')
