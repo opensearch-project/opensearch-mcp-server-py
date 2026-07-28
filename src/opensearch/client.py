@@ -9,6 +9,7 @@ authentication methods and connection modes (single vs multi-cluster).
 
 import boto3
 import importlib.metadata
+import ipaddress
 import logging
 import os
 from .connection import (
@@ -45,6 +46,8 @@ except importlib.metadata.PackageNotFoundError:
 USER_AGENT = f'opensearch-mcp-server-py/{_VERSION}'
 # opensearch-py uses 9200 when the URL has no port; http/https must use RFC defaults.
 _DEFAULT_PORTS_BY_SCHEME: dict[str, int] = {'http': HTTP_PORT, 'https': HTTPS_PORT}
+# NAT64 maps an IPv4 address into IPv6, so 64:ff9b::192.168.1.1 reaches a private host.
+_NAT64_PREFIX = ipaddress.ip_network('64:ff9b::/96')
 
 
 class AuthenticationError(OpenSearchClientError):
@@ -210,7 +213,6 @@ def _reject_caller_url_if_not_public(url: str) -> None:
     if not _ssrf_guard_enabled():
         return
 
-    import ipaddress
     import socket
 
     parsed = urlparse(url)
@@ -230,7 +232,15 @@ def _reject_caller_url_if_not_public(url: str) -> None:
 
     for info in resolved:
         ip = ipaddress.ip_address(info[4][0])
-        if not ip.is_global or ip.is_link_local:
+        # An IPv4 address wrapped in NAT64 (64:ff9b::192.168.1.1) is global as an
+        # IPv6 address, so unwrap it and judge the address actually reached.
+        if getattr(ip, 'ipv4_mapped', None):
+            ip = ip.ipv4_mapped
+        elif isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64_PREFIX:
+            ip = ipaddress.ip_address(int(ip) & 0xFFFFFFFF)
+
+        # is_global is False for private and loopback but True for multicast.
+        if not ip.is_global or ip.is_link_local or ip.is_multicast:
             raise ConfigurationError(
                 f'Caller-supplied URL resolves to a non-public address ({ip}), '
                 f'blocked by OPENSEARCH_SSRF_GUARD: {_scrub_url_userinfo(url)}'
@@ -762,9 +772,12 @@ def _create_opensearch_client(
             parsed_url = _strip_url_credentials_and_query(parsed_url)
         opensearch_url, parsed_url = _parsed_with_default_ports(parsed_url)
     except Exception as e:
-        # A malformed URL may still contain a password, so scrub before reporting.
+        # The parse error quotes the text it choked on, which for a URL like
+        # "https://user:secret" (no host) is the password, so it is logged rather
+        # than returned. The caller gets the scrubbed URL only.
+        logger.debug(f'URL parse failed: {type(e).__name__}')
         raise ConfigurationError(
-            f'Invalid OpenSearch URL format: {_scrub_url_userinfo(opensearch_url)}. Error: {e}'
+            f'Invalid OpenSearch URL format: {_scrub_url_userinfo(opensearch_url)}'
         )
 
     # Determine service name and datasource type

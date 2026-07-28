@@ -1519,3 +1519,49 @@ class TestSsrfGuard:
         os.environ['OPENSEARCH_SSRF_GUARD'] = 'true'
         mock_getaddrinfo.return_value = [(2, 1, 6, '', ('93.184.216.34', 443))]
         self._assert('https://public.example.com')  # no raise
+
+    @pytest.mark.parametrize(
+        'address',
+        [
+            '64:ff9b::c0a8:101',  # NAT64-wrapped 192.168.1.1
+            '64:ff9b::7f00:1',  # NAT64-wrapped 127.0.0.1
+            '::ffff:192.168.1.1',  # IPv4-mapped private
+        ],
+    )
+    @patch('socket.getaddrinfo')
+    def test_enabled_rejects_ipv6_wrapped_private(self, mock_getaddrinfo, address):
+        """An IPv4 private address wrapped in IPv6 is global as IPv6, so unwrap first."""
+        os.environ['OPENSEARCH_SSRF_GUARD'] = 'true'
+        mock_getaddrinfo.return_value = [(10, 1, 6, '', (address, 443))]
+        with pytest.raises(ConfigurationError):
+            self._assert('https://nat64.attacker.example')
+
+    @pytest.mark.parametrize('address', ['239.255.255.250', 'ff02::1'])
+    @patch('socket.getaddrinfo')
+    def test_enabled_rejects_multicast(self, mock_getaddrinfo, address):
+        """Multicast reaches local-network listeners and is_global does not exclude it."""
+        os.environ['OPENSEARCH_SSRF_GUARD'] = 'true'
+        family = 10 if ':' in address else 2
+        mock_getaddrinfo.return_value = [(family, 1, 6, '', (address, 443))]
+        with pytest.raises(ConfigurationError):
+            self._assert('https://multicast.attacker.example')
+
+
+class TestUrlParseErrorHidesSecrets:
+    """A URL parse error must not echo the text it failed on."""
+
+    @pytest.mark.parametrize(
+        'url,secret',
+        [
+            ('https://user:supersecret', 'supersecret'),  # no @host: password is the port
+            ('https://admin:hunter2', 'hunter2'),
+            ('https://user:pw@host:notaport/x', 'pw'),
+            ('https://user:pw@host:99999999999999/x', 'pw'),
+        ],
+    )
+    def test_secret_absent_from_error(self, url, secret):
+        from opensearch.client import _create_opensearch_client
+
+        with pytest.raises(ConfigurationError) as excinfo:
+            _create_opensearch_client(opensearch_url=url, caller_supplied_url=True)
+        assert secret not in str(excinfo.value)
