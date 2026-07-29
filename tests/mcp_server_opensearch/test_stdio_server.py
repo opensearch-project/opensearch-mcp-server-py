@@ -149,7 +149,7 @@ async def test_list_tools(mock_server, mock_stdio, mock_tool_registry, mock_gene
                     Tool(
                         name='test_tool',
                         description='Test tool',
-                        inputSchema={'type': 'object', 'properties': {}},
+                        input_schema={'type': 'object', 'properties': {}},
                     )
                 ]
 
