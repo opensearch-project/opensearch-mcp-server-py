@@ -11,6 +11,7 @@ import boto3
 import importlib.metadata
 import logging
 import os
+from .client_cache import cache_client, get_cached_client
 from .connection import (
     DEFAULT_MAX_RESPONSE_SIZE,
     BufferedAsyncHttpConnection,
@@ -107,39 +108,107 @@ def initialize_client(args: baseToolArgs) -> AsyncOpenSearch:
 
 @asynccontextmanager
 async def get_opensearch_client(args: baseToolArgs) -> AsyncIterator[AsyncOpenSearch]:
-    """Async context manager for OpenSearch client lifecycle management.
+    """Async context manager for OpenSearch client lifecycle management with connection pooling.
 
-    This context manager ensures that OpenSearch clients are properly closed after use,
-    preventing connection leaks and enabling graceful server shutdown.
+    This context manager uses a connection pool by caching OpenSearch clients based on
+    their configuration. Clients are reused across requests to avoid repeated SSL
+    handshakes and connection establishment, significantly improving performance.
+
+    When caching is enabled (default), clients are NOT closed after use - they remain
+    in the cache for reuse. Use close_all_clients() during server shutdown for cleanup.
+
+    When caching is disabled (e.g., via OPENSEARCH_DISABLE_CLIENT_CACHE), clients are
+    closed after use as in the original behavior.
 
     Usage:
         async with get_opensearch_client(args) as client:
-            # Use client for operations
+            # Use client for operations (client may be from cache)
             result = await client.info()
 
     Args:
         args (baseToolArgs): Arguments containing optional opensearch_cluster_name
 
     Yields:
-        AsyncOpenSearch: An initialized OpenSearch client instance
+        AsyncOpenSearch: An initialized OpenSearch client instance (cached or new)
 
     Raises:
         ConfigurationError: If in multi mode but no cluster name provided or invalid mode
         AuthenticationError: If authentication fails
     """
-    client = None
-    try:
-        logger.debug('Creating OpenSearch client')
-        client = initialize_client(args)
+    # Generate a cache key that includes all connection parameters
+    # This ensures different credentials/configurations get different cached clients
+    mode = get_mode()
+    cluster_name = args.opensearch_cluster_name if args else None
+
+    # Fast path: build cache key parts tuple (tuples are faster than lists)
+    if args:
+        cache_key_parts = (
+            mode,
+            cluster_name or 'default',
+            args.opensearch_url or '',
+            args.opensearch_username or '',
+            args.opensearch_password or '',
+            args.opensearch_no_auth or False,
+            args.aws_region or '',
+            args.aws_iam_arn or '',
+            args.aws_profile or '',
+            args.aws_opensearch_serverless or False,
+            args.opensearch_ssl_verify or True,
+        )
+    else:
+        cache_key_parts = (mode, 'default')
+
+    # Only check header auth and parse headers if enabled (avoid overhead when not needed)
+    use_header_auth = os.getenv('OPENSEARCH_HEADER_AUTH', '').lower() == 'true'
+    if use_header_auth:
+        # Get headers once and add to cache key
+        header_auth = _get_auth_from_headers()
+        cache_key_parts = cache_key_parts + (
+            'header_auth',
+            header_auth.get('opensearch_url') or '',
+            header_auth.get('opensearch_username') or '',
+            header_auth.get('opensearch_password') or '',
+            header_auth.get('aws_access_key_id') or '',
+            header_auth.get('aws_secret_access_key') or '',
+            header_auth.get('aws_session_token') or '',
+            header_auth.get('aws_region') or '',
+            header_auth.get('aws_service_name') or '',
+            header_auth.get('bearer_auth_header') or '',
+        )
+
+    # Use Python's built-in hash (much faster than SHA256) and convert to hex string
+    # This is safe because we only need uniqueness within the process, not cryptographic security
+    cache_key = hex(hash(cache_key_parts))[2:]
+
+    # Try to get cached client first
+    client = await get_cached_client(cache_key)
+
+    if client is not None:
+        logger.debug(f'Reusing cached OpenSearch client for {cache_key}')
         yield client
-    finally:
-        if client is not None:
-            try:
-                logger.debug('Closing OpenSearch client')
-                await client.close()
-            except Exception as e:
-                # Log but don't propagate cleanup errors to avoid masking original errors
-                logger.warning(f'Error closing OpenSearch client: {e}')
+        # Don't close cached clients
+    else:
+        # Create new client
+        logger.debug(f'Creating new OpenSearch client for {cache_key}')
+        client = None
+        try:
+            client = initialize_client(args)
+            # Cache the new client
+            await cache_client(cache_key, client)
+            yield client
+        finally:
+            # If caching was disabled (cache_client is a no-op), close the client
+            # This maintains backward compatibility when caching is disabled
+            if client is not None:
+                # Check if the client was actually cached
+                cached_client = await get_cached_client(cache_key)
+                if cached_client is None:
+                    # Caching was disabled, close the client
+                    try:
+                        logger.debug('Closing OpenSearch client (caching disabled)')
+                        await client.close()
+                    except Exception as e:
+                        logger.warning(f'Error closing OpenSearch client: {e}')
 
 
 # Private Implementation Functions

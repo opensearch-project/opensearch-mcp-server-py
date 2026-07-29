@@ -74,6 +74,7 @@ async def serve(
 
     # Start stdio-based MCP server
     from mcp_server_opensearch.logging_config import start_memory_monitor
+    from opensearch.client_cache import close_all_clients
 
     options = server.create_initialization_options()
     async with stdio_server() as (reader, writer):
@@ -86,3 +87,5 @@ async def serve(
                 await monitor_task
             except (asyncio.CancelledError, Exception):
                 pass
+            logging.info('Closing cached OpenSearch clients...')
+            await close_all_clients()

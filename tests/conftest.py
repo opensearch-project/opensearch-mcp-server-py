@@ -5,6 +5,10 @@ import os
 import pytest
 
 
+# Disable client caching during tests to avoid event loop issues
+os.environ['OPENSEARCH_DISABLE_CLIENT_CACHE'] = '1'
+
+
 def pytest_addoption(parser):
     parser.addoption(
         '--run-evals',

@@ -131,9 +131,10 @@ class MCPStarletteApp:
     async def lifespan(self, app: Starlette) -> AsyncIterator[None]:
         """Context manager for session manager lifecycle.
 
-        Ensures proper startup and shutdown of the session manager.
+        Ensures proper startup and shutdown of the session manager and OpenSearch clients.
         """
         from mcp_server_opensearch.logging_config import start_memory_monitor
+        from opensearch.client_cache import close_all_clients
 
         async with self.session_manager.run():
             logging.info('Application started with StreamableHTTP session manager!')
@@ -146,6 +147,8 @@ class MCPStarletteApp:
                     await monitor_task
                 except (asyncio.CancelledError, Exception):
                     pass
+                logging.info('Closing cached OpenSearch clients...')
+                await close_all_clients()
                 logging.info('Application shutting down...')
 
     async def handle_streamable_http(self, scope: Scope, receive: Receive, send: Send) -> None:
