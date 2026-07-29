@@ -1,10 +1,11 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import httpx2
 import logging
 from contextlib import AsyncExitStack, asynccontextmanager
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 
 logger = logging.getLogger(__name__)
@@ -24,10 +25,13 @@ async def mcp_client(server_url: str, headers: dict | None = None, timeout: floa
     """
     stack = AsyncExitStack()
     try:
-        transport_ctx = streamablehttp_client(
-            url=server_url,
+        http_client = httpx2.AsyncClient(
             headers=headers or {},
             timeout=timeout,
+        )
+        transport_ctx = streamable_http_client(
+            url=server_url,
+            http_client=http_client,
         )
         streams = await stack.enter_async_context(transport_ctx)
         read_stream, write_stream = streams[0], streams[1]
