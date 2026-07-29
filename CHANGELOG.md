@@ -25,6 +25,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Fixed
 - Fix Streamable HTTP `/mcp` endpoint issuing a 307 redirect to `/mcp/`, which broke strict proxies/clients that don't follow redirects mid-session. The bare `/mcp` path is now served directly via a `Route` ([#273](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/273))
 - Constrain `mcp[cli]` to `>=1.9.4,<2`. The `mcp` 2.0 release removes the `@server.list_tools()` and `@server.call_tool()` decorators and the `request_ctx` contextvar that this server is built on, so an unbounded floor resolved to an incompatible major version and broke installs and CI
+- Fix CVE-2026-7246 by requiring `click>=8.3.3`, and sync the `uv.lock` project version to 0.11.0 ([#286](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/286))
 
 ### Removed
 
