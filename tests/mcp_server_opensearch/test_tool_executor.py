@@ -36,7 +36,7 @@ class TestExecuteTool:
 
         # Success is returned as a CallToolResult with isError=False.
         assert isinstance(result, CallToolResult)
-        assert result.isError is False
+        assert result.is_error is False
         assert result.content[0].text == 'Success'
         # Check structured log was emitted
         assert any('Tool executed: TestTool' in r.message for r in caplog.records)
@@ -68,7 +68,7 @@ class TestExecuteTool:
             result = await execute_tool('TestTool', {}, enabled_tools)
 
         assert isinstance(result, CallToolResult)
-        assert result.isError is True
+        assert result.is_error is True
         assert getattr(result.content[0], 'is_error', None) is None
         assert result.content[0].text == 'Error searching index: connection refused'
         error_records = [

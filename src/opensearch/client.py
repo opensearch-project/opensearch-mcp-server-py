@@ -19,7 +19,7 @@ from .connection import (
 from botocore.credentials import Credentials
 from contextlib import asynccontextmanager
 from http.client import HTTP_PORT, HTTPS_PORT
-from mcp.server.lowlevel.server import request_ctx
+from mcp_server_opensearch.client_context import request_context_var
 from mcp_server_opensearch.clusters_information import ClusterInfo, get_cluster
 from mcp_server_opensearch.global_state import get_mode, get_profile
 from opensearchpy import AsyncOpenSearch, AWSV4SignerAsyncAuth
@@ -905,41 +905,39 @@ def _get_auth_from_headers() -> Dict[str, Optional[str]]:
     }
 
     try:
-        request_context = request_ctx.get()
-        if request_context and hasattr(request_context, 'request'):
-            request = request_context.request
-            if request and isinstance(request, Request):
-                headers = dict(request.headers)
-                result['opensearch_url'] = headers.get('opensearch-url', '').strip() or None
-                result['aws_region'] = headers.get('aws-region', '').strip() or None
-                result['aws_access_key_id'] = headers.get('aws-access-key-id', '').strip() or None
-                result['aws_secret_access_key'] = (
-                    headers.get('aws-secret-access-key', '').strip() or None
-                )
-                result['aws_session_token'] = headers.get('aws-session-token', '').strip() or None
-                result['aws_service_name'] = headers.get('aws-service-name', '').strip() or None
+        request = request_context_var.get()
+        if request and isinstance(request, Request):
+            headers = dict(request.headers)
+            result['opensearch_url'] = headers.get('opensearch-url', '').strip() or None
+            result['aws_region'] = headers.get('aws-region', '').strip() or None
+            result['aws_access_key_id'] = headers.get('aws-access-key-id', '').strip() or None
+            result['aws_secret_access_key'] = (
+                headers.get('aws-secret-access-key', '').strip() or None
+            )
+            result['aws_session_token'] = headers.get('aws-session-token', '').strip() or None
+            result['aws_service_name'] = headers.get('aws-service-name', '').strip() or None
 
-                # Extract auth from Authorization header
-                auth_header = headers.get('authorization', '').strip()
-                if auth_header:
-                    auth_header_lower = auth_header.lower()
-                    if auth_header_lower.startswith('bearer '):
-                        token = auth_header[7:].strip()
-                        if token:
-                            result['bearer_auth_header'] = f'Bearer {token}'
-                    elif auth_header_lower.startswith('basic '):
-                        import base64
+            # Extract auth from Authorization header
+            auth_header = headers.get('authorization', '').strip()
+            if auth_header:
+                auth_header_lower = auth_header.lower()
+                if auth_header_lower.startswith('bearer '):
+                    token = auth_header[7:].strip()
+                    if token:
+                        result['bearer_auth_header'] = f'Bearer {token}'
+                elif auth_header_lower.startswith('basic '):
+                    import base64
 
-                        # Extract the base64 encoded credentials
-                        encoded_credentials = auth_header[6:]  # Skip 'Basic '
-                        decoded_bytes = base64.b64decode(encoded_credentials)
-                        decoded_credentials = decoded_bytes.decode('utf-8')
+                    # Extract the base64 encoded credentials
+                    encoded_credentials = auth_header[6:]  # Skip 'Basic '
+                    decoded_bytes = base64.b64decode(encoded_credentials)
+                    decoded_credentials = decoded_bytes.decode('utf-8')
 
-                        # Split into username and password
-                        if ':' in decoded_credentials:
-                            username, password = decoded_credentials.split(':', 1)
-                            result['opensearch_username'] = username
-                            result['opensearch_password'] = password
+                    # Split into username and password
+                    if ':' in decoded_credentials:
+                        username, password = decoded_credentials.split(':', 1)
+                        result['opensearch_username'] = username
+                        result['opensearch_password'] = password
     except Exception as e:
         logger.debug(f'Could not read headers from request context: {e}')
 

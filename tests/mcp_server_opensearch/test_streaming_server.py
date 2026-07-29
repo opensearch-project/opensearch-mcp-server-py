@@ -101,14 +101,14 @@ class TestMCPServer:
                 Tool(
                     name=tool_name,
                     description=tool_info['description'],
-                    inputSchema=tool_info['input_schema'],
+                    input_schema=tool_info['input_schema'],
                 )
             )
 
         assert len(tools) == 1
         assert tools[0].name == 'test-tool'
         assert tools[0].description == 'Test tool'
-        assert tools[0].inputSchema == {'type': 'object'}
+        assert tools[0].input_schema == {'type': 'object'}
 
     @pytest.mark.asyncio
     @patch('mcp_server_opensearch.streaming_server.get_tools')

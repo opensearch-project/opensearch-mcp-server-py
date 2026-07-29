@@ -14,13 +14,21 @@ The header is optional — if absent, the client name defaults to ``"unknown"``.
 
 import contextvars
 import re
+from starlette.requests import Request
 from starlette.types import ASGIApp, Receive, Scope, Send
+from typing import Optional
 
 
 #: Context variable holding the client name for the current request.
 #: Defaults to ``"unknown"`` when the ``X-MCP-Client-Name`` header is not provided.
 client_name_var: contextvars.ContextVar[str] = contextvars.ContextVar(
     'mcp_client_name', default='unknown'
+)
+
+#: Context variable holding the current Starlette Request for header-auth extraction.
+#: Set from the call_tool handler when the transport provides a request object.
+request_context_var: contextvars.ContextVar[Optional[Request]] = contextvars.ContextVar(
+    'mcp_request_context', default=None
 )
 
 # Header name (lowercase for case-insensitive lookup in ASGI scope).

@@ -8,7 +8,7 @@ import uvicorn
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from mcp.types import CallToolResult, Tool
+from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, Tool
 from mcp_server_opensearch.client_context import ClientNameMiddleware
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
@@ -47,8 +47,6 @@ async def create_mcp_server(
     if mode == 'multi':
         await load_clusters_from_yaml(config_file_path)
 
-    # Server instructions guide the LLM on dynamic connection params (single mode only)
-    server = Server('opensearch-mcp-server', instructions=get_server_instructions())
     # Call tool generator
     await generate_tools_from_openapi()
     # Apply custom tool config (custom name and description)
@@ -61,24 +59,35 @@ async def create_mcp_server(
     )
     logging.info(f'Enabled tools: {list(enabled_tools.keys())}')
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
+    async def _list_tools(ctx, params) -> ListToolsResult:
         tools = []
         for tool_name, tool_info in enabled_tools.items():
             tools.append(
                 Tool(
                     name=tool_info.get('display_name', tool_name),
                     description=tool_info['description'],
-                    inputSchema=tool_info['input_schema'],
+                    input_schema=tool_info['input_schema'],
                 )
             )
-        return tools
+        return ListToolsResult(tools=tools)
 
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict) -> CallToolResult:
+    async def _call_tool(ctx, params: CallToolRequestParams) -> CallToolResult:
+        from mcp_server_opensearch.client_context import request_context_var
         from mcp_server_opensearch.tool_executor import execute_tool
 
-        return await execute_tool(name, arguments, enabled_tools)
+        token = request_context_var.set(ctx.request)
+        try:
+            return await execute_tool(params.name, params.arguments or {}, enabled_tools)
+        finally:
+            request_context_var.reset(token)
+
+    # Server instructions guide the LLM on dynamic connection params (single mode only)
+    server = Server(
+        'opensearch-mcp-server',
+        instructions=get_server_instructions(),
+        on_list_tools=_list_tools,
+        on_call_tool=_call_tool,
+    )
 
     return server
 

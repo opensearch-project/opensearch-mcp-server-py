@@ -636,7 +636,7 @@ class TestHeaderBasedBasicAuth:
         set_mode('single')
 
     @patch('opensearch.client.boto3.Session')
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_basic_auth_from_authorization_header(
         self, mock_opensearch, mock_request_ctx, mock_boto_session
@@ -663,10 +663,8 @@ class TestHeaderBasedBasicAuth:
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Basic {encoded_credentials}'}
 
-        # Mock request context
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        # Mock request context var to return the request directly
+        mock_request_ctx.get.return_value = mock_request
 
         # Mock OpenSearch client
         mock_client = Mock()
@@ -682,7 +680,7 @@ class TestHeaderBasedBasicAuth:
         assert call_kwargs['http_auth'] == (username, password)
 
     @patch('opensearch.client.boto3.Session')
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_basic_auth_header_overrides_env_vars(
         self, mock_opensearch, mock_request_ctx, mock_boto_session
@@ -711,10 +709,8 @@ class TestHeaderBasedBasicAuth:
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Basic {encoded_credentials}'}
 
-        # Mock request context
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        # Mock request context var to return the request directly
+        mock_request_ctx.get.return_value = mock_request
 
         # Mock OpenSearch client
         mock_client = Mock()
@@ -728,7 +724,7 @@ class TestHeaderBasedBasicAuth:
         call_kwargs = mock_opensearch.call_args[1]
         assert call_kwargs['http_auth'] == (header_username, header_password)
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
     def test_basic_auth_falls_back_to_env_when_no_header(
@@ -748,10 +744,8 @@ class TestHeaderBasedBasicAuth:
         mock_request = Mock()
         mock_request.headers = {}
 
-        # Mock request context
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        # Mock request context var to return the request directly
+        mock_request_ctx.get.return_value = mock_request
 
         # Mock OpenSearch client
         mock_client = Mock()
@@ -788,7 +782,7 @@ class TestHeaderBasedBearerAuth:
 
         set_mode('single')
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_bearer_auth_from_authorization_header(self, mock_opensearch, mock_request_ctx):
         """Test Bearer auth passthrough from Authorization header."""
@@ -803,10 +797,8 @@ class TestHeaderBasedBearerAuth:
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Bearer {bearer_token}'}
 
-        # Mock request context
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        # Mock request context var to return the request directly
+        mock_request_ctx.get.return_value = mock_request
 
         # Mock OpenSearch client
         mock_client = Mock()
@@ -821,7 +813,7 @@ class TestHeaderBasedBearerAuth:
         assert call_kwargs['headers'] == {'Authorization': f'Bearer {bearer_token}'}
         assert 'http_auth' not in call_kwargs
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
     def test_malformed_authorization_header(
@@ -841,10 +833,8 @@ class TestHeaderBasedBearerAuth:
         mock_request = Mock()
         mock_request.headers = {'authorization': 'Basic invalid-base64!!!'}
 
-        # Mock request context
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        # Mock request context var to return the request directly
+        mock_request_ctx.get.return_value = mock_request
 
         # Mock OpenSearch client
         mock_client = Mock()
@@ -858,7 +848,7 @@ class TestHeaderBasedBearerAuth:
         call_kwargs = mock_opensearch.call_args[1]
         assert call_kwargs['http_auth'] == ('env-user', 'env-password')
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
     def test_authorization_header_without_colon(
@@ -882,10 +872,8 @@ class TestHeaderBasedBearerAuth:
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
         mock_request.headers = {'authorization': f'Basic {encoded_credentials}'}
 
-        # Mock request context
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        # Mock request context var to return the request directly
+        mock_request_ctx.get.return_value = mock_request
 
         # Mock OpenSearch client
         mock_client = Mock()
