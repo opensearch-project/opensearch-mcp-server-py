@@ -6,12 +6,21 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Removed
+
+## [Released 0.11.0]
+
+### Added
+
 - Set MCP `CallToolResult.isError` when tool responses indicate failure (`is_error`), so clients can distinguish errors from successful tool calls ([#265](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/265))
 - `ListIndexTool` now falls back to `GET /_resolve/index/*` when `_cat/indices` returns 403, allowing users with only index-level read permissions to list indices. The response is annotated when the fallback is used to indicate that health, size, and doc count are unavailable ([#279](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/279))
 - Add skills tools for root-cause analysis (`DataDistributionTool`, `LogPatternAnalysisTool`, `MetricChangeAnalysisTool`) that surface categorical value shifts, ML-clustered log patterns, and percentile changes between a baseline and an anomaly window. Skills tools are in the `skills_tools` category and can be enabled via `enabled_categories: ["skills_tools"]` ([#259](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/259))
 - Add `PPLQueryTool` for executing PPL (Piped Processing Language) queries via `/_plugins/_ppl` endpoint, with support for `jdbc`, `csv`, and `raw` output formats. Tool is in the `observability` category. ([#257](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/257))
 - Add client attribution to tool execution structured logs via optional `X-MCP-Client-Name` HTTP header. When multiple clients share a single MCP server, each client can identify itself and the `client_name` field appears in `tool_execution` log events for per-client metric filtering ([#281](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/281))
-
 
 ### Fixed
 - Fix Streamable HTTP `/mcp` endpoint issuing a 307 redirect to `/mcp/`, which broke strict proxies/clients that don't follow redirects mid-session. The bare `/mcp` path is now served directly via a `Route` ([#273](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/273))
