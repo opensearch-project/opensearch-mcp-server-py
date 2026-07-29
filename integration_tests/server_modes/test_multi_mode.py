@@ -9,6 +9,7 @@ from integration_tests.framework.assertions import assert_tool_error, assert_too
 from integration_tests.framework.client import mcp_client
 from integration_tests.framework.constants import TEST_INDEX
 from integration_tests.framework.server import MCPServerProcess
+from mcp.shared.exceptions import MCPError
 
 
 def _build_multi_config():
@@ -94,7 +95,7 @@ class TestMultiMode:
             for tool in tools.tools:
                 if tool.name == 'ListClustersTool':
                     continue
-                props = tool.inputSchema.get('properties', {})
+                props = tool.input_schema.get('properties', {})
                 assert 'opensearch_cluster_name' in props, (
                     f'Tool {tool.name} should expose opensearch_cluster_name in multi mode'
                 )
@@ -117,9 +118,11 @@ class TestMultiMode:
             assert_tool_success(result, TEST_INDEX)
 
     async def test_call_tool_without_cluster_name_errors(self, multi_mode_setup):
+        # mcp 2.0 validates required fields client-side and raises MCPError
+        # before the call reaches the server, so we catch the exception directly.
         async with mcp_client(multi_mode_setup.url) as session:
-            result = await session.call_tool('ListIndexTool', arguments={})
-            assert_tool_error(result, 'opensearch_cluster_name')
+            with pytest.raises(MCPError, match='opensearch_cluster_name'):
+                await session.call_tool('ListIndexTool', arguments={})
 
     async def test_call_tool_with_nonexistent_cluster_errors(self, multi_mode_setup):
         async with mcp_client(multi_mode_setup.url) as session:

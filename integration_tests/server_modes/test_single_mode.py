@@ -21,7 +21,7 @@ class TestSingleMode:
         """In single mode, tools should NOT require opensearch_cluster_name."""
         tools = await default_client.list_tools()
         for tool in tools.tools:
-            props = tool.inputSchema.get('properties', {})
+            props = tool.input_schema.get('properties', {})
             assert 'opensearch_cluster_name' not in props, (
                 f'Tool {tool.name} should not expose opensearch_cluster_name in single mode'
             )

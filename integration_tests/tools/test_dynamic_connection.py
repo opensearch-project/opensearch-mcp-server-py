@@ -119,7 +119,7 @@ class TestZeroConfigMode:
             assert tools.tools, 'Expected at least one tool to be listed'
 
             for tool in tools.tools:
-                props = tool.inputSchema.get('properties', {})
+                props = tool.input_schema.get('properties', {})
                 for field in CONNECTION_OVERRIDE_FIELDS:
                     assert field in props, (
                         f'Tool {tool.name!r} is missing override field {field!r} '
@@ -163,7 +163,7 @@ class TestPreconfiguredMode:
             assert tools.tools, 'Expected at least one tool to be listed'
 
             for tool in tools.tools:
-                props = tool.inputSchema.get('properties', {})
+                props = tool.input_schema.get('properties', {})
                 for field in CONNECTION_OVERRIDE_FIELDS:
                     assert field not in props, (
                         f'Tool {tool.name!r} should NOT expose override field {field!r} '
@@ -175,7 +175,7 @@ class TestPreconfiguredMode:
         async with mcp_client(preconfigured_server.url) as session:
             tools = await session.list_tools()
             for tool in tools.tools:
-                props = tool.inputSchema.get('properties', {})
+                props = tool.input_schema.get('properties', {})
                 assert 'opensearch_cluster_name' not in props, (
                     f'Tool {tool.name!r} should not expose opensearch_cluster_name in single mode'
                 )
