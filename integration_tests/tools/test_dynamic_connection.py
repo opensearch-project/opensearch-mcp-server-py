@@ -83,8 +83,15 @@ async def wrong_url_server(seed_test_index):
 
     No auth is configured on the server — auth comes entirely from the
     inline call params, which also proves per-call auth overrides work.
+
+    Overriding a configured URL is an opt-in, so dynamic mode is set explicitly.
     """
-    server = MCPServerProcess(env={'OPENSEARCH_URL': 'http://does-not-exist.invalid:9200'})
+    server = MCPServerProcess(
+        env={
+            'OPENSEARCH_URL': 'http://does-not-exist.invalid:9200',
+            'OPENSEARCH_DYNAMIC_CONNECTION': 'true',
+        }
+    )
     await server.start()
     yield server
     await server.stop()
