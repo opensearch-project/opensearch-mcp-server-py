@@ -975,6 +975,7 @@ class TestHeaderUrlBinding:
             'OPENSEARCH_HEADER_AUTH',
         ]:
             os.environ.pop(key, None)
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
         from mcp_server_opensearch.global_state import set_mode
 
         set_mode('single')
@@ -985,6 +986,7 @@ class TestHeaderUrlBinding:
             'OPENSEARCH_USERNAME',
             'OPENSEARCH_PASSWORD',
             'OPENSEARCH_HEADER_AUTH',
+            'OPENSEARCH_DYNAMIC_CONNECTION',
         ]:
             os.environ.pop(key, None)
 
@@ -1295,12 +1297,18 @@ class TestMtlsIdentityWithheldFromCallerUrl:
     def setup_method(self):
         for key in ['OPENSEARCH_URL', 'OPENSEARCH_CLIENT_CERT_PATH', 'OPENSEARCH_CLIENT_KEY_PATH']:
             os.environ.pop(key, None)
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
         from mcp_server_opensearch.global_state import set_mode
 
         set_mode('single')
 
     def teardown_method(self):
-        for key in ['OPENSEARCH_URL', 'OPENSEARCH_CLIENT_CERT_PATH', 'OPENSEARCH_CLIENT_KEY_PATH']:
+        for key in [
+            'OPENSEARCH_URL',
+            'OPENSEARCH_CLIENT_CERT_PATH',
+            'OPENSEARCH_CLIENT_KEY_PATH',
+            'OPENSEARCH_DYNAMIC_CONNECTION',
+        ]:
             os.environ.pop(key, None)
 
     @patch('opensearch.client.AsyncOpenSearch')
@@ -1364,12 +1372,14 @@ class TestCallerUrlUserinfoStripped:
 
     def setup_method(self):
         os.environ.pop('OPENSEARCH_URL', None)
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
         from mcp_server_opensearch.global_state import set_mode
 
         set_mode('single')
 
     def teardown_method(self):
-        os.environ.pop('OPENSEARCH_URL', None)
+        for key in ['OPENSEARCH_URL', 'OPENSEARCH_DYNAMIC_CONNECTION']:
+            os.environ.pop(key, None)
 
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
@@ -1411,12 +1421,13 @@ class TestRedirectsPairedWithSsrfGuard:
     def setup_method(self):
         for key in ['OPENSEARCH_URL', 'OPENSEARCH_SSRF_GUARD']:
             os.environ.pop(key, None)
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
         from mcp_server_opensearch.global_state import set_mode
 
         set_mode('single')
 
     def teardown_method(self):
-        for key in ['OPENSEARCH_URL', 'OPENSEARCH_SSRF_GUARD']:
+        for key in ['OPENSEARCH_URL', 'OPENSEARCH_SSRF_GUARD', 'OPENSEARCH_DYNAMIC_CONNECTION']:
             os.environ.pop(key, None)
 
     def _follow_redirects(self, mock_opensearch):
@@ -1565,3 +1576,244 @@ class TestUrlParseErrorHidesSecrets:
         with pytest.raises(ConfigurationError) as excinfo:
             _create_opensearch_client(opensearch_url=url, caller_supplied_url=True)
         assert secret not in str(excinfo.value)
+
+
+class TestAmbientAwsFallbackOptIn:
+    """OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK shares AWS credentials, nothing else.
+
+    SigV4 signs each request, so a caller who names a URL gets no reusable secret.
+    Basic auth, bearer tokens, and mTLS certs travel to the named host, so they are
+    withheld from a caller-chosen URL even when the opt-in is on.
+    """
+
+    ENV = [
+        'OPENSEARCH_URL',
+        'OPENSEARCH_USERNAME',
+        'OPENSEARCH_PASSWORD',
+        'OPENSEARCH_HEADER_AUTH',
+        'OPENSEARCH_CLIENT_CERT_PATH',
+        'OPENSEARCH_CLIENT_KEY_PATH',
+        'OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK',
+        'OPENSEARCH_DYNAMIC_CONNECTION',
+        'AWS_PROFILE',
+        'AWS_IAM_ARN',
+    ]
+
+    def setup_method(self):
+        for key in self.ENV:
+            os.environ.pop(key, None)
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('single')
+
+    def teardown_method(self):
+        for key in self.ENV:
+            os.environ.pop(key, None)
+
+    def _session(self, mock_boto_session):
+        session = Mock()
+        session.get_credentials.return_value = Mock(
+            access_key='SERVER_KEY', secret_key='SERVER_SECRET', token=None
+        )
+        mock_boto_session.return_value = session
+        return session
+
+    def _caller_args(self, **kwargs):
+        return baseToolArgs(
+            opensearch_cluster_name='', opensearch_url='https://caller.example.com', **kwargs
+        )
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_off_by_default_still_refuses(self, mock_region, mock_opensearch, mock_boto_session):
+        mock_region.return_value = 'us-east-1'
+        self._session(mock_boto_session)
+
+        with pytest.raises(AuthenticationError) as excinfo:
+            initialize_client(self._caller_args())
+        assert 'OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK' in str(excinfo.value)
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_enabled_signs_caller_url_with_server_credentials(
+        self, mock_region, mock_opensearch, mock_boto_session
+    ):
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        mock_region.return_value = 'us-east-1'
+        self._session(mock_boto_session)
+        mock_opensearch.return_value = Mock()
+
+        initialize_client(self._caller_args())
+
+        call_kwargs = mock_opensearch.call_args[1]
+        assert 'caller.example.com' in call_kwargs['hosts'][0]
+        assert isinstance(call_kwargs['http_auth'], AWSV4SignerAsyncAuth)
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_enabled_does_not_share_env_basic_auth(
+        self, mock_region, mock_opensearch, mock_boto_session
+    ):
+        """The opt-in covers AWS only: env basic auth must not reach a caller URL."""
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        os.environ['OPENSEARCH_USERNAME'] = 'env-user'
+        os.environ['OPENSEARCH_PASSWORD'] = 'env-pass'
+        mock_region.return_value = 'us-east-1'
+        self._session(mock_boto_session)
+        mock_opensearch.return_value = Mock()
+
+        initialize_client(self._caller_args())
+
+        call_kwargs = mock_opensearch.call_args[1]
+        assert isinstance(call_kwargs['http_auth'], AWSV4SignerAsyncAuth)
+        assert 'env-pass' not in str(call_kwargs)
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_enabled_does_not_share_env_mtls_identity(
+        self, mock_region, mock_opensearch, mock_boto_session
+    ):
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        mock_region.return_value = 'us-east-1'
+        self._session(mock_boto_session)
+        mock_opensearch.return_value = Mock()
+
+        with tempfile.NamedTemporaryFile() as cert, tempfile.NamedTemporaryFile() as key:
+            os.environ['OPENSEARCH_CLIENT_CERT_PATH'] = cert.name
+            os.environ['OPENSEARCH_CLIENT_KEY_PATH'] = key.name
+
+            initialize_client(self._caller_args())
+
+        call_kwargs = mock_opensearch.call_args[1]
+        assert 'client_cert' not in call_kwargs
+        assert 'client_key' not in call_kwargs
+
+    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_enabled_does_not_share_env_bearer_token(
+        self, mock_region, mock_opensearch, mock_boto_session, mock_request_ctx
+    ):
+        """A bearer token from headers belongs to its sender, not to an args URL."""
+        from starlette.requests import Request
+
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
+        mock_region.return_value = 'us-east-1'
+        self._session(mock_boto_session)
+        mock_opensearch.return_value = Mock()
+
+        mock_request = Mock(spec=Request)
+        mock_request.headers = {'authorization': 'Bearer proxy-token'}
+        mock_context = Mock()
+        mock_context.request = mock_request
+        mock_request_ctx.get.return_value = mock_context
+
+        initialize_client(self._caller_args())
+
+        call_kwargs = mock_opensearch.call_args[1]
+        assert isinstance(call_kwargs['http_auth'], AWSV4SignerAsyncAuth)
+        assert 'proxy-token' not in str(call_kwargs)
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_enabled_allows_env_iam_role_for_caller_url(
+        self, mock_region, mock_opensearch, mock_boto_session
+    ):
+        """With the opt-in on, an env IAM role may be assumed for a caller URL."""
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        os.environ['AWS_IAM_ARN'] = 'arn:aws:iam::123456789012:role/OpenSearchRole'
+        mock_region.return_value = 'us-east-1'
+        session = self._session(mock_boto_session)
+        session.client.return_value.assume_role.return_value = {
+            'Credentials': {
+                'AccessKeyId': 'ASSUMED_KEY',
+                'SecretAccessKey': 'ASSUMED_SECRET',
+                'SessionToken': 'ASSUMED_TOKEN',
+            }
+        }
+        mock_opensearch.return_value = Mock()
+
+        initialize_client(self._caller_args())
+
+        session.client.return_value.assume_role.assert_called_once()
+        assert isinstance(mock_opensearch.call_args[1]['http_auth'], AWSV4SignerAsyncAuth)
+
+    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_enabled_signs_header_url_with_server_credentials(
+        self, mock_region, mock_opensearch, mock_boto_session, mock_request_ctx
+    ):
+        """The opt-in covers header-supplied URLs too, which was the same hole."""
+        from starlette.requests import Request
+
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
+        mock_region.return_value = 'us-east-1'
+        self._session(mock_boto_session)
+        mock_opensearch.return_value = Mock()
+
+        mock_request = Mock(spec=Request)
+        mock_request.headers = {'opensearch-url': 'https://header-cluster.example.com'}
+        mock_context = Mock()
+        mock_context.request = mock_request
+        mock_request_ctx.get.return_value = mock_context
+
+        initialize_client(baseToolArgs(opensearch_cluster_name=''))
+
+        call_kwargs = mock_opensearch.call_args[1]
+        assert 'header-cluster.example.com' in call_kwargs['hosts'][0]
+        assert isinstance(call_kwargs['http_auth'], AWSV4SignerAsyncAuth)
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_enabled_keeps_failed_profile_fatal_for_caller_url(
+        self, mock_region, mock_opensearch, mock_boto_session
+    ):
+        """A profile that cannot build must not degrade to the default identity.
+
+        The default identity may be broader than the profile the operator chose, so
+        signing a caller's URL with it would widen what the caller can reach.
+        """
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        os.environ['AWS_PROFILE'] = 'narrow-profile'
+        mock_region.return_value = 'us-east-1'
+
+        def session(**kwargs):
+            if kwargs.get('profile_name'):
+                raise Exception('ProfileNotFound')
+            return Mock(get_credentials=Mock(return_value=Mock(access_key='BROAD')))
+
+        mock_boto_session.side_effect = session
+
+        with pytest.raises(AuthenticationError, match='requested profile'):
+            initialize_client(self._caller_args())
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_caller_basic_auth_still_wins_when_enabled(
+        self, mock_region, mock_opensearch, mock_boto_session
+    ):
+        """The opt-in is a fallback: credentials in the call still take precedence."""
+        os.environ['OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK'] = 'true'
+        mock_region.return_value = 'us-east-1'
+        self._session(mock_boto_session)
+        mock_opensearch.return_value = Mock()
+
+        initialize_client(
+            self._caller_args(opensearch_username='caller', opensearch_password='caller-pass')
+        )
+
+        assert mock_opensearch.call_args[1]['http_auth'] == ('caller', 'caller-pass')

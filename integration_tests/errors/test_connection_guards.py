@@ -42,7 +42,10 @@ def ml_tool_availability():
 
 
 async def _call_list_indices(server_env: dict, arguments: dict, headers: dict | None = None):
-    server = MCPServerProcess(env=server_env)
+    # Overrides against a configured URL are an opt-in, so default it on here and let
+    # the tests that disable it say so. Otherwise that gate refuses first and the gate
+    # under test never runs.
+    server = MCPServerProcess(env={'OPENSEARCH_DYNAMIC_CONNECTION': 'true', **server_env})
     await server.start(timeout=30.0)
     try:
         async with mcp_client(server.url, headers=headers) as session:

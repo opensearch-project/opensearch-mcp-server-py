@@ -7,6 +7,7 @@ This module provides functions to initialize OpenSearch clients with different
 authentication methods and connection modes (single vs multi-cluster).
 """
 
+import asyncio
 import boto3
 import importlib.metadata
 import ipaddress
@@ -134,7 +135,8 @@ async def get_opensearch_client(args: baseToolArgs) -> AsyncIterator[AsyncOpenSe
     client = None
     try:
         logger.debug('Creating OpenSearch client')
-        client = initialize_client(args)
+        # Off the loop: initialization does blocking DNS and boto3 credential work.
+        client = await asyncio.to_thread(initialize_client, args)
         yield client
     finally:
         if client is not None:
@@ -151,13 +153,16 @@ def _reject_overrides_when_dynamic_disabled(args: baseToolArgs) -> None:
     """Reject per-call connection overrides when the operator has disabled them.
 
     Hiding the fields from the advertised schema is not enforcement, since a raw
-    client can still send them. Covers tool args only. Header-sourced connection
-    fields are gated by ``OPENSEARCH_HEADER_AUTH`` instead.
+    client can still send them. Uses the same predicate as the schema so the two
+    cannot disagree. Tool args only; header fields are gated by
+    ``OPENSEARCH_HEADER_AUTH``.
     """
-    from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
+    from mcp_server_opensearch.server_instructions import (
+        CONNECTION_OVERRIDE_FIELDS,
+        is_dynamic_mode_enabled,
+    )
 
-    explicit = os.getenv('OPENSEARCH_DYNAMIC_CONNECTION', '').strip().lower()
-    if explicit not in ('false', '0'):
+    if is_dynamic_mode_enabled():
         return
 
     supplied = sorted(
@@ -165,9 +170,8 @@ def _reject_overrides_when_dynamic_disabled(args: baseToolArgs) -> None:
     )
     if supplied:
         raise ConfigurationError(
-            'Per-call connection overrides are disabled '
-            '(OPENSEARCH_DYNAMIC_CONNECTION=false) but the request supplied: '
-            f'{", ".join(supplied)}.'
+            'Per-call connection overrides are disabled but the request supplied: '
+            f'{", ".join(supplied)}. Set OPENSEARCH_DYNAMIC_CONNECTION=true to allow them.'
         )
 
 
@@ -193,6 +197,16 @@ def _scrub_url_userinfo(url: str) -> str:
 def _ssrf_guard_enabled() -> bool:
     """Whether the operator opted into restricting caller-supplied URLs."""
     return os.getenv('OPENSEARCH_SSRF_GUARD', '').strip().lower() == 'true'
+
+
+def _ambient_aws_fallback_allowed() -> bool:
+    """Whether a caller-supplied URL may be signed with the server's AWS credentials.
+
+    AWS only: SigV4 signs each request, so the caller gets nothing replayable and the
+    reach is bounded by the IAM role. Basic auth, bearer tokens, and mTLS certs are
+    sent to the named host verbatim, so they are never shared.
+    """
+    return os.getenv('OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK', '').strip().lower() == 'true'
 
 
 def _reject_caller_url_if_not_public(url: str) -> None:
@@ -402,18 +416,21 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
 
         # A URL and the credentials used against it must come from the same caller,
         # or the server's own credentials could be aimed at any host a caller names.
+        # OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK opts out of this for AWS paths only.
+        allow_ambient_aws = _ambient_aws_fallback_allowed()
         caller_supplied_url = args is not None and args.opensearch_url is not None
         if caller_supplied_url:
-            if args.aws_iam_arn is None:
-                iam_arn = ''
-            if args.aws_profile is None:
-                profile = ''
             opensearch_client_cert_path = None
             opensearch_client_key_path = None
+            if not allow_ambient_aws:
+                if args.aws_iam_arn is None:
+                    iam_arn = ''
+                if args.aws_profile is None:
+                    profile = ''
 
-        # A caller-named profile is a valid identity, but only if it really builds.
-        # With no profile named, any AWS path would use the server's own identity.
-        forbid_ambient_fallback = caller_supplied_url and not profile
+        # A named profile is a chosen identity, but only if it really builds. Falling
+        # back would sign with the default identity, which may be broader.
+        forbid_ambient_fallback = caller_supplied_url and not profile and not allow_ambient_aws
         require_named_profile = caller_supplied_url and bool(profile)
 
         aws_access_key_id = None
@@ -472,13 +489,13 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
                 if not (header_username and header_password):
                     opensearch_username = ''
                     opensearch_password = ''
-                iam_arn = ''
-                profile = ''
                 opensearch_client_cert_path = None
                 opensearch_client_key_path = None
-                forbid_ambient_fallback = True
-                # The profile just cleared may have been the one being required.
-                require_named_profile = False
+                if not allow_ambient_aws:
+                    iam_arn = ''
+                    profile = ''
+                    forbid_ambient_fallback = True
+                    require_named_profile = False
 
         # Credentials a proxy injected into headers belong to a different caller,
         # so a URL from tool args must not use them.
@@ -891,7 +908,8 @@ def _create_opensearch_client(
             if forbid_ambient_fallback:
                 raise AuthenticationError(
                     'No caller-supplied base credentials to assume the requested IAM role '
-                    'for the requested URL. Pair aws_iam_arn with aws_profile in the same call.'
+                    'for the requested URL. Pair aws_iam_arn with aws_profile in the same '
+                    'call, or set OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true.'
                 )
             logger.info(f'[IAM AUTH] Using IAM role authentication: {iam_arn}')
             try:
@@ -934,8 +952,9 @@ def _create_opensearch_client(
             raise AuthenticationError(
                 'No caller-supplied credentials for the requested URL. '
                 'Provide auth in the same call (basic, AWS keys/region, IAM role, '
-                'or profile) or set opensearch_no_auth; the server will not sign '
-                'a caller-supplied URL with its own ambient credentials.'
+                'or profile) or set opensearch_no_auth. To let the server sign '
+                'caller-supplied URLs with its own AWS credentials, the operator '
+                'can set OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true.'
             )
         logger.info('[AWS CREDS] Attempting AWS credentials authentication')
         try:

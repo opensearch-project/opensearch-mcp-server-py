@@ -795,3 +795,36 @@ class TestAgenticMemoryTools:
             assert 'input_schema' in self.TOOL_REGISTRY[tool]
             assert 'function' in self.TOOL_REGISTRY[tool]
             assert 'args_model' in self.TOOL_REGISTRY[tool]
+
+    def test_memory_bodies_have_no_aliased_fields(self):
+        """No body field may be aliased, since `_memory_request_body` dumps by alias.
+
+        Nested message content relies on `by_alias=True` to send `type`, so the flag
+        stays. This catches a future top-level alias that would silently rename a
+        field on the wire, including one absent from sample payloads.
+        """
+        from tools.agentic_memory.params import (
+            AddAgenticMemoriesArgs,
+            CreateAgenticMemorySessionArgs,
+            DeleteAgenticMemoryByQueryArgs,
+            SearchAgenticMemoryArgs,
+            UpdateAgenticMemoryArgs,
+        )
+        from tools.tool_params import baseToolArgs
+
+        cases = [
+            (CreateAgenticMemorySessionArgs, {'memory_container_id'}),
+            (AddAgenticMemoriesArgs, {'memory_container_id'}),
+            (UpdateAgenticMemoryArgs, {'memory_container_id', 'memory_type', 'id'}),
+            (DeleteAgenticMemoryByQueryArgs, {'memory_container_id', 'memory_type'}),
+            (SearchAgenticMemoryArgs, {'memory_container_id', 'memory_type'}),
+        ]
+
+        for model, routing_fields in cases:
+            exclude = set(baseToolArgs.model_fields) | routing_fields
+            aliased = {
+                name: field.serialization_alias or field.alias
+                for name, field in model.model_fields.items()
+                if name not in exclude and (field.serialization_alias or field.alias)
+            }
+            assert aliased == {}, f'{model.__name__} has aliased body fields: {aliased}'

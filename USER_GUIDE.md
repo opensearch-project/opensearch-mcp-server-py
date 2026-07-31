@@ -296,7 +296,7 @@ In single mode:
   "index": "my-index"
 }
 ```
-The server will not pair a URL you supply with its own credentials, since that would let any caller borrow the server's access against a host of their choosing. Omitting the credentials above fails with a message telling you to provide auth in the same call. Any of basic auth, AWS keys plus region, `aws_iam_arn` together with `aws_profile`, or `opensearch_no_auth` satisfies this.
+By default the server will not pair a URL you supply with its own credentials, since that would let any caller borrow the server's access against a host of their choosing. Omitting the credentials above fails with a message telling you to provide auth in the same call. Any of basic auth, AWS keys plus region, `aws_iam_arn` together with `aws_profile`, or `opensearch_no_auth` satisfies this. If your clusters all sit behind one IAM identity, see [Sharing the server's AWS credentials](#sharing-the-servers-aws-credentials) for the opt-in that lets a caller send only a URL.
 
 **4. MCP client configuration with no environment variables:** The server can be started with no connection environment variables at all. Agents provide everything at call time:
 ```json
@@ -310,6 +310,25 @@ The server will not pair a URL you supply with its own credentials, since that w
   }
 }
 ```
+
+### Sharing the server's AWS credentials
+
+One IAM identity often covers many clusters. If you configure the server with an IAM role scoped to your 10 domains, requiring the agent to resend credentials on every call adds nothing: the agent only needs to say which cluster it wants.
+
+Set `OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true` to let a caller supply just `opensearch_url` and have the server sign the request with the AWS credentials it already holds, whether those come from an instance role, an environment profile, or `AWS_IAM_ARN`.
+
+```bash
+export OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK="true"
+export OPENSEARCH_DYNAMIC_CONNECTION="true"
+```
+
+Both are needed when `OPENSEARCH_URL` is set. `OPENSEARCH_DYNAMIC_CONNECTION` decides whether callers may name a cluster at all, and is off by default once a URL is configured; this setting decides which credentials such a call may use. Zero-config deployments already allow per-call connections, so only this setting is needed there.
+
+This applies to AWS credentials only. SigV4 signs each request rather than sending a reusable secret, so a caller never receives anything they could replay against another host, and the reach of the fallback is exactly what your IAM policy allows. Scope that role to the clusters your callers should reach, since any caller may now name any URL your role can sign for.
+
+Basic auth, bearer tokens, and mTLS client certificates are never shared this way, whatever this setting says. Those credentials are sent to whichever host the URL names, so a caller who chooses the host would receive them verbatim. A call supplying only a URL against a server configured with basic auth is still rejected.
+
+Credentials in the call still take precedence. This is a fallback for calls that carry none.
 
 ### Restricting caller-supplied URLs
 
@@ -327,7 +346,7 @@ The guard applies only to URLs supplied by a caller. Your own `OPENSEARCH_URL` a
 
 - Dynamic connection parameters are available in **single mode only**. In multi mode, override fields are always hidden from schemas — use `opensearch_cluster_name` to select a pre-configured cluster instead.
 - In single mode, override fields are **conditionally exposed** based on whether a connection is pre-configured (see Schema Exposure Rules above).
-- These parameters are optional on every tool. Omitting them all uses the server's environment configuration. Supplying `opensearch_url`, however, means the credentials must come from that same call, since the server will not use its own against a caller-supplied URL.
+- These parameters are optional on every tool. Omitting them all uses the server's environment configuration. Supplying `opensearch_url` means the credentials must come from that same call, unless `OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true` lets the server's AWS credentials cover it.
 - Each tool call creates a fresh client connection using the resolved parameters, so there is no cross-contamination between calls with different overrides.
 
 ## Authentication
@@ -628,6 +647,7 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 |----------|----------|---------|-------------|
 | `OPENSEARCH_SSL_VERIFY` | No | `"true"` | Control SSL certificate verification (`"true"` or `"false"`) |
 | `OPENSEARCH_SSRF_GUARD` | No | `''` | Set to `"true"` to restrict caller-supplied `opensearch_url` values to public HTTPS addresses. See [Restricting caller-supplied URLs](#restricting-caller-supplied-urls) |
+| `OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK` | No | `''` | Set to `"true"` to let a caller-supplied `opensearch_url` be signed with the server's own AWS credentials. AWS only; never shares basic auth, bearer tokens, or mTLS certs. See [Sharing the server's AWS credentials](#sharing-the-servers-aws-credentials) |
 | `OPENSEARCH_CA_CERT_PATH` | No | `''` | Path to the CA certificate bundle used to verify the OpenSearch server |
 | `OPENSEARCH_CLIENT_CERT_PATH` | No | `''` | Path to the client certificate used for OpenSearch mTLS |
 | `OPENSEARCH_CLIENT_KEY_PATH` | No | `''` | Path to the client private key used for OpenSearch mTLS |

@@ -38,11 +38,14 @@ class TestConnectionOverrides:
             'AWS_OPENSEARCH_SERVERLESS',
             'OPENSEARCH_HEADER_AUTH',
             'OPENSEARCH_MAX_RESPONSE_SIZE',
+            'OPENSEARCH_DYNAMIC_CONNECTION',
         ]
         for key in self._env_keys:
             if key in os.environ:
                 self.original_env[key] = os.environ[key]
                 del os.environ[key]
+        # These tests exercise per-call overrides, which an operator opts into.
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
 
         from mcp_server_opensearch.global_state import set_mode
 
@@ -615,11 +618,31 @@ class TestConnectionOverrides:
         finally:
             os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
 
+    def test_overrides_rejected_when_dynamic_unset_and_url_configured(self):
+        """Enforcement must match schema exposure, which hides the fields in this state.
+
+        A configured OPENSEARCH_URL with the gate unset means dynamic mode is off, so
+        a raw client sending the hidden fields anyway is refused rather than obeyed.
+        """
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+            opensearch_username='caller-user',
+            opensearch_password='caller-pass',
+        )
+        with pytest.raises(ConfigurationError, match='OPENSEARCH_DYNAMIC_CONNECTION=true'):
+            initialize_client(args)
+
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
-    def test_overrides_allowed_when_dynamic_unset(self, mock_get_region, mock_opensearch):
-        """With the gate unset, a full caller bundle still connects."""
-        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+    def test_overrides_allowed_when_dynamic_unset_and_no_url(
+        self, mock_get_region, mock_opensearch
+    ):
+        """Zero-config: with nothing pre-configured, auto-detect leaves overrides on."""
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
         mock_get_region.return_value = 'us-east-1'
         mock_opensearch.return_value = Mock()
 
