@@ -8,6 +8,7 @@ import uvicorn
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+from mcp.shared.exceptions import MCPError
 from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, Tool
 from mcp_server_opensearch.client_context import ClientNameMiddleware
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
@@ -73,11 +74,15 @@ async def create_mcp_server(
 
     async def _call_tool(ctx, params: CallToolRequestParams) -> CallToolResult:
         from mcp_server_opensearch.client_context import request_context_var
-        from mcp_server_opensearch.tool_executor import execute_tool
+        from mcp_server_opensearch.tool_executor import _build_call_tool_result, execute_tool
 
         token = request_context_var.set(ctx.request)
         try:
             return await execute_tool(params.name, params.arguments or {}, enabled_tools)
+        except MCPError:
+            raise
+        except Exception as e:
+            return _build_call_tool_result([str(e)], is_error=True)
         finally:
             request_context_var.reset(token)
 

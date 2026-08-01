@@ -5,6 +5,7 @@ import asyncio
 import logging
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
+from mcp.shared.exceptions import MCPError
 from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, Tool
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
@@ -64,11 +65,15 @@ async def serve(
 
     async def _call_tool(ctx, params: CallToolRequestParams) -> CallToolResult:
         from mcp_server_opensearch.client_context import request_context_var
-        from mcp_server_opensearch.tool_executor import execute_tool
+        from mcp_server_opensearch.tool_executor import _build_call_tool_result, execute_tool
 
         token = request_context_var.set(ctx.request)
         try:
             return await execute_tool(params.name, params.arguments or {}, enabled_tools)
+        except MCPError:
+            raise
+        except Exception as e:
+            return _build_call_tool_result([str(e)], is_error=True)
         finally:
             request_context_var.reset(token)
 

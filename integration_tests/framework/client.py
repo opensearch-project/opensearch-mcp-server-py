@@ -25,9 +25,8 @@ async def mcp_client(server_url: str, headers: dict | None = None, timeout: floa
     """
     stack = AsyncExitStack()
     try:
-        http_client = httpx2.AsyncClient(
-            headers=headers or {},
-            timeout=timeout,
+        http_client = await stack.enter_async_context(
+            httpx2.AsyncClient(headers=headers or {}, timeout=timeout)
         )
         transport_ctx = streamable_http_client(
             url=server_url,
