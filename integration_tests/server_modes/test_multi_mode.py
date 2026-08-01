@@ -120,8 +120,9 @@ class TestMultiMode:
     async def test_call_tool_without_cluster_name_errors(self, multi_mode_setup):
         # mcp 2.0 validates required fields client-side and raises MCPError
         # before the call reaches the server, so we catch the exception directly.
+        # The SDK reports a generic "Invalid request parameters" without the field name.
         async with mcp_client(multi_mode_setup.url) as session:
-            with pytest.raises(MCPError, match='opensearch_cluster_name'):
+            with pytest.raises(MCPError):
                 await session.call_tool('ListIndexTool', arguments={})
 
     async def test_call_tool_with_nonexistent_cluster_errors(self, multi_mode_setup):
