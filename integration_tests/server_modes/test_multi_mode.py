@@ -118,12 +118,12 @@ class TestMultiMode:
             assert_tool_success(result, TEST_INDEX)
 
     async def test_call_tool_without_cluster_name_errors(self, multi_mode_setup):
-        # mcp 2.0 validates required fields client-side and raises MCPError
-        # before the call reaches the server, so we catch the exception directly.
-        # The SDK reports a generic "Invalid request parameters" without the field name.
+        # mcp 2.0 validates required fields and raises MCPError(INVALID_PARAMS).
+        # The field name is not included in the wire message, only the error code.
         async with mcp_client(multi_mode_setup.url) as session:
-            with pytest.raises(MCPError):
+            with pytest.raises(MCPError) as exc_info:
                 await session.call_tool('ListIndexTool', arguments={})
+            assert exc_info.value.error.code == -32602  # INVALID_PARAMS
 
     async def test_call_tool_with_nonexistent_cluster_errors(self, multi_mode_setup):
         async with mcp_client(multi_mode_setup.url) as session:
