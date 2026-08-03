@@ -10,6 +10,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Fixed
 - Bind per-call connection credentials to the caller that supplied the URL ([#287](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/287))
+- Fix CVEs by requiring `aiohttp>=3.14.3` and sync the `uv.lock` ([#294](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/294))
 
 ### Removed
 
