@@ -314,7 +314,7 @@ class TestOpenSearchClient:
         # Should not have http_auth when no-auth is True
         assert 'http_auth' not in call_kwargs
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_multi_mode')
     def test__initialize_client_multi_mode_ignores_header_url(
@@ -335,9 +335,7 @@ class TestOpenSearchClient:
 
         mock_request = Mock(spec=Request)
         mock_request.headers = {'opensearch-url': 'https://attacker.example.com'}
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
 
         _initialize_client_multi_mode(cluster_info)
 
@@ -345,7 +343,7 @@ class TestOpenSearchClient:
         assert call_kwargs['hosts'][0].startswith('https://registered-cluster.example.com')
         assert 'attacker.example.com' not in call_kwargs['hosts'][0]
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_multi_mode')
     def test__initialize_client_multi_mode_no_auth_wins_over_unusable_credential(
@@ -368,9 +366,7 @@ class TestOpenSearchClient:
         token = base64.b64encode(b'alice:').decode()
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Basic {token}'}
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
 
         _initialize_client_multi_mode(cluster_info)
 
@@ -983,11 +979,9 @@ class TestHeaderUrlBinding:
 
         mock_request = Mock(spec=Request)
         mock_request.headers = headers
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_header_url_with_own_bearer_binds(self, mock_opensearch, mock_request_ctx):
         """A header URL carrying its own Bearer token connects to that URL."""
@@ -1009,7 +1003,7 @@ class TestHeaderUrlBinding:
         assert call_kwargs['headers']['Authorization'] == 'Bearer header-token'
 
     @patch('opensearch.client.boto3.Session')
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_header_url_does_not_borrow_env_basic_auth(
         self, mock_opensearch, mock_request_ctx, mock_boto_session
@@ -1029,7 +1023,7 @@ class TestHeaderUrlBinding:
             initialize_client(baseToolArgs(opensearch_cluster_name=''))
         mock_opensearch.assert_not_called()
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_arg_url_does_not_borrow_header_bearer(self, mock_opensearch, mock_request_ctx):
         """An arg-supplied URL must not bind a proxy-injected header Bearer.
@@ -1052,7 +1046,7 @@ class TestHeaderUrlBinding:
         mock_opensearch.assert_not_called()
 
     @patch('opensearch.client._create_opensearch_client')
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     def test_header_url_clears_profile_and_its_requirement_together(
         self, mock_request_ctx, mock_create
     ):
@@ -1105,7 +1099,7 @@ class TestNoAuthDropsEveryCredential:
         ]:
             os.environ.pop(key, None)
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_header_aws_keys_do_not_disable_no_auth(self, mock_opensearch, mock_request_ctx):
         """Credentials in the request must not switch no_auth off.
@@ -1122,16 +1116,14 @@ class TestNoAuthDropsEveryCredential:
 
         mock_request = Mock(spec=Request)
         mock_request.headers = {'aws-access-key-id': 'key-without-secret'}
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
         mock_opensearch.return_value = Mock()
 
         initialize_client(baseToolArgs(opensearch_cluster_name=''))
 
         assert 'http_auth' not in mock_opensearch.call_args[1]
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     def test_no_auth_wins_over_an_unusable_header_credential(
         self, mock_opensearch, mock_request_ctx
@@ -1147,16 +1139,14 @@ class TestNoAuthDropsEveryCredential:
         token = base64.b64encode(b'alice:').decode()
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Basic {token}'}
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
         mock_opensearch.return_value = Mock()
 
         initialize_client(baseToolArgs(opensearch_cluster_name=''))
 
         assert 'http_auth' not in mock_opensearch.call_args[1]
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.boto3.Session')
     def test_empty_password_still_fails_without_no_auth(
@@ -1172,9 +1162,7 @@ class TestNoAuthDropsEveryCredential:
         token = base64.b64encode(b'alice:').decode()
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': f'Basic {token}'}
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
         mock_opensearch.return_value = Mock()
         mock_session.return_value.get_credentials.return_value = None
 
@@ -1321,7 +1309,7 @@ class TestMtlsIdentityWithheldFromCallerUrl:
             assert 'client_cert' not in call_kwargs
             assert 'client_key' not in call_kwargs
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
     def test_header_url_does_not_get_env_client_cert(
@@ -1340,9 +1328,7 @@ class TestMtlsIdentityWithheldFromCallerUrl:
 
             mock_request = Mock(spec=Request)
             mock_request.headers = {'opensearch-url': 'https://header-cluster.example.com'}
-            mock_context = Mock()
-            mock_context.request = mock_request
-            mock_request_ctx.get.return_value = mock_context
+            mock_request_ctx.get.return_value = mock_request
 
             try:
                 initialize_client(baseToolArgs(opensearch_cluster_name=''))
@@ -1682,7 +1668,7 @@ class TestAmbientAwsFallbackOptIn:
         assert 'client_cert' not in call_kwargs
         assert 'client_key' not in call_kwargs
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.boto3.Session')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
@@ -1700,9 +1686,7 @@ class TestAmbientAwsFallbackOptIn:
 
         mock_request = Mock(spec=Request)
         mock_request.headers = {'authorization': 'Bearer proxy-token'}
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
 
         initialize_client(self._caller_args())
 
@@ -1735,7 +1719,7 @@ class TestAmbientAwsFallbackOptIn:
         session.client.return_value.assume_role.assert_called_once()
         assert isinstance(mock_opensearch.call_args[1]['http_auth'], AWSV4SignerAsyncAuth)
 
-    @patch('opensearch.client.request_ctx')
+    @patch('opensearch.client.request_context_var')
     @patch('opensearch.client.boto3.Session')
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
@@ -1753,9 +1737,7 @@ class TestAmbientAwsFallbackOptIn:
 
         mock_request = Mock(spec=Request)
         mock_request.headers = {'opensearch-url': 'https://header-cluster.example.com'}
-        mock_context = Mock()
-        mock_context.request = mock_request
-        mock_request_ctx.get.return_value = mock_context
+        mock_request_ctx.get.return_value = mock_request
 
         initialize_client(baseToolArgs(opensearch_cluster_name=''))
 
