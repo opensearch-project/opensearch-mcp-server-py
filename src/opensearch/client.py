@@ -7,8 +7,10 @@ This module provides functions to initialize OpenSearch clients with different
 authentication methods and connection modes (single vs multi-cluster).
 """
 
+import asyncio
 import boto3
 import importlib.metadata
+import ipaddress
 import logging
 import os
 from .connection import (
@@ -37,6 +39,7 @@ OPENSEARCH_SERVICE = 'es'
 OPENSEARCH_SERVERLESS_SERVICE = 'aoss'
 DEFAULT_TIMEOUT = 30
 DEFAULT_SSL_VERIFY = True
+REDACTED_URL = '[unparseable URL redacted]'
 try:
     _VERSION = importlib.metadata.version('opensearch-mcp-server-py')
 except importlib.metadata.PackageNotFoundError:
@@ -44,6 +47,8 @@ except importlib.metadata.PackageNotFoundError:
 USER_AGENT = f'opensearch-mcp-server-py/{_VERSION}'
 # opensearch-py uses 9200 when the URL has no port; http/https must use RFC defaults.
 _DEFAULT_PORTS_BY_SCHEME: dict[str, int] = {'http': HTTP_PORT, 'https': HTTPS_PORT}
+# NAT64 maps an IPv4 address into IPv6, so 64:ff9b::192.168.1.1 reaches a private host.
+_NAT64_PREFIX = ipaddress.ip_network('64:ff9b::/96')
 
 
 class AuthenticationError(OpenSearchClientError):
@@ -130,7 +135,8 @@ async def get_opensearch_client(args: baseToolArgs) -> AsyncIterator[AsyncOpenSe
     client = None
     try:
         logger.debug('Creating OpenSearch client')
-        client = initialize_client(args)
+        # Off the loop: initialization does blocking DNS and boto3 credential work.
+        client = await asyncio.to_thread(initialize_client, args)
         yield client
     finally:
         if client is not None:
@@ -143,6 +149,132 @@ async def get_opensearch_client(args: baseToolArgs) -> AsyncIterator[AsyncOpenSe
 
 
 # Private Implementation Functions
+def _reject_overrides_when_dynamic_disabled(args: baseToolArgs) -> None:
+    """Reject per-call connection overrides when the operator has disabled them.
+
+    Hiding the fields from the advertised schema is not enforcement, since a raw
+    client can still send them. Uses the same predicate as the schema so the two
+    cannot disagree. Tool args only; header fields are gated by
+    ``OPENSEARCH_HEADER_AUTH``.
+    """
+    from mcp_server_opensearch.server_instructions import (
+        CONNECTION_OVERRIDE_FIELDS,
+        is_dynamic_mode_enabled,
+    )
+
+    if is_dynamic_mode_enabled():
+        return
+
+    supplied = sorted(
+        name for name in CONNECTION_OVERRIDE_FIELDS if getattr(args, name, None) is not None
+    )
+    if supplied:
+        raise ConfigurationError(
+            'Per-call connection overrides are disabled but the request supplied: '
+            f'{", ".join(supplied)}. Set OPENSEARCH_DYNAMIC_CONNECTION=true to allow them.'
+        )
+
+
+def _scrub_url_userinfo(url: str) -> str:
+    """Return ``url`` reduced to scheme, host, port, and path, for safe logging.
+
+    A URL can carry a password in userinfo or a token in its query string, and
+    neither belongs in a log or an error message. Anything we cannot parse is
+    redacted whole, since a malformed URL may still hold a secret.
+    """
+    if not url:
+        return url
+    try:
+        parsed = urlparse(url)
+        if not parsed.hostname:
+            return REDACTED_URL
+        # Reading .port validates it, and raises for text like "host:not-a-port".
+        return urlunparse(_strip_url_credentials_and_query(parsed))
+    except ValueError:
+        return REDACTED_URL
+
+
+def _ssrf_guard_enabled() -> bool:
+    """Whether the operator opted into restricting caller-supplied URLs."""
+    return os.getenv('OPENSEARCH_SSRF_GUARD', '').strip().lower() == 'true'
+
+
+def _ambient_aws_fallback_allowed() -> bool:
+    """Whether a caller-supplied URL may be signed with the server's AWS credentials.
+
+    AWS only: SigV4 signs each request, so the caller gets nothing replayable and the
+    reach is bounded by the IAM role. Basic auth, bearer tokens, and mTLS certs are
+    sent to the named host verbatim, so they are never shared.
+    """
+    return os.getenv('OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK', '').strip().lower() == 'true'
+
+
+def _reject_caller_url_if_not_public(url: str) -> None:
+    """Reject a caller-supplied URL that targets a non-public address.
+
+    Off unless ``OPENSEARCH_SSRF_GUARD`` is ``true``, because localhost dev
+    clusters and private-VPC production clusters are both normal. When on, the URL
+    must be https and must not resolve to a loopback, link-local, or private
+    address. Resolving the host defeats encoded-IP and DNS-name evasions.
+
+    While on, redirects are also refused for caller URLs, since following one
+    reaches an address this never checked.
+
+    Does not stop DNS rebinding: the address checked here is not necessarily the
+    one aiohttp connects to. That needs the validated IP pinned through the
+    connection layer.
+    """
+    if not _ssrf_guard_enabled():
+        return
+
+    import socket
+
+    parsed = urlparse(url)
+    if parsed.scheme != 'https':
+        raise ConfigurationError(
+            f'Caller-supplied URL must use https when OPENSEARCH_SSRF_GUARD is enabled: '
+            f'{_scrub_url_userinfo(url)}'
+        )
+    host = parsed.hostname
+    if not host:
+        raise ConfigurationError(f'Caller-supplied URL has no host: {_scrub_url_userinfo(url)}')
+
+    try:
+        resolved = socket.getaddrinfo(host, parsed.port or 443, proto=socket.IPPROTO_TCP)
+    except OSError as e:
+        raise ConfigurationError(f'Cannot resolve caller-supplied host "{host}": {e}')
+
+    for info in resolved:
+        ip = ipaddress.ip_address(info[4][0])
+        # An IPv4 address wrapped in NAT64 (64:ff9b::192.168.1.1) is global as an
+        # IPv6 address, so unwrap it and judge the address actually reached.
+        if getattr(ip, 'ipv4_mapped', None):
+            ip = ip.ipv4_mapped
+        elif isinstance(ip, ipaddress.IPv6Address) and ip in _NAT64_PREFIX:
+            ip = ipaddress.ip_address(int(ip) & 0xFFFFFFFF)
+
+        # is_global is False for private and loopback but True for multicast.
+        if not ip.is_global or ip.is_link_local or ip.is_multicast:
+            raise ConfigurationError(
+                f'Caller-supplied URL resolves to a non-public address ({ip}), '
+                f'blocked by OPENSEARCH_SSRF_GUARD: {_scrub_url_userinfo(url)}'
+            )
+
+
+def _strip_url_credentials_and_query(parsed: ParseResult) -> ParseResult:
+    """Reduce a connection URL to host, port, and path.
+
+    A connection URL is a host endpoint, not a request target. Userinfo
+    (``user:pass@``), query strings, matrix params, and fragments have no
+    legitimate place in one, and can carry secrets or smuggle a different host
+    past validation.
+    """
+    host = parsed.hostname or ''
+    host_literal = f'[{host}]' if ':' in host and not host.startswith('[') else host
+    netloc = f'{host_literal}:{parsed.port}' if parsed.port is not None else host_literal
+    return parsed._replace(netloc=netloc, query='', fragment='', params='')
+
+
 def _netloc_with_explicit_port(parsed: ParseResult, port: int) -> str:
     host = parsed.hostname
     if not host:
@@ -186,7 +318,8 @@ def _log_connection_event(
             'auth_method': auth_method,
             'datasource_type': datasource_type,
             'status': 'error',
-            'opensearch_url': opensearch_url,
+            # Strip any embedded user:pass@ before logging.
+            'opensearch_url': _scrub_url_userinfo(opensearch_url),
             'error': error,
         },
     )
@@ -257,6 +390,7 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
 
         # Apply per-call overrides from tool args (if provided)
         if args is not None:
+            _reject_overrides_when_dynamic_disabled(args)
             if args.opensearch_url is not None:
                 opensearch_url = args.opensearch_url.strip()
             if args.opensearch_username is not None:
@@ -275,8 +409,29 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
                 is_serverless_mode = args.aws_opensearch_serverless
             if args.opensearch_timeout is not None:
                 opensearch_timeout = args.opensearch_timeout
-            if args.opensearch_ssl_verify is not None:
-                ssl_verify = args.opensearch_ssl_verify
+            # Callers may tighten TLS but not loosen it. Only the operator's
+            # OPENSEARCH_SSL_VERIFY can disable cert checks.
+            if args.opensearch_ssl_verify is True:
+                ssl_verify = True
+
+        # A URL and the credentials used against it must come from the same caller,
+        # or the server's own credentials could be aimed at any host a caller names.
+        # OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK opts out of this for AWS paths only.
+        allow_ambient_aws = _ambient_aws_fallback_allowed()
+        caller_supplied_url = args is not None and args.opensearch_url is not None
+        if caller_supplied_url:
+            opensearch_client_cert_path = None
+            opensearch_client_key_path = None
+            if not allow_ambient_aws:
+                if args.aws_iam_arn is None:
+                    iam_arn = ''
+                if args.aws_profile is None:
+                    profile = ''
+
+        # A named profile is a chosen identity, but only if it really builds. Falling
+        # back would sign with the default identity, which may be broader.
+        forbid_ambient_fallback = caller_supplied_url and not profile and not allow_ambient_aws
+        require_named_profile = caller_supplied_url and bool(profile)
 
         aws_access_key_id = None
         aws_secret_access_key = None
@@ -289,12 +444,14 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
             aws_region = args.aws_region.strip()
 
         # Check if header auth is enabled and update variables accordingly
+        header_supplied_url = False
         use_header_auth = os.getenv('OPENSEARCH_HEADER_AUTH', '').lower() == 'true'
         if use_header_auth:
             header_auth = _get_auth_from_headers()
             header_url = header_auth.get('opensearch_url')
             if header_url:
                 opensearch_url = header_url
+                header_supplied_url = True
             header_service = header_auth.get('aws_service_name')
             if header_service:
                 is_serverless_mode = header_service.lower() == OPENSEARCH_SERVERLESS_SERVICE
@@ -314,6 +471,51 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
             # Pass through Bearer token if provided in headers
             bearer_auth_header = header_auth.get('bearer_auth_header')
 
+            # A username with no password cannot authenticate. Fail rather than
+            # carry on and let a later branch use different credentials. Skipped
+            # for an args-only URL, whose header credentials are cleared below, and
+            # when no_auth is set, since then nothing is attached anyway.
+            if (
+                not opensearch_no_auth
+                and (not caller_supplied_url or header_supplied_url)
+                and (header_username and not header_password)
+            ):
+                raise AuthenticationError(
+                    'Incomplete Basic credential in Authorization header: password is empty.'
+                )
+            # Same rule for a header URL: only credentials from those same headers.
+            # Header credentials against the operator's own URL stay allowed.
+            if header_supplied_url:
+                if not (header_username and header_password):
+                    opensearch_username = ''
+                    opensearch_password = ''
+                opensearch_client_cert_path = None
+                opensearch_client_key_path = None
+                if not allow_ambient_aws:
+                    iam_arn = ''
+                    profile = ''
+                    forbid_ambient_fallback = True
+                    require_named_profile = False
+
+        # Credentials a proxy injected into headers belong to a different caller,
+        # so a URL from tool args must not use them.
+        if caller_supplied_url and not header_supplied_url:
+            aws_access_key_id = None
+            aws_secret_access_key = None
+            aws_session_token = None
+            bearer_auth_header = None
+            opensearch_username = (
+                args.opensearch_username.strip() if args.opensearch_username is not None else ''
+            )
+            opensearch_password = (
+                args.opensearch_password if args.opensearch_password is not None else ''
+            )
+            # Same check the header path makes, so both report the real problem.
+            if not opensearch_no_auth and opensearch_username and not opensearch_password:
+                raise AuthenticationError(
+                    'Incomplete Basic credential in tool arguments: password is empty.'
+                )
+
         # Validate URL after potential header override (must come from either env or headers)
         if not opensearch_url or not opensearch_url.strip():
             if use_header_auth:
@@ -326,7 +528,14 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
                     'OPENSEARCH_URL environment variable is required but not set'
                 )
 
-        logger.info(f'Initializing single mode OpenSearch client for URL: {opensearch_url}')
+        # Only caller-controlled URLs are guarded; the operator's own is trusted.
+        if caller_supplied_url or header_supplied_url:
+            _reject_caller_url_if_not_public(opensearch_url)
+
+        logger.info(
+            f'Initializing single mode OpenSearch client for URL: '
+            f'{_scrub_url_userinfo(opensearch_url)}'
+        )
 
         # Use common client creation function
         return _create_opensearch_client(
@@ -348,6 +557,9 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
             opensearch_ca_cert_path=opensearch_ca_cert_path,
             opensearch_client_cert_path=opensearch_client_cert_path,
             opensearch_client_key_path=opensearch_client_key_path,
+            forbid_ambient_fallback=forbid_ambient_fallback,
+            require_named_profile=require_named_profile,
+            caller_supplied_url=caller_supplied_url or header_supplied_url,
         )
 
     except (ConfigurationError, AuthenticationError):
@@ -376,7 +588,8 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
         raise ConfigurationError('Cluster info cannot be None for multi mode')
     try:
         logger.info(
-            f'Initializing multi mode OpenSearch client for cluster: {cluster_info.opensearch_url}'
+            f'Initializing multi mode OpenSearch client for cluster: '
+            f'{_scrub_url_userinfo(cluster_info.opensearch_url)}'
         )
         # Extract parameters from cluster info
         opensearch_url = cluster_info.opensearch_url
@@ -428,9 +641,13 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
         use_header_auth = cluster_info.opensearch_header_auth or False
         if use_header_auth:
             header_auth = _get_auth_from_headers()
-            header_url = header_auth.get('opensearch_url')
-            if header_url:
-                opensearch_url = header_url
+            # The URL identifies the registered cluster, so a header URL is ignored.
+            # Headers may still carry per-request credentials for it.
+            if header_auth.get('opensearch_url'):
+                logger.warning(
+                    'Ignoring header-supplied opensearch-url in multi mode; '
+                    'the registered cluster URL is authoritative.'
+                )
             header_service = header_auth.get('aws_service_name')
             if header_service:
                 is_serverless_mode = header_service.lower() == OPENSEARCH_SERVERLESS_SERVICE
@@ -450,6 +667,11 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
             # Pass through Bearer token if provided in headers
             bearer_auth_header = header_auth.get('bearer_auth_header')
 
+            # As in single mode, an unusable Basic credential fails loudly.
+            if not opensearch_no_auth and header_username and not header_password:
+                raise AuthenticationError(
+                    'Incomplete Basic credential in Authorization header: password is empty.'
+                )
         # Use common client creation function
         return _create_opensearch_client(
             opensearch_url=opensearch_url,
@@ -475,11 +697,12 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
     except (ConfigurationError, AuthenticationError):
         raise
     except Exception as e:
+        safe_url = _scrub_url_userinfo(cluster_info.opensearch_url)
         logger.error(
-            f'Unexpected error in multi mode client initialization for cluster "{cluster_info.opensearch_url}": {e}'
+            f'Unexpected error in multi mode client initialization for cluster "{safe_url}": {e}'
         )
         raise ConfigurationError(
-            f'Failed to initialize multi mode client for cluster "{cluster_info.opensearch_url}": {e}'
+            f'Failed to initialize multi mode client for cluster "{safe_url}": {e}'
         )
 
 
@@ -502,6 +725,9 @@ def _create_opensearch_client(
     opensearch_ca_cert_path: Optional[str] = None,
     opensearch_client_cert_path: Optional[str] = None,
     opensearch_client_key_path: Optional[str] = None,
+    forbid_ambient_fallback: bool = False,
+    require_named_profile: bool = False,
+    caller_supplied_url: bool = False,
 ) -> AsyncOpenSearch:
     """Common function to create OpenSearch client with authentication.
 
@@ -527,6 +753,16 @@ def _create_opensearch_client(
         opensearch_ca_cert_path: Path to the CA certificate bundle for verifying TLS
         opensearch_client_cert_path: Path to the client certificate for mTLS
         opensearch_client_key_path: Path to the client private key for mTLS
+        forbid_ambient_fallback: Set when the caller supplied a URL but no AWS
+            identity of its own. Refuses every AWS path that would use the
+            server's ambient credentials against that caller-chosen host.
+        require_named_profile: Set when the caller supplied a URL and named a
+            profile. Makes a failed profile session fatal, so it cannot quietly
+            degrade into using the server's ambient credentials instead.
+        caller_supplied_url: Set when the target came from the request rather than
+            operator config. With the SSRF guard on, stops redirects being followed,
+            which would otherwise reach an address the guard just checked and
+            rejected. Operator URLs keep following redirects, as proxies rely on.
 
     Returns:
         OpenSearch: An initialized OpenSearch client instance
@@ -547,9 +783,19 @@ def _create_opensearch_client(
         parsed_url = urlparse(opensearch_url)
         if not parsed_url.scheme or not parsed_url.netloc:
             raise ValueError('Invalid URL format')
+        # Only for a caller URL. An operator may legitimately embed credentials in
+        # their own configured URL, where opensearch-py turns them into http_auth.
+        if caller_supplied_url:
+            parsed_url = _strip_url_credentials_and_query(parsed_url)
         opensearch_url, parsed_url = _parsed_with_default_ports(parsed_url)
     except Exception as e:
-        raise ConfigurationError(f'Invalid OpenSearch URL format: {opensearch_url}. Error: {e}')
+        # The parse error quotes the text it choked on, which for a URL like
+        # "https://user:secret" (no host) is the password, so it is logged rather
+        # than returned. The caller gets the scrubbed URL only.
+        logger.debug(f'URL parse failed: {type(e).__name__}')
+        raise ConfigurationError(
+            f'Invalid OpenSearch URL format: {_scrub_url_userinfo(opensearch_url)}'
+        )
 
     # Determine service name and datasource type
     service_name = OPENSEARCH_SERVERLESS_SERVICE if is_serverless_mode else OPENSEARCH_SERVICE
@@ -583,6 +829,7 @@ def _create_opensearch_client(
         'connection_class': BufferedAsyncHttpConnection,
         'timeout': timeout,
         'max_response_size': response_size_limit,
+        'follow_redirects': not (caller_supplied_url and _ssrf_guard_enabled()),
         'headers': {'user-agent': USER_AGENT},
     }
     client_kwargs.update(tls_config)
@@ -598,6 +845,12 @@ def _create_opensearch_client(
     try:
         session = boto3.Session(profile_name=profile) if profile else boto3.Session()
     except Exception as e:
+        # Falling back to a bare session here would swap the caller's chosen
+        # profile for the server's own credentials, so fail instead.
+        if require_named_profile:
+            raise AuthenticationError(
+                f"Failed to create boto3 session with the requested profile '{profile}': {e}"
+            )
         logger.warning(f"Failed to create boto3 session with profile '{profile}': {e}")
         session = boto3.Session()
 
@@ -650,6 +903,14 @@ def _create_opensearch_client(
 
         # 4. IAM role authentication
         if iam_arn and iam_arn.strip():
+            # With no caller profile, `session` holds the server's own credentials,
+            # so assuming a role through it aims them at the caller's host.
+            if forbid_ambient_fallback:
+                raise AuthenticationError(
+                    'No caller-supplied base credentials to assume the requested IAM role '
+                    'for the requested URL. Pair aws_iam_arn with aws_profile in the same '
+                    'call, or set OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true.'
+                )
             logger.info(f'[IAM AUTH] Using IAM role authentication: {iam_arn}')
             try:
                 if not aws_region or (isinstance(aws_region, str) and not aws_region.strip()):
@@ -685,7 +946,16 @@ def _create_opensearch_client(
                 _log_connection_event('basic_auth', datasource_type, opensearch_url, str(e))
                 raise AuthenticationError(f'Failed to connect with basic authentication: {e}')
 
-        # 6. AWS credentials authentication
+        # 6. AWS credentials authentication (ambient / profile session)
+        # Refuse rather than let a caller borrow the server's own identity.
+        if forbid_ambient_fallback:
+            raise AuthenticationError(
+                'No caller-supplied credentials for the requested URL. '
+                'Provide auth in the same call (basic, AWS keys/region, IAM role, '
+                'or profile) or set opensearch_no_auth. To let the server sign '
+                'caller-supplied URLs with its own AWS credentials, the operator '
+                'can set OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true.'
+            )
         logger.info('[AWS CREDS] Attempting AWS credentials authentication')
         try:
             if not aws_region or (isinstance(aws_region, str) and not aws_region.strip()):

@@ -149,7 +149,7 @@ Memory tools give the MCP agent itself persistent, cross-session memory backed b
 
 ### Tool Parameters
 
-All tools accept the following **optional connection parameters** that override the server's environment variable configuration on a per-call basis. When omitted, the server falls back to its configured environment variables or cluster config as usual.
+All tools accept the following **optional connection parameters** that override the server's environment variable configuration on a per-call basis. When all are omitted, the server uses its configured environment variables or cluster config as usual. When you supply `opensearch_url`, the credentials must come from that same call: the server will not use its own credentials against a URL a caller chose, unless the operator sets `OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true` to share its AWS credentials.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -161,10 +161,10 @@ All tools accept the following **optional connection parameters** that override 
 | `aws_iam_arn` | string | IAM role ARN. Overrides `AWS_IAM_ARN`. |
 | `aws_profile` | string | AWS profile name. Overrides `AWS_PROFILE`. |
 | `aws_opensearch_serverless` | boolean | Use OpenSearch Serverless. Overrides `AWS_OPENSEARCH_SERVERLESS`. |
-| `opensearch_ssl_verify` | boolean | SSL certificate verification. Overrides `OPENSEARCH_SSL_VERIFY`. |
+| `opensearch_ssl_verify` | boolean | Set true to require SSL certificate verification. A false value is ignored, since only `OPENSEARCH_SSL_VERIFY` may disable it. |
 | `opensearch_timeout` | integer | Connection timeout in seconds. Overrides `OPENSEARCH_TIMEOUT`. |
 
-This allows agents to dynamically target different clusters per tool call without reconfiguring the server (single mode only). See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) in the User Guide for details and examples.
+This allows agents to dynamically target different clusters per tool call without reconfiguring the server (single mode only). Credentials must come from the same call as the URL, unless `OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK=true` lets the server sign caller-supplied URLs with its own AWS credentials. `OPENSEARCH_SSRF_GUARD=true` restricts caller-supplied URLs to public HTTPS addresses. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) in the User Guide for details and examples.
 
 In addition to the common connection parameters above, each tool accepts its own specific parameters:
 

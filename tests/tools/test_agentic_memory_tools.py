@@ -112,6 +112,35 @@ class TestAgenticMemoryTools:
         return 'HudqiJkB1SltqOcZusVU'
 
     @pytest.mark.asyncio
+    async def test_connection_credentials_never_serialize_into_body(self, memory_container_id):
+        """Caller-supplied connection fields must not leak into the request body."""
+        self.mock_client.transport.perform_request.return_value = {'session_id': 's1'}
+
+        args = self.CreateAgenticMemorySessionArgs(
+            opensearch_cluster_name='',
+            memory_container_id=memory_container_id,
+            opensearch_url='https://caller.example:9200',
+            opensearch_username='caller',
+            opensearch_password='secret',
+            aws_iam_arn='arn:aws:iam::123456789012:role/Caller',
+            aws_profile='caller-profile',
+            summary='hello',
+        )
+        await self._create_agentic_memory_session_tool(args)
+
+        _, kwargs = self.mock_client.transport.perform_request.call_args
+        body = kwargs['body']
+        for leaked in (
+            'opensearch_url',
+            'opensearch_username',
+            'opensearch_password',
+            'aws_iam_arn',
+            'aws_profile',
+        ):
+            assert leaked not in body
+        assert body == {'summary': 'hello'}
+
+    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         'payload, mock_response', agentic_memory_data.CREATE_SESSION_HAPPY_PATH_CASES
     )
@@ -766,3 +795,36 @@ class TestAgenticMemoryTools:
             assert 'input_schema' in self.TOOL_REGISTRY[tool]
             assert 'function' in self.TOOL_REGISTRY[tool]
             assert 'args_model' in self.TOOL_REGISTRY[tool]
+
+    def test_memory_bodies_have_no_aliased_fields(self):
+        """No body field may be aliased, since `_memory_request_body` dumps by alias.
+
+        Nested message content relies on `by_alias=True` to send `type`, so the flag
+        stays. This catches a future top-level alias that would silently rename a
+        field on the wire, including one absent from sample payloads.
+        """
+        from tools.agentic_memory.params import (
+            AddAgenticMemoriesArgs,
+            CreateAgenticMemorySessionArgs,
+            DeleteAgenticMemoryByQueryArgs,
+            SearchAgenticMemoryArgs,
+            UpdateAgenticMemoryArgs,
+        )
+        from tools.tool_params import baseToolArgs
+
+        cases = [
+            (CreateAgenticMemorySessionArgs, {'memory_container_id'}),
+            (AddAgenticMemoriesArgs, {'memory_container_id'}),
+            (UpdateAgenticMemoryArgs, {'memory_container_id', 'memory_type', 'id'}),
+            (DeleteAgenticMemoryByQueryArgs, {'memory_container_id', 'memory_type'}),
+            (SearchAgenticMemoryArgs, {'memory_container_id', 'memory_type'}),
+        ]
+
+        for model, routing_fields in cases:
+            exclude = set(baseToolArgs.model_fields) | routing_fields
+            aliased = {
+                name: field.serialization_alias or field.alias
+                for name, field in model.model_fields.items()
+                if name not in exclude and (field.serialization_alias or field.alias)
+            }
+            assert aliased == {}, f'{model.__name__} has aliased body fields: {aliased}'

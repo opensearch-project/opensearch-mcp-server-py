@@ -10,6 +10,7 @@ OpenSearch connection classes with additional features like response size limiti
 import logging
 import time
 from opensearchpy import AsyncHttpConnection
+from opensearchpy.exceptions import TransportError
 
 
 # Configure logging
@@ -77,16 +78,21 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
     before the complete response is downloaded.
     """
 
-    def __init__(self, *args, max_response_size=DEFAULT_MAX_RESPONSE_SIZE, **kwargs):
+    def __init__(
+        self, *args, max_response_size=DEFAULT_MAX_RESPONSE_SIZE, follow_redirects=True, **kwargs
+    ):
         """Initialize buffered connection with response size limit.
 
         Args:
             *args: Arguments passed to parent AsyncHttpConnection.
             max_response_size: Maximum allowed response size in bytes (default: None - no limit).
+            follow_redirects: Whether to follow redirects. False for a caller-supplied URL,
+                where a redirect would send the request to a host nobody validated.
             **kwargs: Keyword arguments passed to parent AsyncHttpConnection.
         """
         super().__init__(*args, **kwargs)
         self.max_response_size = max_response_size
+        self.follow_redirects = follow_redirects
         if max_response_size is not None:
             logger.debug(
                 f'Initialized BufferedAsyncHttpConnection with max_response_size={max_response_size} bytes'
@@ -168,7 +174,6 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
 
             start = self.loop.time()
 
-            # Make request with streaming response handling
             async with self.session.request(
                 method,
                 yarl.URL(url, encoded=True),
@@ -177,6 +182,7 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
                 headers=req_headers,
                 timeout=timeout_obj,
                 fingerprint=self.ssl_assert_fingerprint,
+                allow_redirects=self.follow_redirects,
             ) as response:
                 # Stream the response with optional size checking
                 chunks = []
@@ -263,7 +269,15 @@ class BufferedAsyncHttpConnection(AsyncHttpConnection):
 
         except ResponseSizeExceededError:
             raise
+        except TransportError:
+            # The server answered, so this is its response, not a transport failure.
+            # Retrying would re-send the request and undo any refusal made above.
+            raise
         except Exception as e:
+            # The parent implementation always follows redirects, so falling back
+            # would undo a refusal this request was meant to make.
+            if not self.follow_redirects:
+                raise
             # For connection errors and other failures, fall back to parent implementation
             logger.warning(
                 f'Streaming request failed ({type(e).__name__}: {e}), falling back to parent implementation'

@@ -83,8 +83,15 @@ async def wrong_url_server(seed_test_index):
 
     No auth is configured on the server — auth comes entirely from the
     inline call params, which also proves per-call auth overrides work.
+
+    Overriding a configured URL is an opt-in, so dynamic mode is set explicitly.
     """
-    server = MCPServerProcess(env={'OPENSEARCH_URL': 'http://does-not-exist.invalid:9200'})
+    server = MCPServerProcess(
+        env={
+            'OPENSEARCH_URL': 'http://does-not-exist.invalid:9200',
+            'OPENSEARCH_DYNAMIC_CONNECTION': 'true',
+        }
+    )
     await server.start()
     yield server
     await server.stop()
@@ -145,6 +152,43 @@ class TestZeroConfigMode:
         async with mcp_client(wrong_url_server.url) as session:
             result = await session.call_tool('ClusterHealthTool', arguments=call_args)
             assert_tool_success(result)
+
+    async def test_caller_url_with_iam_role_and_profile_succeeds(
+        self, seed_test_index, aws_profile_manager
+    ):
+        """A caller URL paired with an IAM role and a profile must still work.
+
+        The server will not assume a role using its own credentials, so a caller
+        wanting a role names a profile alongside it. That pairing is legitimate.
+
+        The server needs AWS_SHARED_CREDENTIALS_FILE to resolve the named profile,
+        so this starts its own server rather than using the zero-config one.
+        """
+        url = os.environ.get('IT_OPENSEARCH_URL')
+        iam_arn = os.environ.get('IT_IAM_ROLE_ARN')
+        region = os.environ.get('IT_AWS_REGION')
+        if not (url and iam_arn and region):
+            pytest.skip('IT_OPENSEARCH_URL, IT_IAM_ROLE_ARN and IT_AWS_REGION required')
+
+        server = MCPServerProcess(
+            env={'AWS_SHARED_CREDENTIALS_FILE': aws_profile_manager.credentials_file}
+        )
+        await server.start()
+        try:
+            async with mcp_client(server.url) as session:
+                result = await session.call_tool(
+                    'ListIndexTool',
+                    arguments={
+                        'opensearch_url': url,
+                        'aws_iam_arn': iam_arn,
+                        'aws_profile': aws_profile_manager.profile_name,
+                        'aws_region': region,
+                    },
+                )
+                assert not result.isError, f'Expected success: {result.content}'
+                assert_tool_success(result)
+        finally:
+            await server.stop()
 
 
 # ---------------------------------------------------------------------------

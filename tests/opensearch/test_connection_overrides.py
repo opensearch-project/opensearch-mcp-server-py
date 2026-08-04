@@ -11,11 +11,12 @@ dynamically target different clusters without reconfiguring the server.
 import os
 import pytest
 from opensearch.client import (
+    AuthenticationError,
     ConfigurationError,
     initialize_client,
 )
 from tools.tool_params import ListIndicesArgs, baseToolArgs
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 
 class TestConnectionOverrides:
@@ -37,11 +38,14 @@ class TestConnectionOverrides:
             'AWS_OPENSEARCH_SERVERLESS',
             'OPENSEARCH_HEADER_AUTH',
             'OPENSEARCH_MAX_RESPONSE_SIZE',
+            'OPENSEARCH_DYNAMIC_CONNECTION',
         ]
         for key in self._env_keys:
             if key in os.environ:
                 self.original_env[key] = os.environ[key]
                 del os.environ[key]
+        # These tests exercise per-call overrides, which an operator opts into.
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'true'
 
         from mcp_server_opensearch.global_state import set_mode
 
@@ -142,8 +146,13 @@ class TestConnectionOverrides:
 
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
-    def test_ssl_verify_false_override(self, mock_get_region, mock_opensearch):
-        """Tool-level opensearch_ssl_verify=False overrides default True."""
+    def test_ssl_verify_false_override_is_ignored(self, mock_get_region, mock_opensearch):
+        """A caller may tighten TLS verification, never loosen it.
+
+        opensearch_ssl_verify=False from tool args must not disable cert
+        verification on the operator's own cluster. The env escape hatch
+        (OPENSEARCH_SSL_VERIFY=false) is the only way to loosen it.
+        """
         os.environ['OPENSEARCH_URL'] = 'https://cluster.example.com'
         os.environ['OPENSEARCH_NO_AUTH'] = 'true'
         mock_get_region.return_value = 'us-east-1'
@@ -153,6 +162,22 @@ class TestConnectionOverrides:
             opensearch_cluster_name='',
             opensearch_ssl_verify=False,
         )
+        initialize_client(args)
+
+        call_kwargs = mock_opensearch.call_args[1]
+        assert call_kwargs['verify_certs'] is True
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_ssl_verify_false_env_still_honored(self, mock_get_region, mock_opensearch):
+        """The operator env escape hatch OPENSEARCH_SSL_VERIFY=false still works."""
+        os.environ['OPENSEARCH_URL'] = 'https://cluster.example.com'
+        os.environ['OPENSEARCH_NO_AUTH'] = 'true'
+        os.environ['OPENSEARCH_SSL_VERIFY'] = 'false'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        args = baseToolArgs(opensearch_cluster_name='')
         initialize_client(args)
 
         call_kwargs = mock_opensearch.call_args[1]
@@ -373,8 +398,13 @@ class TestConnectionOverrides:
 
     @patch('opensearch.client.AsyncOpenSearch')
     @patch('opensearch.client.get_aws_region_single_mode')
-    def test_partial_override_mixes_with_env(self, mock_get_region, mock_opensearch):
-        """Override only URL; username/password still come from env."""
+    def test_caller_url_does_not_borrow_env_basic_auth(self, mock_get_region, mock_opensearch):
+        """A caller-supplied URL must not inherit the server's env credentials.
+
+        A URL-only override with env basic auth present must NOT bind the
+        operator's env username/password to the caller's host. With no
+        caller-supplied credentials and no ambient fallback, it raises.
+        """
         os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
         os.environ['OPENSEARCH_USERNAME'] = 'env-user'
         os.environ['OPENSEARCH_PASSWORD'] = 'env-pass'
@@ -385,11 +415,245 @@ class TestConnectionOverrides:
             opensearch_cluster_name='',
             opensearch_url='https://other-cluster.example.com',
         )
+        with pytest.raises(AuthenticationError):
+            initialize_client(args)
+
+        mock_opensearch.assert_not_called()
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_caller_url_with_own_basic_auth(self, mock_get_region, mock_opensearch):
+        """A caller-supplied URL paired with caller creds connects with those creds."""
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        os.environ['OPENSEARCH_USERNAME'] = 'env-user'
+        os.environ['OPENSEARCH_PASSWORD'] = 'env-pass'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+            opensearch_username='caller-user',
+            opensearch_password='caller-pass',
+        )
         initialize_client(args)
 
         call_kwargs = mock_opensearch.call_args[1]
         assert 'other-cluster.example.com' in call_kwargs['hosts'][0]
-        assert call_kwargs['http_auth'] == ('env-user', 'env-pass')
+        assert call_kwargs['http_auth'] == ('caller-user', 'caller-pass')
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_caller_url_without_creds_refuses_ambient(
+        self, mock_get_region, mock_opensearch, mock_session
+    ):
+        """A caller URL with no caller creds must not sign with the server's AWS identity.
+
+        Ambient creds are present (mocked) so the refusal proves the guard fires,
+        not that the host merely happens to lack credentials.
+        """
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+        mock_session.return_value.get_credentials.return_value = Mock()
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+        )
+        with pytest.raises(AuthenticationError):
+            initialize_client(args)
+        mock_opensearch.assert_not_called()
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_caller_url_with_bad_profile_does_not_fall_back_to_ambient(
+        self, mock_get_region, mock_opensearch, mock_session
+    ):
+        """A caller URL plus a nonexistent profile must fail, not fall back to ambient.
+
+        The named profile raises, but a bare fallback session would yield ambient
+        creds; the guard must refuse before that fallback can sign the caller URL.
+        """
+        from botocore.exceptions import ProfileNotFound
+
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        def session_factory(*args, **kwargs):
+            if kwargs.get('profile_name'):
+                raise ProfileNotFound(profile=kwargs['profile_name'])
+            fallback = Mock()
+            fallback.get_credentials.return_value = Mock()
+            return fallback
+
+        mock_session.side_effect = session_factory
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+            aws_profile='definitely-does-not-exist-xyz',
+            aws_region='us-east-1',
+        )
+        with pytest.raises(AuthenticationError):
+            initialize_client(args)
+        mock_opensearch.assert_not_called()
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_caller_url_with_iam_arn_refuses_ambient_assume(
+        self, mock_get_region, mock_opensearch, mock_session
+    ):
+        """A caller URL plus iam_arn must not assume a role via the server's own session."""
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        mock_sts = Mock()
+        mock_sts.assume_role.return_value = {
+            'Credentials': {
+                'AccessKeyId': 'ak',
+                'SecretAccessKey': 'sk',
+                'SessionToken': 'tok',
+            }
+        }
+        mock_session.return_value.client.return_value = mock_sts
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://attacker.us-east-1.es.amazonaws.com',
+            aws_iam_arn='arn:aws:iam::123456789012:role/SearchAdmin',
+            aws_region='us-east-1',
+        )
+        with pytest.raises(AuthenticationError):
+            initialize_client(args)
+        mock_sts.assume_role.assert_not_called()
+        mock_opensearch.assert_not_called()
+
+    @patch('opensearch.client.boto3.Session')
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_caller_url_with_iam_arn_and_profile_still_assumes(
+        self, mock_get_region, mock_opensearch, mock_session
+    ):
+        """The legitimate bundle (caller URL + iam_arn + caller profile) must still work."""
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        mock_sts = Mock()
+        mock_sts.assume_role.return_value = {
+            'Credentials': {
+                'AccessKeyId': 'ak',
+                'SecretAccessKey': 'sk',
+                'SessionToken': 'tok',
+            }
+        }
+        mock_session.return_value.client.return_value = mock_sts
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://mycluster.us-east-1.es.amazonaws.com',
+            aws_iam_arn='arn:aws:iam::123456789012:role/MyRole',
+            aws_profile='caller-profile',
+            aws_region='us-east-1',
+        )
+        initialize_client(args)
+
+        assert mock_session.call_args_list == [call(profile_name='caller-profile')]
+        mock_sts.assume_role.assert_called_once()
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_arg_username_without_password_is_rejected(self, mock_get_region, mock_opensearch):
+        """An arg-supplied username with an empty password reports the real problem."""
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+            opensearch_username='alice',
+            opensearch_password='',
+        )
+        with pytest.raises(AuthenticationError, match='tool arguments'):
+            initialize_client(args)
+        mock_opensearch.assert_not_called()
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_caller_no_auth_still_connects_anonymously(self, mock_get_region, mock_opensearch):
+        """A caller asking for no_auth must still get an unauthenticated connection."""
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+            opensearch_no_auth=True,
+        )
+        initialize_client(args)
+
+        assert 'http_auth' not in mock_opensearch.call_args[1]
+
+    # --- per-call overrides disabled ---
+
+    def test_overrides_rejected_when_dynamic_disabled(self):
+        """OPENSEARCH_DYNAMIC_CONNECTION=false rejects any supplied override field."""
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+        os.environ['OPENSEARCH_DYNAMIC_CONNECTION'] = 'false'
+        try:
+            args = baseToolArgs(
+                opensearch_cluster_name='',
+                opensearch_url='https://other-cluster.example.com',
+            )
+            with pytest.raises(ConfigurationError):
+                initialize_client(args)
+        finally:
+            os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+
+    def test_overrides_rejected_when_dynamic_unset_and_url_configured(self):
+        """Enforcement must match schema exposure, which hides the fields in this state.
+
+        A configured OPENSEARCH_URL with the gate unset means dynamic mode is off, so
+        a raw client sending the hidden fields anyway is refused rather than obeyed.
+        """
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        os.environ['OPENSEARCH_URL'] = 'https://env-cluster.example.com'
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+            opensearch_username='caller-user',
+            opensearch_password='caller-pass',
+        )
+        with pytest.raises(ConfigurationError, match='OPENSEARCH_DYNAMIC_CONNECTION=true'):
+            initialize_client(args)
+
+    @patch('opensearch.client.AsyncOpenSearch')
+    @patch('opensearch.client.get_aws_region_single_mode')
+    def test_overrides_allowed_when_dynamic_unset_and_no_url(
+        self, mock_get_region, mock_opensearch
+    ):
+        """Zero-config: with nothing pre-configured, auto-detect leaves overrides on."""
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        mock_get_region.return_value = 'us-east-1'
+        mock_opensearch.return_value = Mock()
+
+        args = baseToolArgs(
+            opensearch_cluster_name='',
+            opensearch_url='https://other-cluster.example.com',
+            opensearch_username='caller-user',
+            opensearch_password='caller-pass',
+        )
+        initialize_client(args)
+        assert 'other-cluster.example.com' in mock_opensearch.call_args[1]['hosts'][0]
 
     # --- Error cases ---
 

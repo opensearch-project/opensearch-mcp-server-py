@@ -355,6 +355,155 @@ class TestResponseSizeExceededError:
         assert 'Consider increasing max_response_size' in str(error)
 
 
+class TestRedirectsDisabled:
+    """Redirects are refused only for a caller URL under the SSRF guard.
+
+    An operator's own URL keeps following them, since a proxy in front of a
+    cluster may legitimately redirect.
+    """
+
+    @pytest.mark.asyncio
+    async def test_caller_url_under_guard_does_not_follow_redirects(self):
+        import contextlib
+        from unittest.mock import AsyncMock
+
+        captured = {}
+
+        response = MagicMock()
+
+        async def chunk_iter(_size):
+            for _ in range(1):
+                yield b'ok'
+
+        response.content.iter_chunked = chunk_iter
+        response.headers.getall = MagicMock(return_value=())
+        response.status = 200
+
+        @contextlib.asynccontextmanager
+        async def fake_request(*args, **kwargs):
+            captured.update(kwargs)
+            yield response
+
+        conn = BufferedAsyncHttpConnection(
+            host='localhost',
+            port=9200,
+            use_ssl=False,
+            max_response_size=1024,
+            follow_redirects=False,
+        )
+        conn.session = MagicMock()
+        conn.session.request = fake_request
+        conn._create_aiohttp_session = AsyncMock()
+        conn.loop = MagicMock()
+        conn.loop.time = MagicMock(return_value=0.0)
+        conn._http_auth = None
+
+        await conn.perform_request(method='GET', url='/test')
+
+        assert captured.get('allow_redirects') is False
+
+    @pytest.mark.asyncio
+    async def test_operator_url_still_follows_redirects(self):
+        """A proxy in front of an operator's cluster may redirect, so keep following."""
+        import contextlib
+        from unittest.mock import AsyncMock
+
+        captured = {}
+
+        response = MagicMock()
+
+        async def chunk_iter(_size):
+            yield b'ok'
+
+        response.content.iter_chunked = chunk_iter
+        response.headers.getall = MagicMock(return_value=())
+        response.status = 200
+
+        @contextlib.asynccontextmanager
+        async def fake_request(*_args, **kwargs):
+            captured.update(kwargs)
+            yield response
+
+        conn = BufferedAsyncHttpConnection(
+            host='localhost', port=9200, use_ssl=False, max_response_size=1024
+        )
+        conn.session = MagicMock()
+        conn.session.request = fake_request
+        conn._create_aiohttp_session = AsyncMock()
+        conn.loop = MagicMock()
+        conn.loop.time = MagicMock(return_value=0.0)
+        conn._http_auth = None
+
+        await conn.perform_request(method='GET', url='/test')
+
+        assert captured.get('allow_redirects') is True
+
+    @pytest.mark.asyncio
+    async def test_no_fallback_when_redirects_must_be_refused(self):
+        """The parent always follows redirects, so falling back would undo the refusal."""
+        import contextlib
+        from unittest.mock import AsyncMock
+
+        @contextlib.asynccontextmanager
+        async def broken_request(*_args, **_kwargs):
+            raise OSError('connection reset mid-body')
+            yield  # pragma: no cover
+
+        conn = BufferedAsyncHttpConnection(
+            host='localhost',
+            port=9200,
+            use_ssl=False,
+            max_response_size=1024,
+            follow_redirects=False,
+        )
+        conn.session = MagicMock()
+        conn.session.request = broken_request
+        conn._create_aiohttp_session = AsyncMock()
+        conn.loop = MagicMock()
+        conn.loop.time = MagicMock(return_value=0.0)
+        conn._http_auth = None
+
+        with patch.object(conn.__class__.__bases__[0], 'perform_request') as mock_parent:
+            with pytest.raises(OSError):
+                await conn.perform_request(method='GET', url='/test')
+            mock_parent.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_redirect_is_not_retried_through_parent(self):
+        """Retrying a redirect through the parent would follow it, undoing the refusal."""
+        import contextlib
+        from opensearchpy.exceptions import TransportError
+        from unittest.mock import AsyncMock
+
+        response = MagicMock()
+
+        async def chunk_iter(_size):
+            yield b'moved'
+
+        response.content.iter_chunked = chunk_iter
+        response.headers.getall = MagicMock(return_value=())
+        response.status = 302
+
+        @contextlib.asynccontextmanager
+        async def fake_request(*_args, **_kwargs):
+            yield response
+
+        conn = BufferedAsyncHttpConnection(
+            host='localhost', port=9200, use_ssl=False, max_response_size=1024
+        )
+        conn.session = MagicMock()
+        conn.session.request = fake_request
+        conn._create_aiohttp_session = AsyncMock()
+        conn.loop = MagicMock()
+        conn.loop.time = MagicMock(return_value=0.0)
+        conn._http_auth = None
+
+        with patch.object(conn.__class__.__bases__[0], 'perform_request') as mock_parent:
+            with pytest.raises(TransportError):
+                await conn.perform_request(method='GET', url='/test')
+            mock_parent.assert_not_called()
+
+
 class TestIntegrationScenarios:
     """Integration tests for various response size limiting scenarios."""
 

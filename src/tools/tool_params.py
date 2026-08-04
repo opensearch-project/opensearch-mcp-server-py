@@ -99,7 +99,7 @@ class baseToolArgs(BaseModel):
     )
     opensearch_ssl_verify: Optional[bool] = Field(
         default=None,
-        description='If false, disable SSL certificate verification.',
+        description='Set true to require SSL certificate verification. A false value is ignored, since only the operator may disable verification.',
     )
     opensearch_timeout: Optional[int] = Field(
         default=None,
