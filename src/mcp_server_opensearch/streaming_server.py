@@ -9,7 +9,7 @@ from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.shared.exceptions import MCPError
-from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, Tool
+from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, TextContent, Tool
 from mcp_server_opensearch.client_context import ClientNameMiddleware
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
@@ -82,7 +82,15 @@ async def create_mcp_server(
         except MCPError:
             raise
         except Exception as e:
-            return _build_call_tool_result([str(e)], is_error=True)
+            return _build_call_tool_result(
+                [
+                    TextContent(
+                        type='text',
+                        text=str(e),
+                    )
+                ],
+                is_error=True,
+            )
         finally:
             request_context_var.reset(token)
 

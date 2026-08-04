@@ -3,10 +3,55 @@
 
 import logging
 import pytest
-from mcp.types import CallToolResult
+from mcp.types import CallToolResult, TextContent
 from mcp_server_opensearch.client_context import client_name_var
-from mcp_server_opensearch.tool_executor import execute_tool
+from mcp_server_opensearch.tool_executor import _build_call_tool_result, execute_tool
 from unittest.mock import AsyncMock, Mock, patch
+
+
+class TestBuildCallToolResult:
+    def test_dict_item_becomes_text_content(self):
+        result = _build_call_tool_result([{'type': 'text', 'text': 'hello'}], is_error=False)
+        assert isinstance(result, CallToolResult)
+        assert result.is_error is False
+        assert len(result.content) == 1
+        assert isinstance(result.content[0], TextContent)
+        assert result.content[0].text == 'hello'
+
+    def test_text_content_instance_passed_through(self):
+        item = TextContent(type='text', text='direct')
+        result = _build_call_tool_result([item], is_error=False)
+        assert result.content[0] is item
+
+    def test_is_error_true_propagates(self):
+        result = _build_call_tool_result([{'type': 'text', 'text': 'boom'}], is_error=True)
+        assert result.is_error is True
+
+    def test_empty_list_produces_empty_content(self):
+        result = _build_call_tool_result([], is_error=False)
+        assert result.content == []
+
+    def test_none_list_produces_empty_content(self):
+        result = _build_call_tool_result(None, is_error=False)
+        assert result.content == []
+
+    def test_dict_missing_text_key_defaults_to_empty_string(self):
+        result = _build_call_tool_result([{'type': 'text'}], is_error=False)
+        assert result.content[0].text == ''
+
+    def test_dict_missing_type_key_defaults_to_text(self):
+        result = _build_call_tool_result([{'text': 'hi'}], is_error=False)
+        assert isinstance(result.content[0], TextContent)
+
+    def test_multiple_items_preserved_in_order(self):
+        items = [
+            {'type': 'text', 'text': 'first'},
+            TextContent(type='text', text='second'),
+        ]
+        result = _build_call_tool_result(items, is_error=False)
+        assert len(result.content) == 2
+        assert result.content[0].text == 'first'
+        assert result.content[1].text == 'second'
 
 
 def make_enabled_tools(tool_key='TestTool', display_name=None, return_value=None):

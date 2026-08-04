@@ -17,7 +17,7 @@ tool invocation, enabling metric filters for:
 
 import logging
 import time
-from mcp.types import CallToolResult, TextContent
+from mcp.types import CallToolResult, ContentBlock, TextContent
 from mcp_server_opensearch.client_context import client_name_var
 
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def _build_call_tool_result(result: list, is_error: bool) -> CallToolResult:
     # Convert a tool's raw content list into a CallToolResult.
 
-    content: list[TextContent] = []
+    content: list[ContentBlock] = []
     for item in result or []:
         if isinstance(item, dict):
             content.append(
