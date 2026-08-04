@@ -9,7 +9,6 @@ from integration_tests.framework.assertions import assert_tool_error, assert_too
 from integration_tests.framework.client import mcp_client
 from integration_tests.framework.constants import TEST_INDEX
 from integration_tests.framework.server import MCPServerProcess
-from mcp.shared.exceptions import MCPError
 
 
 def _build_multi_config():
@@ -23,7 +22,8 @@ def _build_multi_config():
     basic_pass = os.environ.get('IT_BASIC_AUTH_PASSWORD')
     aws_region = os.environ.get('IT_AWS_REGION')
 
-    cluster_config = {'opensearch_url': url}
+    ssl_verify = os.environ.get('OPENSEARCH_SSL_VERIFY', 'true').lower() != 'false'
+    cluster_config = {'opensearch_url': url, 'ssl_verify': ssl_verify}
 
     if basic_user and basic_pass:
         cluster_config['opensearch_username'] = basic_user
@@ -118,12 +118,12 @@ class TestMultiMode:
             assert_tool_success(result, TEST_INDEX)
 
     async def test_call_tool_without_cluster_name_errors(self, multi_mode_setup):
-        # mcp 2.0 validates required fields and raises MCPError(INVALID_PARAMS).
-        # The field name is not included in the wire message, only the error code.
         async with mcp_client(multi_mode_setup.url) as session:
-            with pytest.raises(MCPError) as exc_info:
-                await session.call_tool('ListIndexTool', arguments={})
-            assert exc_info.value.error.code == -32602  # INVALID_PARAMS
+            result = await session.call_tool(
+                'ListIndexTool',
+                arguments={},
+            )
+            assert_tool_error(result, 'opensearch_cluster_name')
 
     async def test_call_tool_with_nonexistent_cluster_errors(self, multi_mode_setup):
         async with mcp_client(multi_mode_setup.url) as session:

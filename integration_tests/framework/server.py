@@ -76,10 +76,14 @@ class MCPServerProcess:
 
         # Build process environment: inherit current env, overlay test-specific vars
         proc_env = os.environ.copy()
-        # Clear potentially conflicting vars so each server is isolated
+        # Clear potentially conflicting vars so each server is isolated,
+        # but preserve OPENSEARCH_SSL_VERIFY so local self-signed certs work.
+        ssl_verify = proc_env.get('OPENSEARCH_SSL_VERIFY')
         for key in list(proc_env.keys()):
             if key.startswith(('OPENSEARCH_', 'AWS_')):
                 del proc_env[key]
+        if ssl_verify is not None:
+            proc_env['OPENSEARCH_SSL_VERIFY'] = ssl_verify
         proc_env.update(self.env)
 
         logger.info(f'Starting MCP server on port {self.port}: {" ".join(cmd)}')

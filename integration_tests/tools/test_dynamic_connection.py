@@ -185,7 +185,7 @@ class TestZeroConfigMode:
                         'aws_region': region,
                     },
                 )
-                assert not result.isError, f'Expected success: {result.content}'
+                assert not result.is_error, f'Expected success: {result.content}'
                 assert_tool_success(result)
         finally:
             await server.stop()

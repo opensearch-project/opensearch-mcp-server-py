@@ -46,6 +46,7 @@ def _create_os_client():
         pytest.skip('IT_OPENSEARCH_URL not set')
 
     use_ssl = url.startswith('https')
+    verify_certs = os.environ.get('OPENSEARCH_SSL_VERIFY', 'true').lower() != 'false'
 
     aws_key = os.environ.get('IT_AWS_ACCESS_KEY_ID')
     aws_secret = os.environ.get('IT_AWS_SECRET_ACCESS_KEY')
@@ -63,7 +64,7 @@ def _create_os_client():
             hosts=[url],
             http_auth=aws_auth,
             use_ssl=use_ssl,
-            verify_certs=True,
+            verify_certs=verify_certs,
             connection_class=RequestsHttpConnection,
         )
     elif basic_user and basic_pass:
@@ -71,7 +72,7 @@ def _create_os_client():
             hosts=[url],
             http_auth=(basic_user, basic_pass),
             use_ssl=use_ssl,
-            verify_certs=True,
+            verify_certs=verify_certs,
         )
     else:
         pytest.skip('No auth credentials available for seed_test_index')

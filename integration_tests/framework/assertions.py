@@ -10,7 +10,7 @@ def _extract_texts(result) -> str:
     return '\n'.join(texts)
 
 
-_ERROR_PREFIXES = ('Error', 'Input validation error')
+_ERROR_PREFIXES = ('Error', 'Input validation error', 'Missing required field')
 
 
 def assert_tool_success(result, *expected: str) -> str:
