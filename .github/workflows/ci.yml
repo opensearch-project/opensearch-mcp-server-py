@@ -11,9 +11,35 @@ on:
 permissions:
   id-token: write
   contents: read
+  pull-requests: write
 
 jobs:
+  Code-Diff-Analyzer:
+    uses: opensearch-project/opensearch-build/.github/workflows/code-diff-analyzer.yml@main
+    if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
+    permissions:
+      id-token: write
+      pull-requests: write
+    secrets:
+      BEDROCK_ACCESS_ROLE: ${{ secrets.BEDROCK_ACCESS_ROLE }}
+    with:
+      skip_diff_analyzer_with_label_name: 'skip-diff-analyzer'
+      update_pr_comment_with_analyzer_report: true
+
+  Code-Diff-Reviewer:
+    uses: opensearch-project/opensearch-build/.github/workflows/code-diff-reviewer.yml@main
+    needs: [Code-Diff-Analyzer]
+    if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
+    permissions:
+      id-token: write
+      pull-requests: write
+    secrets:
+      BEDROCK_ACCESS_ROLE: ${{ secrets.BEDROCK_ACCESS_ROLE }}
+    with:
+      skip_diff_reviewer_with_label_name: 'skip-diff-reviewer'
+
   lint:
+    needs: [Code-Diff-Analyzer]
     if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
     name: Code Quality
     runs-on: ubuntu-latest
@@ -44,6 +70,7 @@ jobs:
         run: uv run ruff check .
 
   test:
+    needs: [Code-Diff-Analyzer]
     if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
     name: Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
