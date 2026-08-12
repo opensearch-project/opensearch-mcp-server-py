@@ -155,14 +155,14 @@ jobs:
 
       - name: Install from tar.gz (Unix)
         if: runner.os != 'Windows'
-        run: pip install dist/*.tar.gz
+        run: pip install "$(ls dist/*.tar.gz)[aws]"
 
       - name: Install from tar.gz (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $tarball = Get-ChildItem dist/*.tar.gz | Select-Object -First 1
-          pip install $tarball.FullName
+          pip install "$($tarball.FullName)[aws]"
 
       - name: Show metadata (tar.gz)
         run: pip show opensearch-mcp-server-py
@@ -172,14 +172,14 @@ jobs:
 
       - name: Install from wheel (Unix)
         if: runner.os != 'Windows'
-        run: pip install dist/*.whl
+        run: pip install "$(ls dist/*.whl)[aws]"
 
       - name: Install from wheel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
-          pip install $wheel.FullName
+          pip install "$($wheel.FullName)[aws]"
 
       - name: Show metadata (wheel)
         run: pip show opensearch-mcp-server-py
