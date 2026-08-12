@@ -38,12 +38,19 @@ all = [
 ]
 
 [dependency-groups]
+# The optional extras are included here so the full test suite runs on a plain
+# `uv sync`: the tests exercise the AWS and analysis code paths directly.
 dev = [
     "anthropic>=0.50.0",
+    "boto3>=1.39.0",
+    "numpy>=1.24.0",
     "pytest>=8.3.5",
     "pytest-asyncio>=0.26.0",
     "pytest-cov>=6.2.1",
+    "requests-aws4auth>=1.3.1",
     "ruff>=0.9.7",
+    "scikit-learn>=1.3.0",
+    "scipy>=1.10.0",
 ]
 integration = [
     "pytest>=8.3.5",
