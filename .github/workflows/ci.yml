@@ -61,7 +61,7 @@ jobs:
         run: |
           uv venv
           source .venv/bin/activate
-          uv sync
+          uv sync --all-extras
 
       - name: Check formatting
         run: uv run ruff format --check .
@@ -121,7 +121,7 @@ jobs:
         run: |
           uv venv
           source .venv/bin/activate
-          uv sync
+          uv sync --all-extras
 
       - name: Install dependencies (Windows)
         if: runner.os == 'Windows'
@@ -129,7 +129,7 @@ jobs:
         run: |
           uv venv
           .\.venv\Scripts\Activate.ps1
-          uv sync
+          uv sync --all-extras
 
       - name: Run unit tests (Unix)
         if: runner.os != 'Windows'
