@@ -1,7 +1,12 @@
 import copy
 import pytest
 from semver import Version
-from tools.tool_filter import get_tools, process_tool_filter
+from tools.tool_filter import (
+    BUILTIN_CATEGORY_TOOLS,
+    build_category_map,
+    get_tools,
+    process_tool_filter,
+)
 from tools.utils import is_tool_compatible
 from unittest.mock import MagicMock, patch
 
@@ -63,6 +68,180 @@ MOCK_TOOL_REGISTRY = {
         'http_methods': 'POST',
     },
 }
+
+
+class TestBuildCategoryMap:
+    """Tests for build_category_map and BUILTIN_CATEGORY_TOOLS."""
+
+    def _registry(self, *keys):
+        return {k: {'display_name': k} for k in keys}
+
+    def test_known_core_tools_are_mapped(self):
+        registry = self._registry('ListIndexTool', 'SearchIndexTool', 'ClusterHealthTool')
+        result = build_category_map(registry)
+        assert 'ListIndexTool' in result['core_tools']
+        assert 'SearchIndexTool' in result['core_tools']
+        assert 'ClusterHealthTool' in result['core_tools']
+
+    def test_tools_absent_from_registry_are_excluded(self):
+        result = build_category_map({})
+        for category, tools in result.items():
+            if category != 'skills':
+                assert tools == [], f'Expected empty list for {category}, got {tools}'
+
+    def test_all_builtin_categories_present(self):
+        result = build_category_map({})
+        for category in BUILTIN_CATEGORY_TOOLS:
+            assert category in result
+        assert 'skills' in result
+
+    def test_custom_display_name_is_used(self):
+        registry = {'ListIndexTool': {'display_name': 'MyListTool'}}
+        result = build_category_map(registry)
+        assert 'MyListTool' in result['core_tools']
+        assert 'ListIndexTool' not in result['core_tools']
+
+    def test_search_relevance_tools_in_correct_category(self):
+        registry = self._registry('GetQuerySetTool', 'CreateExperimentTool')
+        result = build_category_map(registry)
+        assert 'GetQuerySetTool' in result['search_relevance']
+        assert 'CreateExperimentTool' in result['search_relevance']
+        assert 'GetQuerySetTool' not in result.get('core_tools', [])
+
+    def test_process_tool_filter_returns_category_map(self):
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'ClusterHealthTool': {'display_name': 'ClusterHealthTool', 'http_methods': 'GET'},
+        }
+        result = process_tool_filter(tool_registry=registry, allow_write=True)
+        assert isinstance(result, dict)
+        assert 'core_tools' in result
+        assert 'ListIndexTool' in result['core_tools']
+
+    def test_process_tool_filter_returns_empty_dict_on_error(self):
+        result = process_tool_filter(tool_registry=None, allow_write=True)
+        assert result == {}
+
+
+class TestCategoryStamping:
+    """Tests that get_tools stamps the category field on enabled tools."""
+
+    def setup_method(self):
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('single')
+
+    @pytest.mark.asyncio
+    async def test_single_mode_stamps_category_on_core_tools(self):
+        registry = {
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'description': 'List indices',
+                'input_schema': {'type': 'object', 'properties': {}},
+                'function': MagicMock(),
+                'args_model': MagicMock(),
+                'min_version': '1.0.0',
+                'http_methods': 'GET',
+            },
+        }
+        with (
+            patch('tools.tool_filter.get_opensearch_version', return_value=Version.parse('2.5.0')),
+            patch('tools.tool_filter.is_tool_compatible', return_value=True),
+        ):
+            result = await get_tools(registry)
+
+        assert result['ListIndexTool']['category'] == 'core_tools'
+
+    @pytest.mark.asyncio
+    async def test_single_mode_tool_not_in_any_category_gets_empty_string(self):
+        registry = {
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'description': 'List indices',
+                'input_schema': {'type': 'object', 'properties': {}},
+                'function': MagicMock(),
+                'args_model': MagicMock(),
+                'min_version': '1.0.0',
+                'http_methods': 'GET',
+            },
+            'UnknownTool': {
+                'display_name': 'UnknownTool',
+                'description': 'Some tool',
+                'input_schema': {'type': 'object', 'properties': {}},
+                'function': MagicMock(),
+                'args_model': MagicMock(),
+                'min_version': '1.0.0',
+                'http_methods': 'GET',
+            },
+        }
+        with (
+            patch('tools.tool_filter.get_opensearch_version', return_value=Version.parse('2.5.0')),
+            patch('tools.tool_filter.is_tool_compatible', return_value=True),
+            patch.dict('os.environ', {'OPENSEARCH_ENABLED_TOOLS': 'ListIndexTool,UnknownTool'}),
+        ):
+            result = await get_tools(registry)
+
+        assert result['ListIndexTool']['category'] == 'core_tools'
+        assert result['UnknownTool']['category'] == ''
+
+    @pytest.mark.asyncio
+    async def test_multi_mode_stamps_category_on_tools(self):
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('multi')
+
+        registry = {
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'description': 'List indices',
+                'input_schema': {'type': 'object', 'properties': {}},
+                'function': MagicMock(),
+                'args_model': MagicMock(),
+                'http_methods': 'GET',
+            },
+            'SearchIndexTool': {
+                'display_name': 'SearchIndexTool',
+                'description': 'Search',
+                'input_schema': {'type': 'object', 'properties': {}},
+                'function': MagicMock(),
+                'args_model': MagicMock(),
+                'http_methods': 'GET, POST',
+            },
+        }
+        result = await get_tools(registry)
+
+        assert result['ListIndexTool']['category'] == 'core_tools'
+        assert result['SearchIndexTool']['category'] == 'core_tools'
+
+    @pytest.mark.asyncio
+    async def test_multi_mode_memory_tool_excluded_no_category_stamped(self):
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('multi')
+
+        registry = {
+            'ListIndexTool': {
+                'display_name': 'ListIndexTool',
+                'description': 'List indices',
+                'input_schema': {'type': 'object', 'properties': {}},
+                'function': MagicMock(),
+                'args_model': MagicMock(),
+                'http_methods': 'GET',
+            },
+            'SaveMemoryTool': {
+                'display_name': 'SaveMemoryTool',
+                'description': 'Save memory',
+                'input_schema': {'type': 'object', 'properties': {}},
+                'function': MagicMock(),
+                'args_model': MagicMock(),
+                'http_methods': 'POST',
+                'memory_tool': True,
+            },
+        }
+        result = await get_tools(registry)
+
+        assert 'ListIndexTool' in result
+        assert 'SaveMemoryTool' not in result
 
 
 class TestIsToolCompatible:

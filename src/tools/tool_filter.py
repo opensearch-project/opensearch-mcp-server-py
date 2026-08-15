@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import re
-from .skills_tools import SKILLS_TOOLS_REGISTRY
 from .tool_params import baseToolArgs
 from .utils import (
     is_tool_compatible,
@@ -131,6 +130,80 @@ def process_categories(category_list, category_to_tools):
     return tools
 
 
+# Single source of truth: built-in category → registry key lists.
+# Used by build_category_map and to stamp tool_info['category'] at startup.
+BUILTIN_CATEGORY_TOOLS: dict[str, list[str]] = {
+    'core_tools': [
+        'ListIndexTool',
+        'IndexMappingTool',
+        'SearchIndexTool',
+        'GetShardsTool',
+        'ClusterHealthTool',
+        'CountTool',
+        'ExplainTool',
+        'MsearchTool',
+        'GenericOpenSearchApiTool',
+    ],
+    'memory': [
+        'SaveMemoryTool',
+        'SearchMemoryTool',
+        'DeleteMemoryTool',
+    ],
+    'search_relevance': [
+        'CreateSearchConfigurationTool',
+        'GetSearchConfigurationTool',
+        'DeleteSearchConfigurationTool',
+        'GetQuerySetTool',
+        'CreateQuerySetTool',
+        'SampleQuerySetTool',
+        'DeleteQuerySetTool',
+        'GetJudgmentListTool',
+        'CreateJudgmentListTool',
+        'CreateUBIJudgmentListTool',
+        'CreateLLMJudgmentListTool',
+        'DeleteJudgmentListTool',
+        'GetExperimentTool',
+        'CreateExperimentTool',
+        'DeleteExperimentTool',
+        'SearchQuerySetsTool',
+        'SearchSearchConfigurationsTool',
+        'SearchJudgmentsTool',
+        'SearchExperimentsTool',
+    ],
+    'agentic_memory': [
+        'CreateAgenticMemorySessionTool',
+        'AddAgenticMemoriesTool',
+        'GetAgenticMemoryTool',
+        'UpdateAgenticMemoryTool',
+        'DeleteAgenticMemoryByIDTool',
+        'DeleteAgenticMemoryByQueryTool',
+        'SearchAgenticMemoryTool',
+    ],
+    'observability': [
+        'PPLQueryTool',
+    ],
+    'skills': [
+        'DataDistributionTool',
+        'LogPatternAnalysisTool',
+        'MetricChangeAnalysisTool',
+    ],
+}
+
+
+def build_category_map(tool_registry: dict) -> dict[str, list[str]]:
+    """Return a category → list-of-display-names map for the given registry.
+
+    All categories come from BUILTIN_CATEGORY_TOOLS.  User-defined categories
+    (from YAML or env vars) are merged on top by the caller.
+    """
+    return {
+        category: [
+            tool_registry[k].get('display_name', k) for k in tool_keys if k in tool_registry
+        ]
+        for category, tool_keys in BUILTIN_CATEGORY_TOOLS.items()
+    }
+
+
 def process_tool_filter(
     enabled_tools: str = None,
     disabled_tools: str = None,
@@ -143,7 +216,7 @@ def process_tool_filter(
     allow_write_categories: list = None,
     filter_path: str = None,
     tool_registry: dict = None,
-) -> None:
+) -> dict:
     """Process tool filter configuration from a YAML file and environment variables.
 
     Args:
@@ -166,124 +239,19 @@ def process_tool_filter(
         }
 
         # Initialize collections
-        category_to_tools = {}
         enabled_tool_list = []
         disabled_tool_list = []
         enabled_category_list = ['core_tools']
         disabled_category_list = []
         enabled_tools_regex_list = []
         disabled_tools_regex_list = []
-        core_tools_display_name = []
 
-        # Initialize core tool names
-        core_tools = [
-            'ListIndexTool',
-            'IndexMappingTool',
-            'SearchIndexTool',
-            'GetShardsTool',
-            'ClusterHealthTool',
-            'CountTool',
-            'ExplainTool',
-            'MsearchTool',
-            'GenericOpenSearchApiTool',
-        ]
-
-        # Build core tools list using display names
-        for tool_name in core_tools:
-            if tool_name in tool_registry:
-                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
-                core_tools_display_name.append(tool_display_name)
-
-        # Add core_tools as a built-in category using display name
-        category_to_tools['core_tools'] = core_tools_display_name
-
-        # Initialize memory tool names (opt-in via MEMORY_TOOLS_ENABLED)
-        memory_tools = [
-            'SaveMemoryTool',
-            'SearchMemoryTool',
-            'DeleteMemoryTool',
-        ]
-        memory_tools_display_names = []
-        for tool_name in memory_tools:
-            if tool_name in tool_registry:
-                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
-                memory_tools_display_names.append(tool_display_name)
-        category_to_tools['memory'] = memory_tools_display_names
+        # Build built-in category map (category → list of display names)
+        category_to_tools = build_category_map(tool_registry)
 
         # Auto-enable memory category when memory tools are registered
-        if memory_tools_display_names:
+        if category_to_tools.get('memory'):
             enabled_category_list.append('memory')
-
-        # Initialize search_relevance tool names
-        search_relevance_tools = [
-            'CreateSearchConfigurationTool',
-            'GetSearchConfigurationTool',
-            'DeleteSearchConfigurationTool',
-            'GetQuerySetTool',
-            'CreateQuerySetTool',
-            'SampleQuerySetTool',
-            'DeleteQuerySetTool',
-            'GetJudgmentListTool',
-            'CreateJudgmentListTool',
-            'CreateUBIJudgmentListTool',
-            'CreateLLMJudgmentListTool',
-            'DeleteJudgmentListTool',
-            'GetExperimentTool',
-            'CreateExperimentTool',
-            'DeleteExperimentTool',
-            'SearchQuerySetsTool',
-            'SearchSearchConfigurationsTool',
-            'SearchJudgmentsTool',
-            'SearchExperimentsTool',
-        ]
-
-        # Build search_relevance tools list using display names
-        search_relevance_display_names = []
-        for tool_name in search_relevance_tools:
-            if tool_name in tool_registry:
-                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
-                search_relevance_display_names.append(tool_display_name)
-
-        # Add search_relevance as a built-in category (not enabled by default)
-        category_to_tools['search_relevance'] = search_relevance_display_names
-
-        # Initialize agentic_memory tool names
-        agentic_memory_tools = [
-            'CreateAgenticMemorySessionTool',
-            'AddAgenticMemoriesTool',
-            'GetAgenticMemoryTool',
-            'UpdateAgenticMemoryTool',
-            'DeleteAgenticMemoryByIDTool',
-            'DeleteAgenticMemoryByQueryTool',
-            'SearchAgenticMemoryTool',
-        ]
-
-        # Build agentic_memory tools list using display names
-        agentic_memory_display_names = []
-        for tool_name in agentic_memory_tools:
-            if tool_name in tool_registry:
-                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
-                agentic_memory_display_names.append(tool_display_name)
-
-        # Add agentic_memory as a built-in category (not enabled by default)
-        category_to_tools['agentic_memory'] = agentic_memory_display_names
-
-        # Initialize observability tool names
-        observability_tools = [
-            'PPLQueryTool',
-        ]
-        observability_display_names = []
-        for tool_name in observability_tools:
-            if tool_name in tool_registry:
-                tool_display_name = tool_registry[tool_name].get('display_name', tool_name)
-                observability_display_names.append(tool_display_name)
-        category_to_tools['observability'] = observability_display_names
-
-        # Add skills as a built-in category (not enabled by default)
-        skills_display_names = [
-            info.get('display_name', name) for name, info in SKILLS_TOOLS_REGISTRY.items()
-        ]
-        category_to_tools['skills'] = skills_display_names
 
         # Process YAML config file if provided
         config = load_yaml_config(filter_path)
@@ -407,9 +375,11 @@ def process_tool_filter(
         # Log results
         source = filter_path if filter_path else 'environment variables'
         logging.info(f'Applied tool filter from {source}')
+        return category_to_tools
 
     except Exception as e:
         logging.error(f'Error processing tool filter: {str(e)}')
+        return {}
 
 
 async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
@@ -451,6 +421,10 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         filtered_registry = {
             name: info for name, info in tool_registry.items() if not info.get('memory_tool')
         }
+        category_to_tools = build_category_map(filtered_registry)
+        tool_to_category = {
+            dn.lower(): cat for cat, dns in category_to_tools.items() for dn in dns
+        }
         for name, info in filtered_registry.items():
             schema = info['input_schema']
             if 'properties' in schema:
@@ -458,6 +432,7 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
                     schema['properties'].pop(field, None)
                     if 'required' in schema and field in schema['required']:
                         schema['required'].remove(field)
+            info['category'] = tool_to_category.get(info.get('display_name', name).lower(), '')
         return filtered_registry
 
     enabled = {}
@@ -486,11 +461,12 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         logging.warning('Both config file and environment variables are set. Using config file.')
 
     # Apply tool filtering, update the TOOL_REGISTRY
-    process_tool_filter(
+    category_to_tools = process_tool_filter(
         tool_registry=tool_registry,
         filter_path=config_file_path if config_file_path else None,
         **{k: v for k, v in env_config.items() if not config_file_path},
     )
+    tool_to_category = {dn.lower(): cat for cat, dns in category_to_tools.items() for dn in dns}
 
     for name, info in tool_registry.items():
         # Create a copy to avoid modifying the original tool info
@@ -539,6 +515,7 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
                 if 'opensearch_url' not in schema['required']:
                     schema['required'].append('opensearch_url')
         tool_info['input_schema'] = schema
+        tool_info['category'] = tool_to_category.get(tool_name.lower(), '')
 
         enabled[tool_name] = tool_info
 
