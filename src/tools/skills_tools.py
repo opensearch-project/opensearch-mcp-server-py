@@ -251,6 +251,7 @@ SKILLS_TOOLS_REGISTRY = {
         'args_model': DataDistributionToolArgs,
         'min_version': '1.0.0',
         'http_methods': 'POST',
+        'bypass_write_filter': True,
     },
     'LogPatternAnalysisTool': {
         'display_name': 'LogPatternAnalysisTool',
@@ -267,6 +268,7 @@ SKILLS_TOOLS_REGISTRY = {
         'args_model': LogPatternAnalysisToolArgs,
         'min_version': '2.19.0',
         'http_methods': 'POST',
+        'bypass_write_filter': True,
     },
     'MetricChangeAnalysisTool': {
         'display_name': 'MetricChangeAnalysisTool',
@@ -286,5 +288,6 @@ SKILLS_TOOLS_REGISTRY = {
         'args_model': MetricChangeAnalysisToolArgs,
         'min_version': '1.0.0',
         'http_methods': 'POST',
+        'bypass_write_filter': True,
     },
 }
