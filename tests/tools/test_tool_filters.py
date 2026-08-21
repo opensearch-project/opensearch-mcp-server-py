@@ -86,14 +86,14 @@ class TestBuildCategoryMap:
     def test_tools_absent_from_registry_are_excluded(self):
         result = build_category_map({})
         for category, tools in result.items():
-            if category != 'skills':
+            if category != 'analytics':
                 assert tools == [], f'Expected empty list for {category}, got {tools}'
 
     def test_all_builtin_categories_present(self):
         result = build_category_map({})
         for category in BUILTIN_CATEGORY_TOOLS:
             assert category in result
-        assert 'skills' in result
+        assert 'analytics' in result
 
     def test_custom_display_name_is_used(self):
         registry = {'ListIndexTool': {'display_name': 'MyListTool'}}
@@ -445,9 +445,9 @@ class TestGetTools:
     async def test_get_tools_skills_tools_compatible_version(
         self, mock_tool_registry, mock_patches
     ):
-        """Test that skills tools are excluded by default even when version is compatible.
+        """Test that analytics tools are excluded by default even when version is compatible.
 
-        Since they belong to the 'skills' category which is not enabled by default.
+        Since they belong to the 'analytics' category which is not enabled by default.
         """
         mock_get_version, mock_is_compatible = mock_patches
 
@@ -614,7 +614,10 @@ class TestProcessToolFilter:
         assert 'LogPatternAnalysisTool' not in registry
 
     def test_skills_category_can_be_enabled(self):
-        """Skills tools are exposed when the category is explicitly enabled."""
+        """Analytics tools are exposed when the category is explicitly enabled.
+
+        Also verifies 'skills' legacy alias resolves to 'analytics'.
+        """
         registry = {
             'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
             'DataDistributionTool': {
@@ -1015,8 +1018,8 @@ class TestAllowWriteCategories:
         process_tool_filter(
             tool_registry=registry,
             allow_write=False,
-            allow_write_categories=['search_relevance', 'skills'],
-            enabled_categories='core_tools,search_relevance,skills',
+            allow_write_categories=['search_relevance', 'analytics'],
+            enabled_categories='core_tools,search_relevance,analytics',
         )
 
         assert 'ListIndexTool' in registry

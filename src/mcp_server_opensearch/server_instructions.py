@@ -92,18 +92,21 @@ def _resolve_enabled_disabled_categories() -> tuple[list[str], list[str]]:
 
 
 def are_skills_enabled() -> bool:
-    """Check whether skills tools are enabled based on environment/config.
+    """Check whether analytics tools are enabled based on environment/config.
 
-    Skills are enabled when 'skills' appears in the enabled categories and NOT
-    in the disabled categories. Category state is resolved from the YAML config
-    file when present, otherwise from the OPENSEARCH_ENABLED_CATEGORIES /
+    Analytics tools are enabled when 'analytics', 'skills', or 'observability'
+    appears in the enabled categories and NOT in the disabled categories.
+    'skills' and 'observability' are legacy aliases for 'analytics'.
+    Category state is resolved from the YAML config file when present,
+    otherwise from the OPENSEARCH_ENABLED_CATEGORIES /
     OPENSEARCH_DISABLED_CATEGORIES environment variables — matching how
     ``process_tool_filter`` decides tool visibility.
     """
     enabled_cats, disabled_cats = _resolve_enabled_disabled_categories()
-    if 'skills' in disabled_cats:
+    trigger_names = ('analytics', 'skills', 'observability')
+    if any(name in disabled_cats for name in trigger_names):
         return False
-    if 'skills' in enabled_cats:
+    if any(name in enabled_cats for name in trigger_names):
         return True
     return False
 

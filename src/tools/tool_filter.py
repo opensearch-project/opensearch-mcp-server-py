@@ -179,15 +179,32 @@ BUILTIN_CATEGORY_TOOLS: dict[str, list[str]] = {
         'DeleteAgenticMemoryByQueryTool',
         'SearchAgenticMemoryTool',
     ],
-    'observability': [
+    'analytics': [
         'PPLQueryTool',
-    ],
-    'skills': [
         'DataDistributionTool',
         'LogPatternAnalysisTool',
         'MetricChangeAnalysisTool',
     ],
 }
+
+
+# Aliases allow legacy category names to resolve to their replacement.
+# Enabling 'observability' or 'skills' expands to 'analytics'.
+CATEGORY_ALIASES: dict[str, list[str]] = {
+    'observability': ['analytics'],
+    'skills': ['analytics'],
+}
+
+
+def expand_category_aliases(categories: list[str]) -> list[str]:
+    """Expand any alias names in a category list to their constituent categories."""
+    expanded = []
+    for cat in categories:
+        if cat in CATEGORY_ALIASES:
+            expanded.extend(CATEGORY_ALIASES[cat])
+        else:
+            expanded.append(cat)
+    return expanded
 
 
 def build_category_map(tool_registry: dict) -> dict[str, list[str]]:
@@ -316,6 +333,10 @@ def process_tool_filter(
                     f'Tools exempt from write filter via allow_write_categories: {exempt_tools}'
                 )
             apply_write_filter(tool_registry, exempt_tools=exempt_tools)
+
+        # Expand category aliases (e.g. 'observability'/'skills' -> 'analytics')
+        enabled_category_list = expand_category_aliases(enabled_category_list)
+        disabled_category_list = expand_category_aliases(disabled_category_list)
 
         # Process tools from categories and regex patterns
         enabled_tools_from_categories = process_categories(
