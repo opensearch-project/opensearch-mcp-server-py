@@ -8,7 +8,6 @@ authentication methods and connection modes (single vs multi-cluster).
 """
 
 import asyncio
-import boto3
 import importlib.metadata
 import ipaddress
 import logging
@@ -18,7 +17,6 @@ from .connection import (
     BufferedAsyncHttpConnection,
     OpenSearchClientError,
 )
-from botocore.credentials import Credentials
 from contextlib import asynccontextmanager
 from http.client import HTTP_PORT, HTTPS_PORT
 from mcp_server_opensearch.client_context import request_context_var
@@ -61,6 +59,62 @@ class ConfigurationError(OpenSearchClientError):
     """Exception raised when configuration is invalid."""
 
     pass
+
+
+AWS_EXTRA_HINT = (
+    'AWS authentication requires the optional "aws" dependencies. '
+    'Install them with: pip install "opensearch-mcp-server-py[aws]"'
+)
+
+
+def _import_boto3():
+    """Import boto3 on demand.
+
+    boto3 is only needed for AWS authentication, so it is imported here rather than at
+    module level. That keeps it out of the import path for basic-auth, no-auth and
+    bearer-token users, who make up the majority of self-managed deployments.
+    """
+    try:
+        import boto3
+    except ImportError as e:
+        raise ConfigurationError(AWS_EXTRA_HINT) from e
+    return boto3
+
+
+def _import_aws_credentials():
+    """Import botocore's Credentials on demand. See _import_boto3."""
+    try:
+        from botocore.credentials import Credentials
+    except ImportError as e:
+        raise ConfigurationError(AWS_EXTRA_HINT) from e
+    return Credentials
+
+
+def _optional_boto3():
+    """Return boto3 if the "aws" extra is installed, otherwise None.
+
+    Used by region discovery, where a missing region is an acceptable outcome for
+    basic-auth and no-auth deployments and must not turn into an error.
+    """
+    try:
+        import boto3
+    except ImportError:
+        logger.debug('boto3 is not installed; skipping AWS region discovery')
+        return None
+    return boto3
+
+
+def __getattr__(name: str):
+    """Expose boto3 and Credentials as module attributes without importing them eagerly.
+
+    Keeps `opensearch.client.boto3` resolvable for callers and test patches while the
+    actual import stays deferred until an AWS code path runs.
+    """
+    if name == 'boto3':
+        return _import_boto3()
+    if name == 'Credentials':
+        return _import_aws_credentials()
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
 
 
 # Public API Functions
@@ -841,18 +895,27 @@ def _create_opensearch_client(
     else:
         logger.info('Configuring OpenSearch client with no response size limit')
 
-    # Create boto3 session
-    try:
-        session = boto3.Session(profile_name=profile) if profile else boto3.Session()
-    except Exception as e:
-        # Falling back to a bare session here would swap the caller's chosen
-        # profile for the server's own credentials, so fail instead.
-        if require_named_profile:
-            raise AuthenticationError(
-                f"Failed to create boto3 session with the requested profile '{profile}': {e}"
-            )
-        logger.warning(f"Failed to create boto3 session with profile '{profile}': {e}")
-        session = boto3.Session()
+    # Create the boto3 session lazily: only the IAM-role and AWS-credentials paths below
+    # need it, so no-auth, bearer-token and basic-auth connections never import boto3.
+    _session = None
+
+    def get_session():
+        nonlocal _session
+        if _session is not None:
+            return _session
+        boto3 = _import_boto3()
+        try:
+            _session = boto3.Session(profile_name=profile) if profile else boto3.Session()
+        except Exception as e:
+            # Falling back to a bare session here would swap the caller's chosen
+            # profile for the server's own credentials, so fail instead.
+            if require_named_profile:
+                raise AuthenticationError(
+                    f"Failed to create boto3 session with the requested profile '{profile}': {e}"
+                )
+            logger.warning(f"Failed to create boto3 session with profile '{profile}': {e}")
+            _session = boto3.Session()
+        return _session
 
     # Authentication logic with proper error handling
     try:
@@ -887,7 +950,7 @@ def _create_opensearch_client(
                     raise AuthenticationError(
                         'AWS region is required for header-based authentication'
                     )
-                credentials = Credentials(
+                credentials = _import_aws_credentials()(
                     access_key=aws_access_key_id,
                     secret_key=aws_secret_access_key,
                     token=aws_session_token,
@@ -916,12 +979,12 @@ def _create_opensearch_client(
                 if not aws_region or (isinstance(aws_region, str) and not aws_region.strip()):
                     raise AuthenticationError('AWS region is required for IAM role authentication')
 
-                sts_client = session.client('sts', region_name=aws_region)
+                sts_client = get_session().client('sts', region_name=aws_region)
                 assumed_role = sts_client.assume_role(
                     RoleArn=iam_arn.strip(), RoleSessionName='OpenSearchClientSession'
                 )
                 creds_dict = assumed_role['Credentials']
-                credentials = Credentials(
+                credentials = _import_aws_credentials()(
                     access_key=creds_dict['AccessKeyId'],
                     secret_key=creds_dict['SecretAccessKey'],
                     token=creds_dict.get('SessionToken'),
@@ -963,7 +1026,7 @@ def _create_opensearch_client(
                     'AWS region is required for AWS credentials authentication'
                 )
 
-            credentials = session.get_credentials()
+            credentials = get_session().get_credentials()
             if not credentials:
                 raise AuthenticationError('No AWS credentials found in session')
 
@@ -1069,6 +1132,12 @@ def get_aws_region_single_mode() -> Optional[str]:
             logger.debug(f'Using AWS_REGION: {aws_region}')
             return aws_region
 
+        # The remaining lookups need boto3; without the "aws" extra there is no region
+        # to discover, which is fine for basic auth and no auth.
+        boto3 = _optional_boto3()
+        if boto3 is None:
+            return None
+
         # Try command line argument, then environment variable
         aws_profile = get_profile() or os.getenv('AWS_PROFILE', '').strip()
         if aws_profile:
@@ -1124,7 +1193,8 @@ def get_aws_region_multi_mode(cluster_info: ClusterInfo) -> Optional[str]:
             return cluster_info.aws_region.strip()
 
         # Try cluster-specific profile
-        if cluster_info.profile and cluster_info.profile.strip():
+        boto3 = _optional_boto3()
+        if boto3 is not None and cluster_info.profile and cluster_info.profile.strip():
             try:
                 session = boto3.Session(profile_name=cluster_info.profile)
                 region = session.region_name

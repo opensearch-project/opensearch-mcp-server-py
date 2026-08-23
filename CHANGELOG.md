@@ -7,6 +7,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 
 ### Changed
+- Move AWS and ML dependencies into optional extras. `boto3`, `requests-aws4auth` are now installed via `opensearch-mcp-server-py[aws]` and `numpy`, `scipy`, `scikit-learn` via `[ml]` (`[all]` installs both). The base install drops from 67 to 57 packages and from ~330 MB to ~86 MB, and no longer imports the ML stack at startup. `LogPatternAnalysisTool` is registered only when the `ml` extra is present; `DataDistributionTool` and `MetricChangeAnalysisTool` are pure Python and unaffected. AWS code paths import `boto3` on demand and report the required extra if it is missing ([#296](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/296))
 - Upgrade `mcp[cli]` to `>=2.0.0`. Ports the server to the mcp 2.0 API: replaces removed `@server.list_tools()` / `@server.call_tool()` decorators with constructor-injected `on_list_tools` / `on_call_tool` handlers, replaces removed `request_ctx` contextvar with a local `request_context_var`, and updates renamed fields (`isError` → `is_error`, `inputSchema` → `input_schema`). Integration test client updated for the renamed `streamable_http_client` function and `httpx2`-based header/timeout configuration ([#292](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/292))
 - Mark skills category tools as read operation([#302](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/302))
 
