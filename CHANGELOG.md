@@ -35,6 +35,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ## [Released 0.10.0]
 ### Added
+- Add Docker infrastructure: Dockerfile, staging/release workflows, PR build validation, and Hadolint linting ([#236](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/236))
 - Add configurable server-side query timeout via `OPENSEARCH_QUERY_TIMEOUT` environment variable, passed as `cancel_after_time_interval` to OpenSearch search requests ([#228](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/228))
 - Add dynamic per-call connection parameters for multi-tenant support, allowing agents to target different OpenSearch clusters without server reconfiguration ([#230](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/230))
 - Add agent memory tools (`SaveMemoryTool`, `SearchMemoryTool`, `DeleteMemoryTool`) with persistent cross-session memory backed by OpenSearch (automatic semantic enrichment, recency-aware ranking, shared memory across agents), `MEMORY.md` documentation, `install-hooks` CLI for Kiro, Claude Code, and Cursor, and `memory install` interactive setup command
