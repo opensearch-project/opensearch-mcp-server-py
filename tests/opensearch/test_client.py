@@ -818,8 +818,8 @@ class TestHeaderBasedBasicAuth:
         assert call_kwargs['http_auth'] == ('env-user', 'env-password')
 
 
-class TestHeaderBasedBearerAuth:
-    """Tests for Bearer authentication via Authorization header."""
+class TestHeaderBasedTokenAuth:
+    """Tests for token authentication via Authorization header."""
 
     def setup_method(self):
         """Setup before each test method."""
@@ -869,6 +869,30 @@ class TestHeaderBasedBearerAuth:
         assert client == mock_client
         call_kwargs = mock_opensearch.call_args[1]
         assert call_kwargs['headers'] == {'Authorization': f'Bearer {bearer_token}'}
+        assert 'http_auth' not in call_kwargs
+
+    @patch('opensearch.client.request_context_var')
+    @patch('opensearch.client.AsyncOpenSearch')
+    def test_api_key_auth_from_authorization_header(self, mock_opensearch, mock_request_ctx):
+        """Test ApiKey auth passthrough from Authorization header."""
+        from starlette.requests import Request
+
+        os.environ['OPENSEARCH_URL'] = 'https://test-opensearch-domain.com'
+        os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
+
+        api_key = 'test-api-key'
+        mock_request = Mock(spec=Request)
+        mock_request.headers = {'authorization': f'apikey {api_key}'}
+        mock_request_ctx.get.return_value = mock_request
+
+        mock_client = Mock()
+        mock_opensearch.return_value = mock_client
+
+        client = initialize_client(baseToolArgs(opensearch_cluster_name=''))
+
+        assert client == mock_client
+        call_kwargs = mock_opensearch.call_args[1]
+        assert call_kwargs['headers'] == {'Authorization': f'ApiKey {api_key}'}
         assert 'http_auth' not in call_kwargs
 
     @patch('opensearch.client.request_context_var')

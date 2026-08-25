@@ -468,7 +468,7 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
             if header_username and header_password:
                 opensearch_username = header_username
                 opensearch_password = header_password
-            # Pass through Bearer token if provided in headers
+            # Pass through Bearer or ApiKey token if provided in headers
             bearer_auth_header = header_auth.get('bearer_auth_header')
 
             # A username with no password cannot authenticate. Fail rather than
@@ -664,7 +664,7 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
             if header_username and header_password:
                 opensearch_username = header_username
                 opensearch_password = header_password
-            # Pass through Bearer token if provided in headers
+            # Pass through Bearer or ApiKey token if provided in headers
             bearer_auth_header = header_auth.get('bearer_auth_header')
 
             # As in single mode, an unusable Basic credential fails loudly.
@@ -749,7 +749,7 @@ def _create_opensearch_client(
         aws_secret_access_key: AWS secret access key from headers (optional)
         aws_session_token: AWS session token from headers (optional)
         max_response_size: Maximum response size in bytes (None means no limit)
-        bearer_auth_header: Authorization Bearer header value (optional)
+        bearer_auth_header: Authorization Bearer or ApiKey header value (optional)
         opensearch_ca_cert_path: Path to the CA certificate bundle for verifying TLS
         opensearch_client_cert_path: Path to the client certificate for mTLS
         opensearch_client_key_path: Path to the client private key for mTLS
@@ -865,9 +865,9 @@ def _create_opensearch_client(
                 _log_connection_event('no_auth', datasource_type, opensearch_url, str(e))
                 raise AuthenticationError(f'Failed to connect without authentication: {e}')
 
-        # 2. Header-based Authorization (Bearer token)
+        # 2. Header-based Authorization (Bearer or ApiKey token)
         if bearer_auth_header:
-            logger.info('[HEADER AUTH] Using Authorization Bearer header')
+            logger.info('[HEADER AUTH] Using token from Authorization header')
             try:
                 client_kwargs['headers'] = {'Authorization': bearer_auth_header}
                 return AsyncOpenSearch(**client_kwargs)
@@ -876,7 +876,7 @@ def _create_opensearch_client(
                     'header_auth_bearer', datasource_type, opensearch_url, str(e)
                 )
                 raise AuthenticationError(
-                    f'Failed to authenticate with Authorization Bearer header: {e}'
+                    f'Failed to authenticate with token from Authorization header: {e}'
                 )
 
         # 3. Header-based AWS credentials authentication (highest priority when provided)
@@ -1159,7 +1159,7 @@ def _get_auth_from_headers() -> Dict[str, Optional[str]]:
         - aws_service_name: AWS service name (es or aoss)
         - opensearch_username: Username from Basic auth (Authorization header)
         - opensearch_password: Password from Basic auth (Authorization header)
-        - bearer_auth_header: Authorization Bearer header value (if provided)
+        - bearer_auth_header: Authorization Bearer or ApiKey header value (if provided)
         All values are None if headers are not available or not set.
     """
     result: Dict[str, Optional[str]] = {
@@ -1195,6 +1195,10 @@ def _get_auth_from_headers() -> Dict[str, Optional[str]]:
                     token = auth_header[7:].strip()
                     if token:
                         result['bearer_auth_header'] = f'Bearer {token}'
+                elif auth_header_lower.startswith('apikey '):
+                    token = auth_header[7:].strip()
+                    if token:
+                        result['bearer_auth_header'] = f'ApiKey {token}'
                 elif auth_header_lower.startswith('basic '):
                     import base64
 
