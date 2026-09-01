@@ -141,7 +141,7 @@ class TestBuildCategoryMap:
         )
 
     def test_analytics_is_superset_of_observability_and_skills(self):
-        """analytics must be exactly the union of observability + skills."""
+        """Analytics must be exactly the union of observability + skills."""
         expected = set(BUILTIN_CATEGORY_TOOLS['observability']) | set(
             BUILTIN_CATEGORY_TOOLS['skills']
         )
