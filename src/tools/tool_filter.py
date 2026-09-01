@@ -390,7 +390,9 @@ def process_tool_filter(
 
     except Exception as e:
         logging.error(f'Error processing tool filter: {str(e)}')
-        return {}
+        # Fall back to built-in category map so _meta.category stamping
+        # still works even when filter processing fails.
+        return build_category_map(tool_registry) if tool_registry else {}
 
 
 async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
@@ -430,19 +432,24 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     # connection setup, and are not supported in multi mode.
     if mode == 'multi':
         filtered_registry = {
-            name: info for name, info in tool_registry.items() if not info.get('memory_tool')
+            name: info.copy()
+            for name, info in tool_registry.items()
+            if not info.get('memory_tool')
         }
         category_to_tools = build_category_map(filtered_registry)
         tool_to_category = {
             dn.lower(): cat for cat, dns in category_to_tools.items() for dn in dns
         }
         for name, info in filtered_registry.items():
-            schema = info['input_schema']
+            # Deep-copy the schema so pop() doesn't mutate the original registry
+            schema = info['input_schema'].copy()
             if 'properties' in schema:
+                schema['properties'] = dict(schema['properties'])
                 for field in CONNECTION_OVERRIDE_FIELDS:
                     schema['properties'].pop(field, None)
                     if 'required' in schema and field in schema['required']:
-                        schema['required'].remove(field)
+                        schema['required'] = [r for r in schema['required'] if r != field]
+            info['input_schema'] = schema
             info['category'] = tool_to_category.get(info.get('display_name', name).lower(), '')
         return filtered_registry
 

@@ -345,8 +345,27 @@ class TestGetTools:
 
         set_mode('multi')  # Set mode to multi for this test
 
+        # Snapshot original registry to verify it is NOT mutated
+        import copy
+
+        original_snapshot = copy.deepcopy(mock_tool_registry)
+
         result = await get_tools(mock_tool_registry)
-        assert result == mock_tool_registry
+
+        # Same tool names (minus memory tools)
+        expected_names = {
+            name for name, info in mock_tool_registry.items() if not info.get('memory_tool')
+        }
+        assert set(result.keys()) == expected_names
+
+        # Original registry must not be mutated (no 'category' key added)
+        for name, info in mock_tool_registry.items():
+            assert 'category' not in info, f'Original registry mutated for {name}'
+            assert info['input_schema'] == original_snapshot[name]['input_schema'], (
+                f'Original input_schema mutated for {name}'
+            )
+
+        # Returned tools should have category stamped and schema fields intact
         assert 'param1' in result['ListIndexTool']['input_schema']['properties']
         assert 'opensearch_cluster_name' in result['SearchIndexTool']['input_schema']['properties']
 
@@ -361,8 +380,8 @@ class TestGetTools:
         mock_get_version.return_value = Version.parse('2.5.0')
 
         # Mock compatibility: only ListIndexTool should be compatible
-        mock_is_compatible.side_effect = (
-            lambda version, tool_info: tool_info['min_version'] == '1.0.0'
+        mock_is_compatible.side_effect = lambda version, tool_info: (
+            tool_info['min_version'] == '1.0.0'
         )
 
         # Call get_tools in single mode
