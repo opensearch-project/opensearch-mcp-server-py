@@ -142,7 +142,9 @@ class TestBuildCategoryMap:
 
     def test_analytics_is_superset_of_observability_and_skills(self):
         """analytics must be exactly the union of observability + skills."""
-        expected = set(BUILTIN_CATEGORY_TOOLS['observability']) | set(BUILTIN_CATEGORY_TOOLS['skills'])
+        expected = set(BUILTIN_CATEGORY_TOOLS['observability']) | set(
+            BUILTIN_CATEGORY_TOOLS['skills']
+        )
         actual = set(BUILTIN_CATEGORY_TOOLS['analytics'])
         assert actual == expected, (
             f'analytics category is not the union of observability + skills. '

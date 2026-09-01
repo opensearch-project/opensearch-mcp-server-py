@@ -9,5 +9,13 @@ METRIC_TEST_INDEX = os.environ.get('IT_METRIC_TEST_INDEX', 'mcp-integration-metr
 
 # Known built-in tool categories — mirrors BUILTIN_CATEGORY_TOOLS in tool_filter.py
 BUILTIN_CATEGORIES = frozenset(
-    {'core_tools', 'memory', 'search_relevance', 'agentic_memory', 'observability', 'skills', 'analytics'}
+    {
+        'core_tools',
+        'memory',
+        'search_relevance',
+        'agentic_memory',
+        'observability',
+        'skills',
+        'analytics',
+    }
 )
