@@ -823,6 +823,22 @@ export OPENSEARCH_ENABLED_CATEGORIES="<category_name>"
 - When both config file and environment variables are provided, the config file will be prioritized
 - Tool filtering is only supported in single mode. In multi mode, tool filtering is not supported
 
+### Built-in Categories
+
+The following categories are available out of the box. Only `core_tools` (and `memory` when memory tools are registered) is enabled by default; all others must be explicitly enabled.
+
+| Category | Tools | Default |
+|----------|-------|---------|
+| `core_tools` | ListIndexTool, IndexMappingTool, SearchIndexTool, GetShardsTool, ClusterHealthTool, CountTool, ExplainTool, MsearchTool, GenericOpenSearchApiTool | Enabled |
+| `memory` | SaveMemoryTool, SearchMemoryTool, DeleteMemoryTool | Auto-enabled when registered |
+| `observability` | PPLQueryTool | Disabled |
+| `skills` | DataDistributionTool, LogPatternAnalysisTool, MetricChangeAnalysisTool | Disabled |
+| `analytics` | All `observability` + `skills` tools (superset) | Disabled |
+| `search_relevance` | Search Relevance Workbench tools | Disabled |
+| `agentic_memory` | Agentic Memory tools | Disabled |
+
+`analytics` is a convenience category that enables all observability and skills tools at once. You can also enable `observability` or `skills` individually for finer control.
+
 ## Tool Customization
 
 OpenSearch MCP server supports tool customization to modify tool display names, descriptions, and other properties. You can customize tools using either a YAML configuration file or runtime parameters.

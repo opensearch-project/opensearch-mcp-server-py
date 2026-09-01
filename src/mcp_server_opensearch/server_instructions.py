@@ -96,7 +96,11 @@ def are_skills_enabled() -> bool:
 
     Analytics tools are enabled when 'analytics', 'skills', or 'observability'
     appears in the enabled categories and NOT in the disabled categories.
-    'skills' and 'observability' are legacy aliases for 'analytics'.
+    'analytics' is a superset of 'observability' (PPLQueryTool) and
+    'skills' (DataDistributionTool, LogPatternAnalysisTool,
+    MetricChangeAnalysisTool).  All three are independent categories;
+    enabling any one of them is enough to activate skill-related
+    server instructions.
     Category state is resolved from the YAML config file when present,
     otherwise from the OPENSEARCH_ENABLED_CATEGORIES /
     OPENSEARCH_DISABLED_CATEGORIES environment variables — matching how

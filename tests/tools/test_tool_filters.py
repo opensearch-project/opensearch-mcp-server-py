@@ -86,14 +86,15 @@ class TestBuildCategoryMap:
     def test_tools_absent_from_registry_are_excluded(self):
         result = build_category_map({})
         for category, tools in result.items():
-            if category != 'analytics':
-                assert tools == [], f'Expected empty list for {category}, got {tools}'
+            assert tools == [], f'Expected empty list for {category}, got {tools}'
 
     def test_all_builtin_categories_present(self):
         result = build_category_map({})
         for category in BUILTIN_CATEGORY_TOOLS:
             assert category in result
         assert 'analytics' in result
+        assert 'observability' in result
+        assert 'skills' in result
 
     def test_custom_display_name_is_used(self):
         registry = {'ListIndexTool': {'display_name': 'MyListTool'}}
@@ -121,6 +122,32 @@ class TestBuildCategoryMap:
     def test_process_tool_filter_returns_empty_dict_on_error(self):
         result = process_tool_filter(tool_registry=None, allow_write=True)
         assert result == {}
+
+    def test_skills_category_matches_skills_tools_registry(self):
+        """_SKILLS_TOOLS must contain every key from SKILLS_TOOLS_REGISTRY.
+
+        Prevents drift when a new tool is added to skills_tools.py but
+        not to the BUILTIN_CATEGORY_TOOLS constant.
+        """
+        pytest.importorskip('numpy', reason='skills_tools requires numpy')
+        from tools.skills_tools import SKILLS_TOOLS_REGISTRY
+
+        registry_keys = set(SKILLS_TOOLS_REGISTRY.keys())
+        category_keys = set(BUILTIN_CATEGORY_TOOLS['skills'])
+        assert category_keys == registry_keys, (
+            f'BUILTIN_CATEGORY_TOOLS["skills"] is out of sync with SKILLS_TOOLS_REGISTRY. '
+            f'Missing from category: {registry_keys - category_keys}. '
+            f'Extra in category: {category_keys - registry_keys}.'
+        )
+
+    def test_analytics_is_superset_of_observability_and_skills(self):
+        """analytics must be exactly the union of observability + skills."""
+        expected = set(BUILTIN_CATEGORY_TOOLS['observability']) | set(BUILTIN_CATEGORY_TOOLS['skills'])
+        actual = set(BUILTIN_CATEGORY_TOOLS['analytics'])
+        assert actual == expected, (
+            f'analytics category is not the union of observability + skills. '
+            f'Missing: {expected - actual}. Extra: {actual - expected}.'
+        )
 
 
 class TestCategoryStamping:
@@ -614,12 +641,13 @@ class TestProcessToolFilter:
         assert 'LogPatternAnalysisTool' not in registry
 
     def test_skills_category_can_be_enabled(self):
-        """Analytics tools are exposed when the category is explicitly enabled.
-
-        Also verifies 'skills' legacy alias resolves to 'analytics'.
-        """
+        """Enabling 'skills' exposes only the 3 skills tools, not PPLQueryTool."""
         registry = {
             'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'PPLQueryTool': {
+                'display_name': 'PPLQueryTool',
+                'http_methods': 'POST',
+            },
             'DataDistributionTool': {
                 'display_name': 'DataDistributionTool',
                 'http_methods': 'POST',
@@ -638,6 +666,65 @@ class TestProcessToolFilter:
         assert 'ListIndexTool' in registry
         assert 'DataDistributionTool' in registry
         assert 'LogPatternAnalysisTool' in registry
+        assert 'PPLQueryTool' not in registry, (
+            "'skills' should only enable the 3 skills tools, not PPLQueryTool"
+        )
+
+    def test_analytics_category_enables_all_four_tools(self):
+        """Enabling 'analytics' exposes all 4 tools (superset of observability + skills)."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'PPLQueryTool': {
+                'display_name': 'PPLQueryTool',
+                'http_methods': 'POST',
+            },
+            'DataDistributionTool': {
+                'display_name': 'DataDistributionTool',
+                'http_methods': 'POST',
+            },
+            'LogPatternAnalysisTool': {
+                'display_name': 'LogPatternAnalysisTool',
+                'http_methods': 'POST',
+            },
+            'MetricChangeAnalysisTool': {
+                'display_name': 'MetricChangeAnalysisTool',
+                'http_methods': 'POST',
+            },
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            enabled_categories='core_tools,analytics',
+            allow_write=True,
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'PPLQueryTool' in registry
+        assert 'DataDistributionTool' in registry
+        assert 'LogPatternAnalysisTool' in registry
+        assert 'MetricChangeAnalysisTool' in registry
+
+    def test_observability_category_enables_only_ppl(self):
+        """Enabling 'observability' exposes only PPLQueryTool."""
+        registry = {
+            'ListIndexTool': {'display_name': 'ListIndexTool', 'http_methods': 'GET'},
+            'PPLQueryTool': {
+                'display_name': 'PPLQueryTool',
+                'http_methods': 'POST',
+            },
+            'DataDistributionTool': {
+                'display_name': 'DataDistributionTool',
+                'http_methods': 'POST',
+            },
+        }
+        process_tool_filter(
+            tool_registry=registry,
+            enabled_categories='core_tools,observability',
+            allow_write=True,
+        )
+
+        assert 'ListIndexTool' in registry
+        assert 'PPLQueryTool' in registry
+        assert 'DataDistributionTool' not in registry
 
     def test_data_distribution_and_log_pattern_not_in_core_tools(self):
         """DataDistributionTool and LogPatternAnalysisTool are not part of core_tools category."""

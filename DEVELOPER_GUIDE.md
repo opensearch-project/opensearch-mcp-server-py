@@ -311,7 +311,7 @@ Key fields:
 
 ### 5. Tool category — `src/tools/tool_filter.py`
 
-Add your tool to the appropriate category list (`core_tools`, `search_relevance`, or a new category). Tools not in any enabled category are **filtered out** and invisible to clients. See the `search_relevance` category definition for how to add a new opt-in category.
+Add your tool to the appropriate category list (`core_tools`, `observability`, `skills`, `analytics`, `search_relevance`, or a new category). Tools not in any enabled category are **filtered out** and invisible to clients. See the `search_relevance` category definition for how to add a new opt-in category.
 
 Categories are enabled via YAML config or environment variable. Only `core_tools` is enabled by default.
 
