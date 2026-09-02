@@ -1,6 +1,7 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import copy
 import json
 import logging
 import os
@@ -19,6 +20,20 @@ from opensearch.helper import get_opensearch_version
 # Global variable to store the resolved allow_write setting
 # This is set during server initialization and used by individual tools
 _resolved_allow_write_setting = None
+
+
+def _strip_schema_fields(schema: dict, fields) -> dict:
+    """Return a deep copy of ``schema`` with ``fields`` removed from properties and required.
+
+    Deep-copied so the static TOOL_REGISTRY schema objects are never mutated.
+    """
+    schema = copy.deepcopy(schema)
+    if 'properties' in schema:
+        for field in fields:
+            schema['properties'].pop(field, None)
+            if 'required' in schema and field in schema['required']:
+                schema['required'].remove(field)
+    return schema
 
 
 def process_regex_patterns(regex_list, tool_names):
@@ -415,6 +430,7 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     from mcp_server_opensearch.server_instructions import (
         CONNECTION_OVERRIDE_FIELDS,
         is_dynamic_mode_enabled,
+        is_header_auth_enabled,
     )
 
     # Get the current mode from global state
@@ -431,26 +447,19 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     # Memory tools are also excluded — they require OPENSEARCH_URL and single-mode
     # connection setup, and are not supported in multi mode.
     if mode == 'multi':
-        filtered_registry = {
-            name: info.copy()
-            for name, info in tool_registry.items()
-            if not info.get('memory_tool')
+        non_memory = {
+            name: info for name, info in tool_registry.items() if not info.get('memory_tool')
         }
-        category_to_tools = build_category_map(filtered_registry)
+        category_to_tools = build_category_map(non_memory)
         tool_to_category = {
             dn.lower(): cat for cat, dns in category_to_tools.items() for dn in dns
         }
-        for name, info in filtered_registry.items():
-            # Deep-copy the schema so pop() doesn't mutate the original registry
-            schema = info['input_schema'].copy()
-            if 'properties' in schema:
-                schema['properties'] = dict(schema['properties'])
-                for field in CONNECTION_OVERRIDE_FIELDS:
-                    schema['properties'].pop(field, None)
-                    if 'required' in schema and field in schema['required']:
-                        schema['required'] = [r for r in schema['required'] if r != field]
-            info['input_schema'] = schema
-            info['category'] = tool_to_category.get(info.get('display_name', name).lower(), '')
+        filtered_registry = {}
+        for name, info in non_memory.items():
+            schema = _strip_schema_fields(info['input_schema'], CONNECTION_OVERRIDE_FIELDS)
+            entry = {**info, 'input_schema': schema}
+            entry['category'] = tool_to_category.get(info.get('display_name', name).lower(), '')
+            filtered_registry[name] = entry
         return filtered_registry
 
     enabled = {}
@@ -499,39 +508,32 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         if not is_tool_compatible(version, info):
             continue
 
-        # Remove baseToolArgs fields from input schema for single mode.
-        # Always strip opensearch_cluster_name (mode-specific).
-        # Strip connection override fields when dynamic mode is off (i.e. a
-        # connection is pre-configured), since the agent doesn't need to supply
-        # them. When dynamic mode is on (zero-config / OPENSEARCH_DYNAMIC_CONNECTION=true),
-        # keep them and mark opensearch_url as required so strict MCP clients
-        # know it must be provided.
-        schema = tool_info['input_schema'].copy()
-        if 'properties' in schema:
-            dynamic = is_dynamic_mode_enabled()
-            _always_hidden = {'opensearch_cluster_name'}
-            fields_to_strip = _always_hidden | (set() if dynamic else CONNECTION_OVERRIDE_FIELDS)
-            for field in fields_to_strip:
-                schema['properties'].pop(field, None)
-                if 'required' in schema and field in schema['required']:
-                    schema['required'].remove(field)
+        # Remove baseToolArgs fields from the schema for single mode. opensearch_cluster_name
+        # is always hidden (multi-mode only). Connection overrides are hidden unless dynamic
+        # mode is on; header auth hides everything since URL/creds come from headers.
+        dynamic = is_dynamic_mode_enabled()
+        use_header_auth = is_header_auth_enabled()
+        if use_header_auth:
+            fields_to_strip = set(CONNECTION_OVERRIDE_FIELDS) | {'opensearch_cluster_name'}
+        else:
+            fields_to_strip = {'opensearch_cluster_name'} | (
+                set() if dynamic else CONNECTION_OVERRIDE_FIELDS
+            )
+        schema = _strip_schema_fields(tool_info['input_schema'], fields_to_strip)
 
-            # In dynamic mode, opensearch_url is functionally required at runtime
-            # even though baseToolArgs declares it Optional. Mark it required in
-            # the schema so strict MCP clients enforce it — but only when:
-            # 1. No OPENSEARCH_URL env var is set (no server-side fallback), AND
-            # 2. Header auth is not enabled (URL comes from headers, not tool args).
-            use_header_auth = os.getenv('OPENSEARCH_HEADER_AUTH', '').lower() == 'true'
-            has_url_fallback = bool(os.getenv('OPENSEARCH_URL', '').strip())
-            if (
-                dynamic
-                and not use_header_auth
-                and not has_url_fallback
-                and 'opensearch_url' in schema['properties']
-            ):
-                schema.setdefault('required', [])
-                if 'opensearch_url' not in schema['required']:
-                    schema['required'].append('opensearch_url')
+        # In dynamic mode opensearch_url is functionally required at runtime, so mark it
+        # required for strict MCP clients — but only when there is no OPENSEARCH_URL fallback
+        # and header auth is off (otherwise the URL comes from env or headers, not tool args).
+        has_url_fallback = bool(os.getenv('OPENSEARCH_URL', '').strip())
+        if (
+            dynamic
+            and not use_header_auth
+            and not has_url_fallback
+            and 'opensearch_url' in schema.get('properties', {})
+        ):
+            schema.setdefault('required', [])
+            if 'opensearch_url' not in schema['required']:
+                schema['required'].append('opensearch_url')
         tool_info['input_schema'] = schema
         tool_info['category'] = tool_to_category.get(tool_name.lower(), '')
 

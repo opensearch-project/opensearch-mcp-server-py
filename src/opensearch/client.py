@@ -89,15 +89,24 @@ def initialize_client(args: baseToolArgs) -> AsyncOpenSearch:
             # In single mode, use environment variables with optional per-call overrides from args
             return _initialize_client_single_mode(args)
         elif mode == 'multi':
-            # In multi mode, cluster name must be provided
-            if not args or not args.opensearch_cluster_name:
-                raise ConfigurationError('In multi mode, opensearch_cluster_name must be provided')
-            # Get cluster information
-            cluster_info = get_cluster(args.opensearch_cluster_name)
-            if not cluster_info:
-                raise ConfigurationError(
-                    f'Cluster "{args.opensearch_cluster_name}" not found in configuration'
+            # With header auth, datasources are defined by request headers (mutually
+            # exclusive with the YAML registry); otherwise use the registry.
+            from mcp_server_opensearch.server_instructions import is_header_auth_enabled
+
+            if is_header_auth_enabled():
+                cluster_info = resolve_header_cluster(
+                    args.opensearch_cluster_name if args else None
                 )
+            else:
+                if not args or not args.opensearch_cluster_name:
+                    raise ConfigurationError(
+                        'In multi mode, opensearch_cluster_name must be provided'
+                    )
+                cluster_info = get_cluster(args.opensearch_cluster_name)
+                if not cluster_info:
+                    raise ConfigurationError(
+                        f'Cluster "{args.opensearch_cluster_name}" not found in configuration'
+                    )
 
             return _initialize_client_multi_mode(cluster_info)
         else:
@@ -444,10 +453,14 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
             aws_region = args.aws_region.strip()
 
         # Check if header auth is enabled and update variables accordingly
+        from mcp_server_opensearch.server_instructions import is_header_auth_enabled
+
         header_supplied_url = False
-        use_header_auth = os.getenv('OPENSEARCH_HEADER_AUTH', '').lower() == 'true'
+        use_header_auth = is_header_auth_enabled()
         if use_header_auth:
             header_auth = _get_auth_from_headers()
+            # Single mode targets one datasource from scalar headers; multi-datasource
+            # selection is a multi-mode feature (resolve_header_cluster).
             header_url = header_auth.get('opensearch_url')
             if header_url:
                 opensearch_url = header_url
@@ -637,27 +650,24 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
         # Default to region from cluster config
         aws_region = get_aws_region_multi_mode(cluster_info)
 
-        # Check if header auth is enabled and update variables accordingly
+        # Header auth supplies only the shared credential; url/region/service come from
+        # cluster_info (YAML config, or the aligned header values baked in by
+        # resolve_header_cluster for a per-request datasource).
+        # When header auth is enabled the URL came from request headers (resolve_header_cluster),
+        # so it is caller-supplied and gets the same SSRF/ambient-credential protections single
+        # mode applies. A YAML-registry cluster (header auth off) keeps its trusted operator URL.
+        from mcp_server_opensearch.server_instructions import is_header_auth_enabled
+
+        header_supplied_url = is_header_auth_enabled()
+        if header_supplied_url:
+            _reject_caller_url_if_not_public(opensearch_url)
+
         use_header_auth = cluster_info.opensearch_header_auth or False
         if use_header_auth:
             header_auth = _get_auth_from_headers()
-            # The URL identifies the registered cluster, so a header URL is ignored.
-            # Headers may still carry per-request credentials for it.
-            if header_auth.get('opensearch_url'):
-                logger.warning(
-                    'Ignoring header-supplied opensearch-url in multi mode; '
-                    'the registered cluster URL is authoritative.'
-                )
-            header_service = header_auth.get('aws_service_name')
-            if header_service:
-                is_serverless_mode = header_service.lower() == OPENSEARCH_SERVERLESS_SERVICE
             aws_access_key_id = header_auth.get('aws_access_key_id')
             aws_secret_access_key = header_auth.get('aws_secret_access_key')
             aws_session_token = header_auth.get('aws_session_token')
-            # Override region if provided in headers
-            header_region = header_auth.get('aws_region')
-            if header_region:
-                aws_region = header_region
             # Override Basic auth credentials if provided in headers
             header_username = header_auth.get('opensearch_username')
             header_password = header_auth.get('opensearch_password')
@@ -692,6 +702,8 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
             opensearch_ca_cert_path=opensearch_ca_cert_path,
             opensearch_client_cert_path=opensearch_client_cert_path,
             opensearch_client_key_path=opensearch_client_key_path,
+            forbid_ambient_fallback=header_supplied_url and not _ambient_aws_fallback_allowed(),
+            caller_supplied_url=header_supplied_url,
         )
 
     except (ConfigurationError, AuthenticationError):
@@ -1164,6 +1176,7 @@ def _get_auth_from_headers() -> Dict[str, Optional[str]]:
     """
     result: Dict[str, Optional[str]] = {
         'opensearch_url': None,
+        'cluster_names': None,
         'aws_region': None,
         'aws_access_key_id': None,
         'aws_secret_access_key': None,
@@ -1179,6 +1192,7 @@ def _get_auth_from_headers() -> Dict[str, Optional[str]]:
         if request and isinstance(request, Request):
             headers = dict(request.headers)
             result['opensearch_url'] = headers.get('opensearch-url', '').strip() or None
+            result['cluster_names'] = headers.get('opensearch-cluster-name', '').strip() or None
             result['aws_region'] = headers.get('aws-region', '').strip() or None
             result['aws_access_key_id'] = headers.get('aws-access-key-id', '').strip() or None
             result['aws_secret_access_key'] = (
@@ -1212,3 +1226,137 @@ def _get_auth_from_headers() -> Dict[str, Optional[str]]:
         logger.debug(f'Could not read headers from request context: {e}')
 
     return result
+
+
+def _split_header_list(raw: Optional[str]) -> list[str]:
+    """Split a comma-separated header value into non-empty trimmed parts.
+
+    Empty parts (from a stray/trailing comma) are dropped so a benign header
+    artifact cannot flip a single datasource into the multi-datasource path.
+    """
+    if not raw:
+        return []
+    return [part.strip() for part in raw.split(',') if part.strip()]
+
+
+# User-facing message for any malformed/absent datasource routing headers. The header-level
+# reason is logged for operators; the header mechanism is internal and not shown to the user.
+_NO_DATASOURCE_MSG = 'No OpenSearch datasource is available for this request'
+
+
+def _datasources_phrase(count: int) -> str:
+    """Grammatical 'is/are N datasource(s)' fragment for log messages."""
+    return f'is {count} datasource' if count == 1 else f'are {count} datasources'
+
+
+def _aligned(values: list[str], index: int, count: int, name: str) -> Optional[str]:
+    """Value for datasource ``index``; the list must be absent or align 1:1 with the datasources."""
+    if not values:
+        return None
+    if len(values) != count:
+        logger.error(
+            f'{name} header has {len(values)} values but there {_datasources_phrase(count)}'
+        )
+        raise ConfigurationError(_NO_DATASOURCE_MSG)
+    return values[index]
+
+
+def _reject_misaligned_names(urls: list[str], names: list[str]) -> None:
+    """Names must align 1:1 with URLs and be unique, since a name is the selection key."""
+    count = len(urls)
+    if len(names) != count:
+        logger.error(
+            f'opensearch-cluster-name header has {len(names)} values but there {_datasources_phrase(count)}'
+        )
+        raise ConfigurationError(_NO_DATASOURCE_MSG)
+    if len(set(names)) != count:
+        logger.error(
+            f'Duplicate datasource names in the opensearch-cluster-name header: {", ".join(names)}'
+        )
+        raise ConfigurationError(_NO_DATASOURCE_MSG)
+
+
+def _select_datasource_by_name(urls: list[str], names: list[str], requested: Optional[str]) -> int:
+    """Return the index of the datasource whose name matches ``requested``.
+
+    The LLM picks a datasource by name (the opensearch_cluster_name arg); the server maps
+    it to a URL from the aligned opensearch-cluster-name header.
+    """
+    _reject_misaligned_names(urls, names)
+    available = ', '.join(names)
+    requested = (requested or '').strip()
+    if not requested:
+        # A single datasource needs no explicit selection; multiple require a name.
+        if len(names) == 1:
+            return 0
+        raise ConfigurationError(
+            'Multiple datasources are configured; opensearch_cluster_name is required to '
+            f'select one. Available: {available}'
+        )
+    if requested not in names:
+        raise ConfigurationError(
+            f'opensearch_cluster_name "{requested}" is not among the configured datasources: '
+            f'{available}'
+        )
+    return names.index(requested)
+
+
+def _datasource_names(urls: list[str], header_auth: Dict[str, Optional[str]]) -> list[str]:
+    """Datasource names from the opensearch-cluster-name header, or generated cluster1..clusterN.
+
+    The name header is optional; when omitted we synthesize placeholder names so a client that
+    sends only the routing headers still works.
+    """
+    names = _split_header_list(header_auth.get('cluster_names'))
+    if not names:
+        names = [f'cluster{i + 1}' for i in range(len(urls))]
+    return names
+
+
+def _require_header_datasource_urls(header_auth: Dict[str, Optional[str]]) -> list[str]:
+    """Parse the routing header list, or fail if the request carried no datasource.
+
+    The user-facing message stays generic; the header-level detail is logged for operators
+    since the header mechanism is an internal transport concern, not something the user sees.
+    """
+    urls = _split_header_list(header_auth.get('opensearch_url'))
+    if not urls:
+        logger.error('Header auth is enabled but the request has no opensearch-url header')
+        raise ConfigurationError(_NO_DATASOURCE_MSG)
+    return urls
+
+
+def get_header_cluster_names() -> list[str]:
+    """Datasource names for the request (from the header or generated), else [] when not header auth.
+
+    ListClustersTool uses this so the LLM can discover valid names per request; when [] the YAML
+    registry is used instead.
+    """
+    from mcp_server_opensearch.server_instructions import is_header_auth_enabled
+
+    if not is_header_auth_enabled():
+        return []
+    header_auth = _get_auth_from_headers()
+    urls = _require_header_datasource_urls(header_auth)
+    names = _datasource_names(urls, header_auth)
+    _reject_misaligned_names(urls, names)
+    return names
+
+
+def resolve_header_cluster(name: Optional[str]) -> ClusterInfo:
+    """Build a per-request ClusterInfo for the named datasource from the aligned header lists."""
+    header_auth = _get_auth_from_headers()
+    urls = _require_header_datasource_urls(header_auth)
+    names = _datasource_names(urls, header_auth)
+    idx = _select_datasource_by_name(urls, names, name)
+    count = len(urls)
+    service = _aligned(
+        _split_header_list(header_auth.get('aws_service_name')), idx, count, 'aws-service-name'
+    )
+    region = _aligned(_split_header_list(header_auth.get('aws_region')), idx, count, 'aws-region')
+    return ClusterInfo(
+        opensearch_url=urls[idx],
+        aws_region=region,
+        is_serverless=(service.lower() == OPENSEARCH_SERVERLESS_SERVICE) if service else None,
+        opensearch_header_auth=True,
+    )

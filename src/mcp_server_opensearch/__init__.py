@@ -130,8 +130,8 @@ def main() -> None:
     parser.add_argument(
         '--mode',
         choices=['single', 'multi'],
-        default='single',
-        help='Server mode: single (default) uses environment variables for OpenSearch connection, multi requires explicit connection parameters',
+        default=os.getenv('OPENSEARCH_MODE', 'single'),
+        help='Server mode: single (default) uses environment variables for OpenSearch connection, multi requires explicit connection parameters. Falls back to the OPENSEARCH_MODE env var when the flag is omitted.',
     )
     parser.add_argument(
         '--profile', default='', help='AWS profile to use for OpenSearch connection'
@@ -155,6 +155,11 @@ def main() -> None:
     )
 
     args, unknown = parser.parse_known_args()
+
+    # argparse validates --mode against choices, but not a value coming from the
+    # OPENSEARCH_MODE env default; check it explicitly so a bad value fails fast.
+    if args.mode not in ('single', 'multi'):
+        parser.error(f"invalid OPENSEARCH_MODE '{args.mode}' (choose from 'single', 'multi')")
 
     # Configure logging with appropriate level and format
     from .logging_config import configure_logging

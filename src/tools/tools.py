@@ -91,7 +91,10 @@ from opensearch.helper import (
 async def list_clusters_tool(args: ListClustersArgs) -> list[dict]:
     """List all available OpenSearch clusters."""
     try:
-        cluster_names = list(cluster_registry.keys())
+        from opensearch.client import get_header_cluster_names
+
+        # Header-defined datasources (per request) take precedence over the YAML registry.
+        cluster_names = get_header_cluster_names() or list(cluster_registry.keys())
         formatted_names = json.dumps(cluster_names, separators=(',', ':'))
         return [{'type': 'text', 'text': f'Available clusters:\n{formatted_names}'}]
     except Exception as e:

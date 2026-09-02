@@ -114,6 +114,11 @@ def are_skills_enabled() -> bool:
     return False
 
 
+def is_header_auth_enabled() -> bool:
+    """Whether request-header auth mode is active (``OPENSEARCH_HEADER_AUTH=true``)."""
+    return os.getenv('OPENSEARCH_HEADER_AUTH', '').strip().lower() == 'true'
+
+
 def is_dynamic_mode_enabled() -> bool:
     """Determine whether dynamic (per-call) connection mode is active.
 
@@ -179,8 +184,10 @@ def get_server_instructions() -> str | None:
 
     parts = []
 
-    if get_mode() == 'single' and is_dynamic_mode_enabled():
-        parts.append(_DYNAMIC_CONNECTION_INSTRUCTIONS)
+    if get_mode() == 'single':
+        # Header auth supplies URL/credentials in headers, so the LLM needs no instructions.
+        if not is_header_auth_enabled() and is_dynamic_mode_enabled():
+            parts.append(_DYNAMIC_CONNECTION_INSTRUCTIONS)
 
     if are_skills_enabled():
         parts.append(_SKILLS_TOOLS_INSTRUCTIONS)

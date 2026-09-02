@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import os
 import pytest
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -1419,6 +1420,28 @@ class TestListClustersTool:
             json_part = text.split('\n', 1)[1]
             parsed = json.loads(json_part)
             assert parsed == ['my-cluster']
+
+    @pytest.mark.asyncio
+    async def test_list_clusters_returns_header_names(self):
+        """With header auth, names come from the request's opensearch-cluster-name header."""
+        from starlette.requests import Request
+
+        os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
+        try:
+            mock_request = Mock(spec=Request)
+            mock_request.headers = {
+                'opensearch-url': 'https://logs.example.com,https://metrics.example.com',
+                'opensearch-cluster-name': 'logs,metrics',
+            }
+            with patch('opensearch.client.request_context_var') as mock_ctx:
+                mock_ctx.get.return_value = mock_request
+                # Header names take precedence over any YAML registry entries.
+                with patch('tools.tools.cluster_registry', {'yaml-cluster': Mock()}):
+                    result = await self._list_clusters_tool(self.ListClustersArgs())
+            parsed = json.loads(result[0]['text'].split('\n', 1)[1])
+            assert parsed == ['logs', 'metrics']
+        finally:
+            os.environ.pop('OPENSEARCH_HEADER_AUTH', None)
 
     def test_list_clusters_args_accepts_extra_fields(self):
         """Test that ListClustersArgs doesn't reject extra fields like opensearch_cluster_name."""

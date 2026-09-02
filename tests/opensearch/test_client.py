@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import boto3
+import logging
 import os
 import pytest
 import tempfile
@@ -1787,3 +1788,334 @@ class TestAmbientAwsFallbackOptIn:
         )
 
         assert mock_opensearch.call_args[1]['http_auth'] == ('caller', 'caller-pass')
+
+
+class TestHeaderMultiDatasource:
+    """Multi mode + header auth: the LLM selects a datasource by name.
+
+    The server maps it to the aligned header URL and signs with one shared credential.
+    """
+
+    def setup_method(self):
+        for key in ['OPENSEARCH_URL', 'AWS_REGION', 'OPENSEARCH_HEADER_AUTH']:
+            os.environ.pop(key, None)
+        os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('multi')
+
+    def teardown_method(self):
+        for key in [
+            'OPENSEARCH_HEADER_AUTH',
+            'OPENSEARCH_DYNAMIC_CONNECTION',
+            'OPENSEARCH_SSRF_GUARD',
+            'OPENSEARCH_ALLOW_AMBIENT_AWS_FALLBACK',
+        ]:
+            os.environ.pop(key, None)
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('single')
+
+    def _ctx(self, mock_request_ctx, headers):
+        from starlette.requests import Request
+
+        mock_request = Mock(spec=Request)
+        mock_request.headers = headers
+        mock_request_ctx.get.return_value = mock_request
+
+    def _headers(self):
+        return {
+            'opensearch-url': 'https://logs.example.com,https://metrics.example.com',
+            'opensearch-cluster-name': 'logs,metrics',
+            'aws-service-name': 'es,aoss',
+            'aws-region': 'us-east-1,us-west-2',
+            'aws-access-key-id': 'AKIASHARED',
+            'aws-secret-access-key': 'shared-secret',
+            'aws-session-token': 'shared-token',
+        }
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_selects_datasource_by_name_with_shared_credential(
+        self, mock_request_ctx, mock_create
+    ):
+        """opensearch_cluster_name maps to a header URL; shared creds sign it."""
+        self._ctx(mock_request_ctx, self._headers())
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://logs.example.com'
+        assert kwargs['is_serverless_mode'] is False
+        assert kwargs['aws_region'] == 'us-east-1'
+        assert kwargs['aws_access_key_id'] == 'AKIASHARED'
+        assert kwargs['aws_session_token'] == 'shared-token'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_selected_name_uses_aligned_service_and_region(self, mock_request_ctx, mock_create):
+        """The aligned aws-service-name (aoss) and aws-region entries follow the chosen name."""
+        self._ctx(mock_request_ctx, self._headers())
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='metrics'))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://metrics.example.com'
+        assert kwargs['is_serverless_mode'] is True
+        assert kwargs['aws_region'] == 'us-west-2'
+        assert kwargs['aws_access_key_id'] == 'AKIASHARED'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_works_without_dynamic_connection_flag(self, mock_request_ctx, mock_create):
+        """Name selection needs no OPENSEARCH_DYNAMIC_CONNECTION: the LLM supplies no URL override."""
+        os.environ.pop('OPENSEARCH_DYNAMIC_CONNECTION', None)
+        self._ctx(mock_request_ctx, self._headers())
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='metrics'))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://metrics.example.com'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_single_datasource_via_name(self, mock_request_ctx, mock_create):
+        """One URL with one name is selectable by that name (single-datasource in multi mode)."""
+        self._ctx(
+            mock_request_ctx,
+            {
+                'opensearch-url': 'https://only.example.com',
+                'opensearch-cluster-name': 'only',
+                'aws-region': 'us-east-1',
+                'aws-access-key-id': 'AKIASHARED',
+                'aws-secret-access-key': 'shared-secret',
+                'aws-session-token': 'shared-token',
+            },
+        )
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='only'))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://only.example.com'
+        assert kwargs['aws_region'] == 'us-east-1'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_missing_name_arg_errors_and_lists_available(self, mock_request_ctx, mock_create):
+        self._ctx(mock_request_ctx, self._headers())
+
+        with pytest.raises(ConfigurationError, match='required to select one'):
+            initialize_client(baseToolArgs(opensearch_cluster_name=''))
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_single_datasource_auto_selects_without_name(self, mock_request_ctx, mock_create):
+        """One datasource needs no explicit name; an empty arg selects it."""
+        self._ctx(
+            mock_request_ctx,
+            {
+                'opensearch-url': 'https://only.example.com',
+                'opensearch-cluster-name': 'only',
+                'aws-region': 'us-east-1',
+                'aws-access-key-id': 'AKIASHARED',
+                'aws-secret-access-key': 'shared-secret',
+                'aws-session-token': 'shared-token',
+            },
+        )
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name=''))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://only.example.com'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_name_not_configured_errors(self, mock_request_ctx, mock_create):
+        self._ctx(mock_request_ctx, self._headers())
+
+        with pytest.raises(ConfigurationError, match='not among the configured datasources'):
+            initialize_client(baseToolArgs(opensearch_cluster_name='traces'))
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_name_count_mismatch_errors(self, mock_request_ctx, mock_create, caplog):
+        """A name list that does not align 1:1 with the URL list is rejected."""
+        headers = self._headers()
+        headers['opensearch-cluster-name'] = 'logs'  # 1 name for 2 urls
+        self._ctx(mock_request_ctx, headers)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(ConfigurationError, match='No OpenSearch datasource is available'):
+                initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+        assert 'opensearch-cluster-name header has 1 values' in caplog.text
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_duplicate_names_error(self, mock_request_ctx, mock_create, caplog):
+        headers = self._headers()
+        headers['opensearch-cluster-name'] = 'logs,logs'
+        self._ctx(mock_request_ctx, headers)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(ConfigurationError, match='No OpenSearch datasource is available'):
+                initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+        assert 'Duplicate datasource names' in caplog.text
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_region_length_mismatch_errors(self, mock_request_ctx, mock_create, caplog):
+        """A region list that is neither length 1 nor N is rejected, not silently defaulted."""
+        headers = self._headers()
+        headers['aws-region'] = 'us-east-1,us-west-2,eu-west-1'  # 3 for 2 urls
+        self._ctx(mock_request_ctx, headers)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(ConfigurationError, match='No OpenSearch datasource is available'):
+                initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+        assert 'aws-region header has 3 values' in caplog.text
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_single_service_for_multiple_errors(self, mock_request_ctx, mock_create, caplog):
+        """One aws-service-name value for N datasources is rejected; each must be explicit."""
+        headers = self._headers()
+        headers['aws-service-name'] = 'aoss'  # 1 for 2 urls
+        self._ctx(mock_request_ctx, headers)
+
+        with caplog.at_level(logging.ERROR):
+            with pytest.raises(ConfigurationError, match='No OpenSearch datasource is available'):
+                initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+        assert 'aws-service-name header has 1 values' in caplog.text
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_get_header_cluster_names_returns_names(self, mock_request_ctx, mock_create):
+        """Discovery: names come from the opensearch-cluster-name header for the request."""
+        from opensearch.client import get_header_cluster_names
+
+        self._ctx(mock_request_ctx, self._headers())
+        assert get_header_cluster_names() == ['logs', 'metrics']
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_missing_name_header_uses_placeholders(self, mock_request_ctx, mock_create):
+        """When opensearch-cluster-name is omitted, names default to cluster1..clusterN."""
+        from opensearch.client import get_header_cluster_names
+
+        headers = self._headers()
+        del headers['opensearch-cluster-name']
+        self._ctx(mock_request_ctx, headers)
+        mock_create.return_value = Mock()
+
+        assert get_header_cluster_names() == ['cluster1', 'cluster2']
+        initialize_client(baseToolArgs(opensearch_cluster_name='cluster2'))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://metrics.example.com'
+        assert kwargs['is_serverless_mode'] is True
+        assert kwargs['aws_region'] == 'us-west-2'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_missing_url_header_errors_clearly(self, mock_request_ctx, mock_create):
+        """Header auth on but no opensearch-url header gives a clear error, not an opaque one."""
+        from opensearch.client import get_header_cluster_names
+
+        self._ctx(mock_request_ctx, {'aws-region': 'us-east-1'})
+
+        with pytest.raises(ConfigurationError, match='No OpenSearch datasource is available'):
+            get_header_cluster_names()
+        with pytest.raises(ConfigurationError, match='No OpenSearch datasource is available'):
+            initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_header_url_is_caller_supplied_and_forbids_ambient(
+        self, mock_request_ctx, mock_create
+    ):
+        """A header-derived URL gets the same caller-supplied/ambient protections as single mode."""
+        self._ctx(mock_request_ctx, self._headers())
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['caller_supplied_url'] is True
+        assert kwargs['forbid_ambient_fallback'] is True
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_header_url_ssrf_guard_rejects_private(self, mock_request_ctx, mock_create):
+        """With the SSRF guard on, a header URL resolving to a non-public address is rejected."""
+        os.environ['OPENSEARCH_SSRF_GUARD'] = 'true'
+        self._ctx(
+            mock_request_ctx,
+            {
+                'opensearch-url': 'https://127.0.0.1',
+                'opensearch-cluster-name': 'local',
+                'aws-region': 'us-east-1',
+                'aws-access-key-id': 'AKIASHARED',
+                'aws-secret-access-key': 'shared-secret',
+                'aws-session-token': 'shared-token',
+            },
+        )
+
+        with pytest.raises(ConfigurationError, match='non-public address'):
+            initialize_client(baseToolArgs(opensearch_cluster_name='local'))
+        mock_create.assert_not_called()
+
+
+class TestHeaderSingleDatasource:
+    """Single mode + header auth: one datasource, URL/service/region from scalar headers."""
+
+    def setup_method(self):
+        for key in ['OPENSEARCH_URL', 'AWS_REGION', 'OPENSEARCH_HEADER_AUTH']:
+            os.environ.pop(key, None)
+        os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('single')
+
+    def teardown_method(self):
+        os.environ.pop('OPENSEARCH_HEADER_AUTH', None)
+
+    def _ctx(self, mock_request_ctx, headers):
+        from starlette.requests import Request
+
+        mock_request = Mock(spec=Request)
+        mock_request.headers = headers
+        mock_request_ctx.get.return_value = mock_request
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_scalar_url_from_header(self, mock_request_ctx, mock_create):
+        """A scalar opensearch-url header drives the single-mode connection; no name needed."""
+        self._ctx(
+            mock_request_ctx,
+            {
+                'opensearch-url': 'https://only.example.com',
+                'aws-region': 'us-east-1',
+                'aws-access-key-id': 'AKIASHARED',
+                'aws-secret-access-key': 'shared-secret',
+                'aws-session-token': 'shared-token',
+            },
+        )
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name=''))
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://only.example.com'
+        assert kwargs['aws_region'] == 'us-east-1'

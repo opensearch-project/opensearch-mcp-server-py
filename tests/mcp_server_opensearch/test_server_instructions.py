@@ -400,8 +400,8 @@ class TestConditionalSchemaStripping:
         assert 'opensearch_url' not in schema.get('required', [])
 
     @pytest.mark.asyncio
-    async def test_header_auth_mode_does_not_mark_opensearch_url_required(self):
-        """In header auth mode, opensearch_url must NOT be required (URL comes from headers)."""
+    async def test_single_mode_header_auth_strips_overrides_and_cluster_name(self):
+        """Single-mode header auth hides connection overrides and the (unused) cluster name."""
         os.environ.pop('OPENSEARCH_URL', None)
         os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
         from tools.tool_filter import get_tools
@@ -411,5 +411,7 @@ class TestConditionalSchemaStripping:
                 result = await get_tools(self._make_registry())
 
         schema = result['ListIndexTool']['input_schema']
-        assert 'opensearch_url' in schema['properties']
-        assert 'opensearch_url' not in schema.get('required', [])
+        props = schema['properties']
+        assert 'opensearch_url' not in props
+        assert 'aws_region' not in props
+        assert 'opensearch_cluster_name' not in props
