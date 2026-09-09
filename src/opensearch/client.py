@@ -532,6 +532,11 @@ def _initialize_client_single_mode(args: baseToolArgs = None) -> AsyncOpenSearch
         if caller_supplied_url or header_supplied_url:
             _reject_caller_url_if_not_public(opensearch_url)
 
+        # SECURITY: Validate opensearch_url against allowed datasources when URL comes from header
+        if use_header_auth and header_supplied_url:
+            allowed_datasources = _get_allowed_datasources_from_headers()
+            _validate_opensearch_url(opensearch_url, allowed_datasources)
+
         logger.info(
             f'Initializing single mode OpenSearch client for URL: '
             f'{_scrub_url_userinfo(opensearch_url)}'
@@ -672,6 +677,10 @@ def _initialize_client_multi_mode(cluster_info: ClusterInfo) -> AsyncOpenSearch:
                 raise AuthenticationError(
                     'Incomplete Basic credential in Authorization header: password is empty.'
                 )
+
+        # NOTE: No datasource validation needed in multi mode because the URL comes from
+        # trusted cluster configuration, not from request headers
+
         # Use common client creation function
         return _create_opensearch_client(
             opensearch_url=opensearch_url,
@@ -1212,3 +1221,118 @@ def _get_auth_from_headers() -> Dict[str, Optional[str]]:
         logger.debug(f'Could not read headers from request context: {e}')
 
     return result
+
+
+def _get_allowed_datasources_from_headers() -> list[str]:
+    """Extract the allowlist of datasources from indexed headers.
+
+    For multi-datasource support, the allowlist is provided via indexed headers:
+    opensearch-url-0, opensearch-url-1, etc.
+
+    For backward compatibility, if no indexed headers are found, falls back to
+    the non-indexed opensearch-url header (single datasource).
+
+    Returns:
+        List of allowed OpenSearch URLs from headers.
+    """
+    allowed_urls: list[str] = []
+
+    try:
+        request = request_context_var.get()
+        if request and isinstance(request, Request):
+            headers = dict(request.headers)
+
+            # Extract indexed headers (opensearch-url-0, opensearch-url-1, ...)
+            index = 0
+            while True:
+                header_name = f'opensearch-url-{index}'
+                url = headers.get(header_name, '').strip()
+                if not url:
+                    break
+                allowed_urls.append(url)
+                index += 1
+
+            # If no indexed headers found, fall back to legacy non-indexed header
+            if not allowed_urls:
+                url = headers.get('opensearch-url', '').strip()
+                if url:
+                    allowed_urls.append(url)
+    except Exception as e:
+        logger.warning(f'Failed to extract allowed datasources from headers: {e}')
+
+    return allowed_urls
+
+
+def _normalize_opensearch_url(url: str) -> str:
+    """Normalize OpenSearch URL for comparison.
+
+    Converts to lowercase, removes trailing slashes, and ensures https:// prefix.
+
+    Args:
+        url: The OpenSearch URL to normalize
+
+    Returns:
+        Normalized URL string
+    """
+    if not url:
+        return ''
+
+    url = url.strip().lower()
+
+    # Add https:// if no protocol specified
+    if not url.startswith('http://') and not url.startswith('https://'):
+        url = f'https://{url}'
+
+    # Remove trailing slash
+    url = url.rstrip('/')
+
+    return url
+
+
+def _validate_opensearch_url(requested_url: str, allowed_urls: list[str]) -> None:
+    """Validate that the requested URL is in the allowed list.
+
+    This is a security-critical function that ensures LLM tools can only access
+    datasources that were explicitly allowed by the gateway (Oasis).
+
+    Args:
+        requested_url: The OpenSearch URL being requested
+        allowed_urls: List of allowed OpenSearch URLs from gateway headers
+
+    Raises:
+        AuthenticationError: If URL is not in allowed list or validation fails
+    """
+    if not allowed_urls:
+        raise AuthenticationError(
+            'No datasources are authorized for this request. '
+            'Datasource headers must be provided by the gateway.'
+        )
+
+    if not requested_url:
+        raise AuthenticationError('OpenSearch URL is required but not provided')
+
+    # Normalize URLs for comparison
+    normalized_requested = _normalize_opensearch_url(requested_url)
+    normalized_allowed = [_normalize_opensearch_url(url) for url in allowed_urls]
+
+    if normalized_requested not in normalized_allowed:
+        logger.error(
+            f'Datasource validation failed: requested={requested_url}, allowed={allowed_urls}',
+            extra={
+                'event_type': 'datasource_validation_failure',
+                'requested_url': requested_url,
+                'allowed_urls': allowed_urls,
+            },
+        )
+        raise AuthenticationError(
+            f'Datasource {requested_url} is not authorized. '
+            f'Only datasources provided by the gateway are allowed.'
+        )
+
+    logger.info(
+        f'Datasource validation succeeded: {requested_url}',
+        extra={
+            'event_type': 'datasource_validation_success',
+            'datasource_url': requested_url,
+        },
+    )
