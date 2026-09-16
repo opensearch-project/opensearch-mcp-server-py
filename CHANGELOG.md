@@ -5,6 +5,16 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
+
+### Changed
+
+### Fixed
+
+### Removed
+
+## [Released 0.12.0]
+
+### Added
 - Expose tool category in the `_meta` field of each `Tool` object returned by `tools/list`. Core tools report `"_meta": {"category": "core_tools"}`; tools with no known category omit `_meta`. The MCP 1.x schema for `Tool` does not restrict additional properties, so this is safe for all existing clients. ([#301](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/301))
 - Add `analytics` category as a superset of `observability` (PPLQueryTool) and `skills` (DataDistributionTool, LogPatternAnalysisTool, MetricChangeAnalysisTool). All three categories are independent — `enabled_categories=skills` enables the 3 skills tools, `enabled_categories=observability` enables PPLQueryTool, and `enabled_categories=analytics` enables all 4. ([#301](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/301))
 - Support multiple datasources per request in multi mode via aligned comma-separated `opensearch-url`, `opensearch-cluster-name`, `aws-service-name`, and `aws-region` headers, discovered through `ListClustersTool` and selected per tool call by the `opensearch_cluster_name` argument (mapped to a URL server-side), signed by one shared credential; the mode can also be set via the `OPENSEARCH_MODE` env var. **Potentially breaking (multi mode + `OPENSEARCH_HEADER_AUTH=true`):** with more than one `opensearch-url`, the `opensearch-cluster-name` header is now required (no auto-generated names); a single datasource defaults to `opensearch-cluster` ([#306](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/306))
