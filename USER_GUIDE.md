@@ -43,6 +43,40 @@ Install from [PyPI](https://pypi.org/project/opensearch-mcp-server-py/):
 pip install opensearch-mcp-server-py
 ```
 
+### Optional extras
+
+The base install supports no-auth, basic-auth and bearer-token connections. Add an extra
+if you need AWS authentication or log pattern analysis:
+
+```bash
+pip install "opensearch-mcp-server-py[aws]"   # IAM credentials, assumed roles, SigV4 signing
+pip install "opensearch-mcp-server-py[ml]"    # LogPatternAnalysisTool (clusters log messages)
+pip install "opensearch-mcp-server-py[all]"   # both
+```
+
+With `uvx`, request the extra in the package spec:
+
+```json
+{
+  "mcpServers": {
+    "opensearch": {
+      "command": "uvx",
+      "args": ["opensearch-mcp-server-py[aws]"]
+    }
+  }
+}
+```
+
+Notes:
+- `LogPatternAnalysisTool` is only registered when the `ml` extra is present. The other
+  analysis tools (`DataDistributionTool`, `MetricChangeAnalysisTool`) are pure Python and
+  always available.
+- If AWS authentication is configured without the `aws` extra, the server reports the
+  exact install command instead of failing with an import traceback.
+- Keeping the extras out of the base install matters for `stdio` clients: the ML stack
+  alone is about 180 MB and adds several seconds to every server start, which counts
+  against the client's `initialize` deadline.
+
 ## Quick Start
 
 ### Prerequisites
