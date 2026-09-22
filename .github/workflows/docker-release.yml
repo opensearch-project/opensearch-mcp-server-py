@@ -1,0 +1,36 @@
+name: Docker Promote to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to promote (e.g. 0.5.0)'
+        required: true
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_PROD_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PROD_TOKEN }}
+
+      - uses: docker/login-action@v3
+        id: staging-login
+        with:
+          username: ${{ secrets.DOCKERHUB_STAGING_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_STAGING_TOKEN }}
+
+      - name: Pull from staging and push to production
+        run: |
+          SOURCE="opensearchstaging/opensearch-mcp-server-py:${{ inputs.tag }}"
+          TARGET="opensearchproject/opensearch-mcp-server-py"
+
+          docker buildx imagetools create \
+            --tag "${TARGET}:${{ inputs.tag }}" \
+            --tag "${TARGET}:latest" \
+            "${SOURCE}"
