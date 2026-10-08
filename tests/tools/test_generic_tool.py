@@ -132,6 +132,32 @@ async def test_write_disabled_message_does_not_leak_config():
         set_allow_write_setting(None)
 
 
+@pytest.mark.asyncio
+async def test_boolean_query_params_are_sent_lowercase():
+    """OpenSearch rejects "True"/"False"; booleans must be encoded as "true"/"false"."""
+    from unittest.mock import AsyncMock, patch
+    from urllib.parse import parse_qs, urlparse
+
+    mock_client = AsyncMock()
+    mock_client.transport.perform_request = AsyncMock(return_value={'status': 'green'})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    args = GenericOpenSearchApiArgs(
+        opensearch_cluster_name='',
+        path='/_cat/indices',
+        method='GET',
+        query_params={'format': 'json', 'v': True, 'local': False, 'size': 10},
+    )
+
+    with patch('opensearch.client.get_opensearch_client', return_value=mock_client):
+        await generic_opensearch_api_tool(args)
+
+    url = mock_client.transport.perform_request.call_args.kwargs['url']
+    params = parse_qs(urlparse(url).query)
+    assert params == {'format': ['json'], 'v': ['true'], 'local': ['false'], 'size': ['10']}
+
+
 if __name__ == '__main__':
     print('Testing GenericOpenSearchApiTool...')
     print('Note: This test requires a running OpenSearch instance and proper configuration.')

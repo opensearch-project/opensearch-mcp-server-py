@@ -127,8 +127,13 @@ async def generic_opensearch_api_tool(args: GenericOpenSearchApiArgs) -> list[di
             # Build the request URL
             url = args.path
             if args.query_params:
-                # Convert query parameters to URL-encoded string
-                query_string = urlencode(args.query_params)
+                # Convert query parameters to URL-encoded string. OpenSearch only accepts
+                # lowercase booleans, and urlencode would send Python's "True"/"False".
+                query_params = {
+                    key: str(value).lower() if isinstance(value, bool) else value
+                    for key, value in args.query_params.items()
+                }
+                query_string = urlencode(query_params)
                 url = f'{args.path}?{query_string}'
 
             # Prepare request parameters
