@@ -156,9 +156,15 @@ def _resolve_allow_write_setting(config_file_path: str = None) -> bool:
                 if 'allow_write' in settings:
                     # Config file setting overrides environment variable
                     allow_write = settings.get('allow_write', True)
-                    logging.debug(
-                        f'Using allow_write setting from config file: {config_file_path}'
-                    )
+                    if os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE'):
+                        logging.warning(
+                            'OPENSEARCH_SETTINGS_ALLOW_WRITE is set but the config file sets '
+                            f'allow_write; using the config file value ({str(allow_write).lower()}).'
+                        )
+                    else:
+                        logging.debug(
+                            f'Using allow_write setting from config file: {config_file_path}'
+                        )
         except Exception as e:
             logging.debug(f'Could not load config file {config_file_path}: {e}')
 
@@ -348,7 +354,8 @@ def process_tool_filter(
             # Get settings
             settings = tool_filters.get('settings', {})
             if settings:
-                allow_write = settings.get('allow_write', True)
+                if 'allow_write' in settings:
+                    allow_write = settings['allow_write']
                 if 'allow_write_categories' in settings:
                     allow_write_categories = settings.get('allow_write_categories', [])
 
@@ -542,7 +549,6 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         'disabled_categories': os.getenv('OPENSEARCH_DISABLED_CATEGORIES', ''),
         'enabled_tools_regex': os.getenv('OPENSEARCH_ENABLED_TOOLS_REGEX', ''),
         'disabled_tools_regex': os.getenv('OPENSEARCH_DISABLED_TOOLS_REGEX', ''),
-        'allow_write': os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE', 'true').lower() == 'true',
         'allow_write_categories': parse_comma_separated(
             os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES', '')
         )
@@ -553,9 +559,12 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     if config_file_path and any(env_config.values()):
         logging.warning('Both config file and environment variables are set. Using config file.')
 
-    # Apply tool filtering, update the TOOL_REGISTRY
+    # Apply tool filtering, update the TOOL_REGISTRY. allow_write comes from
+    # _resolve_allow_write_setting so the tool list matches the write check
+    # GenericOpenSearchApiTool makes when it's called.
     category_to_tools = process_tool_filter(
         tool_registry=tool_registry,
+        allow_write=resolved_allow_write,
         filter_path=config_file_path if config_file_path else None,
         **{k: v for k, v in env_config.items() if not config_file_path},
     )
