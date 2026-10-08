@@ -1451,3 +1451,141 @@ class TestMultiOnlyFilter:
         result = await get_tools(registry)
 
         assert 'ListIndexTool' in result
+
+
+class TestConfigFileAllowWrite:
+    """Test allow_write resolution when a config file is used."""
+
+    def setup_method(self):
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode('single')
+
+    def teardown_method(self):
+        from tools.tool_filter import set_allow_write_setting
+
+        set_allow_write_setting(None)
+
+    @pytest.fixture
+    def registry(self):
+        registry = copy.deepcopy(MOCK_TOOL_REGISTRY)
+        registry['ListIndexTool']['http_methods'] = 'GET'
+        registry['SearchIndexTool']['http_methods'] = 'GET, POST'
+        return registry
+
+    @pytest.fixture
+    def write_config(self, tmp_path):
+        def _write(content: str) -> str:
+            path = tmp_path / 'config.yml'
+            path.write_text(content)
+            return str(path)
+
+        return _write
+
+    @pytest.fixture(autouse=True)
+    def version_patches(self):
+        with (
+            patch('tools.tool_filter.get_opensearch_version', return_value=Version.parse('3.3.0')),
+            patch('tools.tool_filter.is_tool_compatible', return_value=True),
+        ):
+            yield
+
+    @pytest.mark.asyncio
+    async def test_config_without_allow_write_keeps_write_tools(self, registry, write_config):
+        config = write_config('tool_filters:\n  enabled_categories:\n    - skills\n')
+
+        with patch.dict('os.environ', {}, clear=True):
+            result = await get_tools(registry, config)
+
+        assert 'DataDistributionTool' in result
+        assert 'LogPatternAnalysisTool' in result
+
+    @pytest.mark.asyncio
+    async def test_config_allow_write_false_removes_write_tools(self, registry, write_config):
+        config = write_config(
+            'tool_filters:\n'
+            '  enabled_categories:\n    - skills\n'
+            '  settings:\n    allow_write: false\n'
+        )
+
+        with patch.dict('os.environ', {}, clear=True):
+            result = await get_tools(registry, config)
+
+        # POST-only tools are removed; tools that also support GET remain
+        assert 'DataDistributionTool' not in result
+        assert 'LogPatternAnalysisTool' not in result
+        assert 'ListIndexTool' in result
+        assert 'SearchIndexTool' in result
+
+    @pytest.mark.asyncio
+    async def test_allow_write_from_env_when_config_has_no_setting(self, registry, write_config):
+        config = write_config('tool_filters:\n  enabled_categories:\n    - skills\n')
+
+        with patch.dict('os.environ', {'OPENSEARCH_SETTINGS_ALLOW_WRITE': 'false'}, clear=True):
+            result = await get_tools(registry, config)
+
+        # Matches the write check at call time, which reads the env var as the base
+        assert 'DataDistributionTool' not in result
+        assert 'ListIndexTool' in result
+
+    @pytest.mark.asyncio
+    async def test_config_allow_write_overrides_env(self, registry, write_config):
+        config = write_config(
+            'tool_filters:\n'
+            '  enabled_categories:\n    - skills\n'
+            '  settings:\n    allow_write: true\n'
+        )
+
+        with patch.dict('os.environ', {'OPENSEARCH_SETTINGS_ALLOW_WRITE': 'false'}, clear=True):
+            result = await get_tools(registry, config)
+
+        assert 'DataDistributionTool' in result
+
+    @pytest.mark.asyncio
+    async def test_no_warning_without_filter_env_vars(self, registry, write_config, caplog):
+        config = write_config('tool_filters: {}\n')
+
+        with patch.dict('os.environ', {}, clear=True), caplog.at_level('WARNING'):
+            await get_tools(registry, config)
+
+        assert 'Both config file and environment variables are set' not in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_warning_with_filter_env_var(self, registry, write_config, caplog):
+        config = write_config('tool_filters: {}\n')
+
+        with (
+            patch.dict('os.environ', {'OPENSEARCH_DISABLED_TOOLS': 'ListIndexTool'}, clear=True),
+            caplog.at_level('WARNING'),
+        ):
+            await get_tools(registry, config)
+
+        assert 'Both config file and environment variables are set' in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_warning_when_env_and_config_both_set_allow_write(
+        self, registry, write_config, caplog
+    ):
+        config = write_config('tool_filters:\n  settings:\n    allow_write: true\n')
+
+        with (
+            patch.dict('os.environ', {'OPENSEARCH_SETTINGS_ALLOW_WRITE': 'false'}, clear=True),
+            caplog.at_level('WARNING'),
+        ):
+            await get_tools(registry, config)
+
+        assert (
+            'OPENSEARCH_SETTINGS_ALLOW_WRITE is set but the config file sets allow_write; '
+            'using the config file value (true).'
+        ) in caplog.text
+
+    @pytest.mark.asyncio
+    async def test_no_allow_write_warning_when_only_config_sets_it(
+        self, registry, write_config, caplog
+    ):
+        config = write_config('tool_filters:\n  settings:\n    allow_write: false\n')
+
+        with patch.dict('os.environ', {}, clear=True), caplog.at_level('WARNING'):
+            await get_tools(registry, config)
+
+        assert 'OPENSEARCH_SETTINGS_ALLOW_WRITE is set' not in caplog.text

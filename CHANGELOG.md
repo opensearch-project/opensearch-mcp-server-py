@@ -9,6 +9,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Changed
 
 ### Fixed
+- A config file without an `allow_write` setting no longer hides write tools; set `allow_write: false` to keep them hidden. The tool list now uses `OPENSEARCH_SETTINGS_ALLOW_WRITE` (default `true`), matching the write check `GenericOpenSearchApiTool` makes when it's called. The warning that both a config file and environment variables are set no longer appears when no tool filtering variable is set
 - Send boolean `query_params` of `GenericOpenSearchApiTool` as lowercase `true`/`false` instead of Python's `True`/`False`, which OpenSearch rejects with a 400 ([#320](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/320))
 
 ### Removed
