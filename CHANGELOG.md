@@ -6,6 +6,8 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added
 
+- Add OAuth protected-resource support for the streaming MCP server, including bearer-token validation, scope enforcement, protected-resource metadata, and bearer-token forwarding to OpenSearch ([#98](https://github.com/opensearch-project/opensearch-mcp-server-py/issues/98))
+
 ### Changed
 
 ### Fixed
