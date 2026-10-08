@@ -50,6 +50,14 @@ The server can be started with no environment variables at all. Agents provide c
 
 With this setup, agents pass `opensearch_url` and authentication parameters directly when calling any tool. This is useful when agents discover endpoints from a knowledge base, runbook, or SOP, or when a single agent needs to work with multiple clusters in one session. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) for details.
 
+### Startup specification downloads
+
+Startup downloads two OpenAPI specifications to generate additional tools. Each
+download has a 10-second total deadline, with 5-second connection and read-idle
+timeouts. If a download fails, existing built-in tools remain available and a
+warning is logged to stderr, not the MCP stdout stream. This bounds startup
+delays in network-restricted environments; it does not disable download attempts.
+
 ## Available Tools
 
 By default, only **core tools** are enabled to provide essential OpenSearch functionality:

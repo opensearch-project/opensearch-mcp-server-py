@@ -3,6 +3,7 @@
 
 import aiohttp
 import json
+import logging
 import os
 import ssl
 import yaml
@@ -15,6 +16,8 @@ from typing import Any, Dict, List
 
 
 # Constants
+logger = logging.getLogger(__name__)
+SPEC_FETCH_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5, sock_read=5)
 BASE_URL = 'https://raw.githubusercontent.com/opensearch-project/opensearch-api-specification/refs/heads/main/spec/namespaces'
 SPEC_FILES = ['cluster.yaml', '_core.yaml']
 SUPPORTED_OPERATIONS = ['msearch', 'explain', 'count', 'cluster.health']
@@ -43,7 +46,7 @@ async def fetch_github_spec(file_name: str) -> Dict:
     # Create connector with SSL context
     connector = aiohttp.TCPConnector(ssl=ssl_context)
 
-    async with aiohttp.ClientSession(connector=connector) as session:
+    async with aiohttp.ClientSession(connector=connector, timeout=SPEC_FETCH_TIMEOUT) as session:
         async with session.get(url) as response:
             # Raise exception for HTTP errors
             response.raise_for_status()
@@ -312,6 +315,6 @@ async def generate_tools_from_openapi() -> Dict[str, Dict[str, Any]]:
                 TOOL_REGISTRY[tool_name] = generate_tool_from_group(base_name, endpoints)
 
     except Exception as e:
-        print(f'Error generating tools: {e}')
+        logger.warning('OpenAPI tool generation failed (%s): %s', type(e).__name__, e)
 
     return TOOL_REGISTRY
