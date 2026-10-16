@@ -832,6 +832,7 @@ export OPENSEARCH_ENABLED_CATEGORIES="<category_name>"
 - All configuration fields are optional
 - Disabled filters have higher priority: If a tool is both enabled and disabled, it will be disabled
 - When both config file and environment variables are provided, the config file will be prioritized
+- If a config file has no `allow_write` setting, `OPENSEARCH_SETTINGS_ALLOW_WRITE` is used (default `true`)
 - Tool filtering is only supported in single mode. In multi mode, tool filtering is not supported
 
 ### Built-in Categories
