@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import aiohttp
+import asyncio
 import json
+import logging
 import os
 import ssl
 import yaml
@@ -15,6 +17,8 @@ from typing import Any, Dict, List
 
 
 # Constants
+logger = logging.getLogger(__name__)
+SPEC_FETCH_TIMEOUT = aiohttp.ClientTimeout(total=10, connect=5, sock_read=5)
 BASE_URL = 'https://raw.githubusercontent.com/opensearch-project/opensearch-api-specification/refs/heads/main/spec/namespaces'
 SPEC_FILES = ['cluster.yaml', '_core.yaml']
 SUPPORTED_OPERATIONS = ['msearch', 'explain', 'count', 'cluster.health']
@@ -43,7 +47,7 @@ async def fetch_github_spec(file_name: str) -> Dict:
     # Create connector with SSL context
     connector = aiohttp.TCPConnector(ssl=ssl_context)
 
-    async with aiohttp.ClientSession(connector=connector) as session:
+    async with aiohttp.ClientSession(connector=connector, timeout=SPEC_FETCH_TIMEOUT) as session:
         async with session.get(url) as response:
             # Raise exception for HTTP errors
             response.raise_for_status()
@@ -301,6 +305,7 @@ def generate_tool_from_group(base_name: str, endpoints: List[Dict]) -> Dict[str,
 
 async def generate_tools_from_openapi() -> Dict[str, Dict[str, Any]]:
     """Generate tools from OpenSearch API specification and append to TOOL_REGISTRY."""
+    generated_tools = {}
     try:
         for spec_file in SPEC_FILES:
             spec = await fetch_github_spec(spec_file)
@@ -309,9 +314,13 @@ async def generate_tools_from_openapi() -> Dict[str, Dict[str, Any]]:
             for group_name, endpoints in grouped_ops.items():
                 base_name = ''.join(part.title() for part in group_name.split('.'))
                 tool_name = f'{base_name.replace("_", "")}Tool'
-                TOOL_REGISTRY[tool_name] = generate_tool_from_group(base_name, endpoints)
+                generated_tools[tool_name] = generate_tool_from_group(base_name, endpoints)
 
+    except asyncio.CancelledError:
+        raise
     except Exception as e:
-        print(f'Error generating tools: {e}')
+        logger.warning('OpenAPI tool generation failed (%s): %s', type(e).__name__, e)
+    else:
+        TOOL_REGISTRY.update(generated_tools)
 
     return TOOL_REGISTRY
