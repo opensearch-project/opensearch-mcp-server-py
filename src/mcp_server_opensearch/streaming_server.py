@@ -68,6 +68,7 @@ async def create_mcp_server(
                     name=tool_info.get('display_name', tool_name),
                     description=tool_info['description'],
                     input_schema=tool_info['input_schema'],
+                    annotations=tool_info.get('annotations'),
                     meta={'category': tool_info['category']}
                     if tool_info.get('category')
                     else None,  # type: ignore[call-arg]

@@ -22,6 +22,7 @@ write-oriented and are a distinct capability from cluster administration.
 import json
 import logging
 import os
+from .tool_annotations import read_only_annotations, write_annotations
 from .tool_logging import log_tool_error
 from .tool_params import baseToolArgs
 from datetime import datetime, timezone
@@ -775,6 +776,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'args_model': SaveMemoryArgs,
             'min_version': '1.0.0',
             'http_methods': 'GET, POST, PUT',
+            'annotations': write_annotations('Save Memory', destructive=False, idempotent=False),
             'bypass_write_filter': True,
             'memory_tool': True,
         },
@@ -797,6 +799,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'args_model': SearchMemoryArgs,
             'min_version': '1.0.0',
             'http_methods': 'GET',
+            'annotations': read_only_annotations('Search Memories'),
             'memory_tool': True,
         },
         'DeleteMemoryTool': {
@@ -811,6 +814,7 @@ MEMORY_TOOLS_REGISTRY: dict[str, dict[str, Any]] = (
             'args_model': DeleteMemoryArgs,
             'min_version': '1.0.0',
             'http_methods': 'GET, DELETE',
+            'annotations': write_annotations('Delete Memory', destructive=True, idempotent=True),
             'bypass_write_filter': True,
             'memory_tool': True,
         },

@@ -6,6 +6,7 @@ import json
 import os
 import ssl
 import yaml
+from .tool_annotations import read_only_annotations
 from .tool_logging import log_tool_error
 from .tool_params import baseToolArgs
 from .tools import TOOL_REGISTRY, check_tool_compatibility
@@ -18,6 +19,14 @@ from typing import Any, Dict, List
 BASE_URL = 'https://raw.githubusercontent.com/opensearch-project/opensearch-api-specification/refs/heads/main/spec/namespaces'
 SPEC_FILES = ['cluster.yaml', '_core.yaml']
 SUPPORTED_OPERATIONS = ['msearch', 'explain', 'count', 'cluster.health']
+
+# Every supported operation needs an entry here; all current ones only read.
+OPERATION_ANNOTATIONS = {
+    'msearch': read_only_annotations('Multi Search'),
+    'explain': read_only_annotations('Explain Document Score'),
+    'count': read_only_annotations('Count Documents'),
+    'cluster.health': read_only_annotations('Get Cluster Health'),
+}
 
 BODY_DESCRIPTIONS = {
     'msearch': 'Request body as NDJSON format: alternating lines of header and query objects ending with \\n. Alternatively, pass a JSON array [header, query, header, query, ...] and the tool will convert it to NDJSON for you.',
@@ -296,6 +305,7 @@ def generate_tool_from_group(base_name: str, endpoints: List[Dict]) -> Dict[str,
         'min_version': min_version,
         'max_version': max_version,
         'http_methods': http_methods,
+        'annotations': OPERATION_ANNOTATIONS[details['x-operation-group']],
     }
 
 
