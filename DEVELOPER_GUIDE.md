@@ -299,6 +299,7 @@ Add your tool to the static `TOOL_REGISTRY` dict. Look at any existing entry for
     'function': your_tool_function,
     'args_model': YourToolArgs,
     'http_methods': 'GET',          # Controls write protection filter
+    'annotations': read_only_annotations('Your Tool Title'),  # MCP ToolAnnotations
     'min_version': '2.0.0',         # Optional: minimum OpenSearch version
 },
 ```
@@ -306,6 +307,7 @@ Add your tool to the static `TOOL_REGISTRY` dict. Look at any existing entry for
 Key fields:
 - `display_name` — name exposed to MCP clients (must match the registry key)
 - `http_methods` — `'GET'`, `'POST'`, `'PUT'`, `'DELETE'`, or `'GET, POST'`. When write protection is enabled, non-GET tools are filtered out
+- `annotations` — required MCP `ToolAnnotations` returned in `tools/list`. Use `read_only_annotations(title)` for tools that only read, or `write_annotations(title, destructive=..., idempotent=..., open_world=...)` from `src/tools/tool_annotations.py` for tools that modify data. These are hints for clients and do not change the write filter
 - `min_version` / `max_version` — optional semver strings for OpenSearch version gating
 - `multi_only` — optional bool, if `True` the tool only appears in multi-cluster mode
 

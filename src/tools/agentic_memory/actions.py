@@ -20,6 +20,7 @@ from opensearch.helper import (
     search_agentic_memory,
     update_agentic_memory,
 )
+from tools.tool_annotations import read_only_annotations, write_annotations
 from tools.tool_logging import log_tool_error
 
 
@@ -134,6 +135,9 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': CreateAgenticMemorySessionArgs,
         'min_version': '3.3.0',
         'http_methods': 'POST',
+        'annotations': write_annotations(
+            'Create Agentic Memory Session', destructive=False, idempotent=False
+        ),
     },
     'AddAgenticMemoriesTool': {
         'display_name': 'AddAgenticMemoriesTool',
@@ -143,6 +147,9 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': AddAgenticMemoriesArgs,
         'min_version': '3.3.0',
         'http_methods': 'POST',
+        'annotations': write_annotations(
+            'Add Agentic Memories', destructive=True, idempotent=False, open_world=True
+        ),
     },
     'GetAgenticMemoryTool': {
         'display_name': 'GetAgenticMemoryTool',
@@ -152,6 +159,7 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': GetAgenticMemoryArgs,
         'min_version': '3.3.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Agentic Memory'),
     },
     'UpdateAgenticMemoryTool': {
         'display_name': 'UpdateAgenticMemoryTool',
@@ -161,6 +169,9 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': UpdateAgenticMemoryArgs,
         'min_version': '3.3.0',
         'http_methods': 'PUT',
+        'annotations': write_annotations(
+            'Update Agentic Memory', destructive=True, idempotent=True
+        ),
     },
     'DeleteAgenticMemoryByIDTool': {
         'display_name': 'DeleteAgenticMemoryByIDTool',
@@ -170,6 +181,9 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': DeleteAgenticMemoryByIDArgs,
         'min_version': '3.3.0',
         'http_methods': 'DELETE',
+        'annotations': write_annotations(
+            'Delete Agentic Memory by ID', destructive=True, idempotent=True
+        ),
     },
     'DeleteAgenticMemoryByQueryTool': {
         'display_name': 'DeleteAgenticMemoryByQueryTool',
@@ -179,6 +193,9 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': DeleteAgenticMemoryByQueryArgs,
         'min_version': '3.3.0',
         'http_methods': 'POST',
+        'annotations': write_annotations(
+            'Delete Agentic Memories by Query', destructive=True, idempotent=True
+        ),
     },
     'SearchAgenticMemoryTool': {
         'display_name': 'SearchAgenticMemoryTool',
@@ -188,5 +205,6 @@ AGENTIC_MEMORY_TOOLS_REGISTRY = {
         'args_model': SearchAgenticMemoryArgs,
         'min_version': '3.3.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Search Agentic Memory'),
     },
 }

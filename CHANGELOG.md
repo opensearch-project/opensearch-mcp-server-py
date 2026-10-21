@@ -6,6 +6,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Added
 - Add a `size` parameter to `PPLQueryTool` to cap returned rows. ([#327](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/327))
+- Add MCP `ToolAnnotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) to every tool in `tools/list`, in both single and multi mode. The existing write filter is unchanged ([#331](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/331))
 
 ### Changed
 

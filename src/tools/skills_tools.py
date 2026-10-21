@@ -6,6 +6,7 @@ from .analysis.data_distribution import execute_data_distribution
 from .analysis.data_fetching_helper import AnalysisParameters
 from .analysis.log_pattern_analysis import execute_log_pattern_analysis
 from .analysis.metric_change_analysis import execute_metric_change_analysis
+from .tool_annotations import read_only_annotations
 from .tool_logging import log_tool_error
 from .tool_params import baseToolArgs
 from .utils import format_json
@@ -251,6 +252,7 @@ SKILLS_TOOLS_REGISTRY = {
         'args_model': DataDistributionToolArgs,
         'min_version': '1.0.0',
         'http_methods': 'POST',
+        'annotations': read_only_annotations('Analyze Data Distribution'),
         'bypass_write_filter': True,
     },
     'LogPatternAnalysisTool': {
@@ -268,6 +270,7 @@ SKILLS_TOOLS_REGISTRY = {
         'args_model': LogPatternAnalysisToolArgs,
         'min_version': '2.19.0',
         'http_methods': 'POST',
+        'annotations': read_only_annotations('Analyze Log Patterns'),
         'bypass_write_filter': True,
     },
     'MetricChangeAnalysisTool': {
@@ -288,6 +291,7 @@ SKILLS_TOOLS_REGISTRY = {
         'args_model': MetricChangeAnalysisToolArgs,
         'min_version': '1.0.0',
         'http_methods': 'POST',
+        'annotations': read_only_annotations('Analyze Metric Changes'),
         'bypass_write_filter': True,
     },
 }
