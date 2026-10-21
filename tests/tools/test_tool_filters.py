@@ -339,8 +339,8 @@ class TestGetTools:
             yield mock_get_version, mock_is_compatible
 
     @pytest.mark.asyncio
-    async def test_get_tools_multi_mode_returns_all_tools(self, mock_tool_registry):
-        """Test that multi mode returns all tools with base fields intact."""
+    async def test_get_tools_multi_mode_returns_default_tools(self, mock_tool_registry):
+        """Test that multi mode returns the default (core) tools with base fields intact."""
         from mcp_server_opensearch.global_state import set_mode
 
         set_mode('multi')  # Set mode to multi for this test
@@ -352,11 +352,8 @@ class TestGetTools:
 
         result = await get_tools(mock_tool_registry)
 
-        # Same tool names (minus memory tools)
-        expected_names = {
-            name for name, info in mock_tool_registry.items() if not info.get('memory_tool')
-        }
-        assert set(result.keys()) == expected_names
+        # Only core tools are enabled by default; skills tools need enabled_categories
+        assert set(result.keys()) == {'ListIndexTool', 'SearchIndexTool'}
 
         # Original registry must not be mutated (no 'category' key added)
         for name, info in mock_tool_registry.items():
@@ -1451,3 +1448,140 @@ class TestMultiOnlyFilter:
         result = await get_tools(registry)
 
         assert 'ListIndexTool' in result
+
+
+class TestMultiModeToolFilter:
+    """Multi mode applies the same tool filters as single mode."""
+
+    FILTER_ENV_VARS = (
+        'OPENSEARCH_ENABLED_TOOLS',
+        'OPENSEARCH_DISABLED_TOOLS',
+        'OPENSEARCH_TOOL_CATEGORIES',
+        'OPENSEARCH_ENABLED_CATEGORIES',
+        'OPENSEARCH_DISABLED_CATEGORIES',
+        'OPENSEARCH_ENABLED_TOOLS_REGEX',
+        'OPENSEARCH_DISABLED_TOOLS_REGEX',
+        'OPENSEARCH_SETTINGS_ALLOW_WRITE',
+        'OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES',
+    )
+
+    @pytest.fixture(autouse=True)
+    def clean_env(self, monkeypatch):
+        from mcp_server_opensearch.global_state import set_mode
+
+        for var in self.FILTER_ENV_VARS:
+            monkeypatch.delenv(var, raising=False)
+        yield monkeypatch
+        set_mode('single')
+
+    @staticmethod
+    def _registry():
+        from tools.tools import TOOL_REGISTRY
+
+        return copy.deepcopy(TOOL_REGISTRY)
+
+    @staticmethod
+    def _without_memory_tools(tools):
+        # Memory tools are single-mode only and may be registered by other tests
+        return {name for name, info in tools.items() if not info.get('memory_tool')}
+
+    @staticmethod
+    async def _tools(mode):
+        from mcp_server_opensearch.global_state import set_mode
+
+        set_mode(mode)
+        with (
+            patch('tools.tool_filter.get_opensearch_version', return_value=Version.parse('3.3.0')),
+            patch('tools.tool_filter.is_tool_compatible', return_value=True),
+        ):
+            return await get_tools(TestMultiModeToolFilter._registry())
+
+    @pytest.mark.asyncio
+    async def test_enabled_categories_exclude_other_tools(self, clean_env):
+        clean_env.setenv('OPENSEARCH_ENABLED_CATEGORIES', 'search_relevance,observability,skills')
+
+        result = await self._tools('multi')
+
+        expected = set(BUILTIN_CATEGORY_TOOLS['core_tools'])
+        for category in ('search_relevance', 'observability', 'skills'):
+            expected.update(BUILTIN_CATEGORY_TOOLS[category])
+        expected.add('ListClustersTool')
+        # Some core tools are generated from the OpenAPI spec at startup, not static
+        assert set(result) == expected & set(self._registry())
+        assert not [name for name in result if 'AgenticMemory' in name]
+        assert 'GetClusterStateTool' not in result
+
+    @pytest.mark.asyncio
+    async def test_no_filters_matches_single_mode_default(self):
+        multi = await self._tools('multi')
+        single = await self._tools('single')
+
+        expected = set(BUILTIN_CATEGORY_TOOLS['core_tools']) | {'ListClustersTool'}
+        assert set(multi) == expected & set(self._registry())
+        assert set(multi) - {'ListClustersTool'} == self._without_memory_tools(single)
+
+    @pytest.mark.asyncio
+    async def test_allow_write_false_hides_write_tools_like_single_mode(self, clean_env):
+        clean_env.setenv('OPENSEARCH_ENABLED_CATEGORIES', 'agentic_memory,search_relevance')
+        clean_env.setenv('OPENSEARCH_SETTINGS_ALLOW_WRITE', 'false')
+
+        multi = await self._tools('multi')
+        single = await self._tools('single')
+
+        assert 'GetAgenticMemoryTool' in multi
+        assert 'SearchAgenticMemoryTool' in multi
+        assert 'GetQuerySetTool' in multi
+        for write_tool in (
+            'AddAgenticMemoriesTool',
+            'UpdateAgenticMemoryTool',
+            'DeleteAgenticMemoryByIDTool',
+            'CreateSearchConfigurationTool',
+            'DeleteExperimentTool',
+        ):
+            assert write_tool not in multi
+        assert set(multi) - {'ListClustersTool'} == self._without_memory_tools(single)
+
+    @pytest.mark.asyncio
+    async def test_allow_write_false_blocks_write_tool_call(self, clean_env):
+        from mcp_server_opensearch.tool_executor import execute_tool
+
+        clean_env.setenv('OPENSEARCH_ENABLED_CATEGORIES', 'agentic_memory')
+        clean_env.setenv('OPENSEARCH_SETTINGS_ALLOW_WRITE', 'false')
+
+        multi = await self._tools('multi')
+
+        with pytest.raises(ValueError, match='Unknown or disabled tool'):
+            await execute_tool('AddAgenticMemoriesTool', {}, multi)
+
+    @pytest.mark.asyncio
+    async def test_allow_write_categories_exempts_category(self, clean_env):
+        clean_env.setenv('OPENSEARCH_ENABLED_CATEGORIES', 'agentic_memory,search_relevance')
+        clean_env.setenv('OPENSEARCH_SETTINGS_ALLOW_WRITE', 'false')
+        clean_env.setenv('OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES', 'agentic_memory')
+
+        result = await self._tools('multi')
+
+        assert 'AddAgenticMemoriesTool' in result
+        assert 'CreateSearchConfigurationTool' not in result
+
+    @pytest.mark.asyncio
+    async def test_disabled_categories_and_list_clusters_kept(self, clean_env):
+        clean_env.setenv('OPENSEARCH_DISABLED_CATEGORIES', 'core_tools')
+        clean_env.setenv('OPENSEARCH_DISABLED_TOOLS', 'ListClustersTool')
+
+        result = await self._tools('multi')
+
+        assert set(result) == {'ListClustersTool'}
+
+    @pytest.mark.asyncio
+    async def test_filters_do_not_mutate_caller_registry(self, clean_env):
+        from mcp_server_opensearch.global_state import set_mode
+
+        clean_env.setenv('OPENSEARCH_ENABLED_CATEGORIES', 'skills')
+        set_mode('multi')
+        registry = self._registry()
+        keys = set(registry)
+
+        await get_tools(registry)
+
+        assert set(registry) == keys

@@ -8,6 +8,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 - Add a `size` parameter to `PPLQueryTool` to cap returned rows. ([#327](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/327))
 
 ### Changed
+- Apply tool filters (enabled/disabled categories, tools and regexes, and `allow_write`) in multi mode the same way as in single mode. **Breaking (multi mode):** with no filter configured, multi mode now enables only `core_tools` (plus `ListClustersTool`) instead of every tool; enable other categories with `OPENSEARCH_ENABLED_CATEGORIES` or `tool_filters.enabled_categories` ([#330](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/330))
 
 ### Fixed
 - Send boolean `query_params` of `GenericOpenSearchApiTool` as lowercase `true`/`false` instead of Python's `True`/`False`, which OpenSearch rejects with a 400 ([#320](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/320))

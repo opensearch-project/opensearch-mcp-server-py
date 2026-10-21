@@ -461,11 +461,46 @@ def process_tool_filter(
         return build_category_map(tool_registry) if tool_registry else {}
 
 
+def _apply_tool_filters(tool_registry: dict, config_file_path: str = '') -> dict:
+    """Apply category, tool, regex and allow_write filters to ``tool_registry`` in place.
+
+    Filters come from the config file when one is given, otherwise from environment
+    variables. Returns the category → display-name map used for category stamping.
+    """
+    env_config = {
+        'enabled_tools': os.getenv('OPENSEARCH_ENABLED_TOOLS', ''),
+        'disabled_tools': os.getenv('OPENSEARCH_DISABLED_TOOLS', ''),
+        'tool_categories': os.getenv('OPENSEARCH_TOOL_CATEGORIES', ''),
+        'enabled_categories': os.getenv('OPENSEARCH_ENABLED_CATEGORIES', ''),
+        'disabled_categories': os.getenv('OPENSEARCH_DISABLED_CATEGORIES', ''),
+        'enabled_tools_regex': os.getenv('OPENSEARCH_ENABLED_TOOLS_REGEX', ''),
+        'disabled_tools_regex': os.getenv('OPENSEARCH_DISABLED_TOOLS_REGEX', ''),
+        'allow_write': os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE', 'true').lower() == 'true',
+        'allow_write_categories': parse_comma_separated(
+            os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES', '')
+        )
+        or None,
+    }
+
+    # Check if both config and env variables are set
+    if config_file_path and any(env_config.values()):
+        logging.warning('Both config file and environment variables are set. Using config file.')
+
+    return process_tool_filter(
+        tool_registry=tool_registry,
+        filter_path=config_file_path if config_file_path else None,
+        **{k: v for k, v in env_config.items() if not config_file_path},
+    )
+
+
 async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
     """Filter and return available tools based on server mode and OpenSearch version.
 
-    In 'multi' mode, returns tools without version filtering or schema stripping,
-    but excludes memory tools (which require single-mode OPENSEARCH_URL config).
+    Both modes apply the same category, tool, regex and allow_write filters, so with
+    no filter configured only core_tools are enabled.
+    In 'multi' mode, tools are not version-filtered, multi-only tools are always kept,
+    memory tools (which require single-mode OPENSEARCH_URL config) are excluded, and
+    connection override fields are stripped from schemas.
     In 'single' mode, filters tools based on OpenSearch version compatibility and
     removes base tool arguments from schemas.
 
@@ -501,16 +536,24 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
         non_memory = {
             name: info for name, info in tool_registry.items() if not info.get('memory_tool')
         }
+        # Filter a copy so the caller's registry is not mutated. Multi-only tools
+        # (cluster discovery) are kept regardless of the filter configuration.
+        filtered = dict(non_memory)
+        category_to_tools = _apply_tool_filters(filtered, config_file_path)
+        kept = {
+            name: info
+            for name, info in non_memory.items()
+            if name in filtered or info.get('multi_only')
+        }
         # Drop serverless-incompatible tools when every configured cluster is
         # serverless. Mixed deployments keep them and rely on the call-time guard.
         if _is_serverless_multi_mode():
-            filter_serverless_incompatible(non_memory)
-        category_to_tools = build_category_map(non_memory)
+            filter_serverless_incompatible(kept)
         tool_to_category = {
             dn.lower(): cat for cat, dns in category_to_tools.items() for dn in dns
         }
         filtered_registry = {}
-        for name, info in non_memory.items():
+        for name, info in kept.items():
             schema = _strip_schema_fields(info['input_schema'], CONNECTION_OVERRIDE_FIELDS)
             entry = {**info, 'input_schema': schema}
             entry['category'] = tool_to_category.get(info.get('display_name', name).lower(), '')
@@ -534,31 +577,8 @@ async def get_tools(tool_registry: dict, config_file_path: str = '') -> dict:
             + (' Applying serverless-aware tool filtering.' if serverless else '')
         )
 
-    env_config = {
-        'enabled_tools': os.getenv('OPENSEARCH_ENABLED_TOOLS', ''),
-        'disabled_tools': os.getenv('OPENSEARCH_DISABLED_TOOLS', ''),
-        'tool_categories': os.getenv('OPENSEARCH_TOOL_CATEGORIES', ''),
-        'enabled_categories': os.getenv('OPENSEARCH_ENABLED_CATEGORIES', ''),
-        'disabled_categories': os.getenv('OPENSEARCH_DISABLED_CATEGORIES', ''),
-        'enabled_tools_regex': os.getenv('OPENSEARCH_ENABLED_TOOLS_REGEX', ''),
-        'disabled_tools_regex': os.getenv('OPENSEARCH_DISABLED_TOOLS_REGEX', ''),
-        'allow_write': os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE', 'true').lower() == 'true',
-        'allow_write_categories': parse_comma_separated(
-            os.getenv('OPENSEARCH_SETTINGS_ALLOW_WRITE_CATEGORIES', '')
-        )
-        or None,
-    }
-
-    # Check if both config and env variables are set
-    if config_file_path and any(env_config.values()):
-        logging.warning('Both config file and environment variables are set. Using config file.')
-
     # Apply tool filtering, update the TOOL_REGISTRY
-    category_to_tools = process_tool_filter(
-        tool_registry=tool_registry,
-        filter_path=config_file_path if config_file_path else None,
-        **{k: v for k, v in env_config.items() if not config_file_path},
-    )
+    category_to_tools = _apply_tool_filters(tool_registry, config_file_path)
     tool_to_category = {dn.lower(): cat for cat, dns in category_to_tools.items() for dn in dns}
 
     for name, info in tool_registry.items():
