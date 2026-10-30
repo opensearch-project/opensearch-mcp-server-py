@@ -1,0 +1,92 @@
+name: Integration Tests
+
+# Setup: create the `integration-ci` GitHub Environment and set its required
+# reviewers to the repository MAINTAINERS team. PR runs wait for maintainer
+# approval; pushes run ungated.
+on:
+  push:
+    branches:
+      - 'main'
+      - '[0-9]+.[0-9]+'
+      - '[0-9]+.x'
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  integration-tests:
+    if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
+    name: Integration tests on ${{ matrix.os }}
+    environment: ${{ github.event_name == 'pull_request_target' && 'integration-ci' || '' }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: macos
+          - os: windows-latest
+            platform: windows
+
+    env:
+      IT_OPENSEARCH_URL: ${{ secrets.IT_OPENSEARCH_URL }}
+      IT_BASIC_AUTH_USERNAME: ${{ secrets.IT_BASIC_AUTH_USERNAME }}
+      IT_BASIC_AUTH_PASSWORD: ${{ secrets.IT_BASIC_AUTH_PASSWORD }}
+      IT_IAM_ROLE_ARN: ${{ secrets.IT_IAM_ROLE_ARN }}
+      IT_AWS_REGION: us-west-2
+      IT_TEST_INDEX: mcp-it-${{ matrix.platform }}-${{ github.run_id }}
+
+    steps:
+      - name: Checkout PR code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Configure AWS credentials
+        id: aws-creds
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ secrets.OPENSEARCH_MCP_CI_ROLE }}
+          aws-region: us-west-2
+          output-credentials: true
+
+      - name: Set up Python 3
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.10'
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+
+      - name: Install dependencies (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv sync
+
+      - name: Install dependencies (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          uv venv
+          .\.venv\Scripts\Activate.ps1
+          uv sync
+
+      - name: Install integration test dependencies
+        run: pip install pytest-asyncio pytest-timeout "httpx[http2]"
+
+      - name: Run integration tests
+        env:
+          IT_AWS_ACCESS_KEY_ID: ${{ steps.aws-creds.outputs.aws-access-key-id }}
+          IT_AWS_SECRET_ACCESS_KEY: ${{ steps.aws-creds.outputs.aws-secret-access-key }}
+          IT_AWS_SESSION_TOKEN: ${{ steps.aws-creds.outputs.aws-session-token }}
+        run: python -m pytest integration_tests/ -v --tb=short --timeout=300
