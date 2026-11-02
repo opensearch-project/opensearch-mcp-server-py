@@ -407,7 +407,7 @@ For Bearer authentication:
 **Multiple datasources per request (multi mode):** With `--mode multi` (or `OPENSEARCH_MODE=multi`) and `OPENSEARCH_HEADER_AUTH=true`, a single request can carry several datasources as comma-separated, positionally aligned headers:
 
 - `opensearch-url`: `url0,url1,...`
-- `opensearch-cluster-name`: `name0,name1,...` — LLM-facing selector. Required for >1 datasource; a single one defaults to `opensearch-cluster`
+- `opensearch-cluster-name`: `name0,name1,...` — LLM-facing selector. Required for >1 datasource; a single one defaults to `default`
 - `aws-service-name`: `es,aoss,...`
 - `aws-region`: `region0,region1,...`
 

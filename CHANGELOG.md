@@ -13,6 +13,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Fixed
 - Send boolean `query_params` of `GenericOpenSearchApiTool` as lowercase `true`/`false` instead of Python's `True`/`False`, which OpenSearch rejects with a 400 ([#320](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/320))
 - Honor `OPENSEARCH_SETTINGS_ALLOW_WRITE` and default `allow_write` to true when a config file has no `tool_filters.settings` block or when the `settings` block omits `allow_write`, in both single and multi mode; the filter previously ignored the environment variable and either hid or showed write tools regardless ([#330](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/330))
+- The single header-defined datasource sent without an `opensearch-cluster-name` header is now named `default` instead of `opensearch-cluster`, so an LLM guessing `default` resolves; header datasource names also match case-insensitively when unambiguous ([#335](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/335))
 
 ### Removed
 

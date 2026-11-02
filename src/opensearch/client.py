@@ -1291,6 +1291,9 @@ def _split_header_list(raw: Optional[str]) -> list[str]:
 # reason is logged for operators; the header mechanism is internal and not shown to the user.
 _NO_DATASOURCE_MSG = 'No OpenSearch datasource is available for this request'
 
+# Name of the single header-defined datasource when the opensearch-cluster-name header is omitted.
+DEFAULT_DATASOURCE_NAME = 'default'
+
 
 def _datasources_phrase(count: int) -> str:
     """Grammatical 'is/are N datasource(s)' fragment for log messages."""
@@ -1341,12 +1344,16 @@ def _select_datasource_by_name(urls: list[str], names: list[str], requested: Opt
             'Multiple datasources are configured; opensearch_cluster_name is required to '
             f'select one. Available: {available}'
         )
-    if requested not in names:
-        raise ConfigurationError(
-            f'opensearch_cluster_name "{requested}" is not among the configured datasources: '
-            f'{available}'
-        )
-    return names.index(requested)
+    if requested in names:
+        return names.index(requested)
+    # LLMs vary case when guessing; accept a case-insensitive match only when it is unique.
+    folded = [i for i, n in enumerate(names) if n.casefold() == requested.casefold()]
+    if len(folded) == 1:
+        return folded[0]
+    raise ConfigurationError(
+        f'opensearch_cluster_name "{requested}" is not among the configured datasources: '
+        f'{available}'
+    )
 
 
 def _datasource_names(urls: list[str], header_auth: Dict[str, Optional[str]]) -> list[str]:
@@ -1363,7 +1370,7 @@ def _datasource_names(urls: list[str], header_auth: Dict[str, Optional[str]]) ->
                 f'multiple values (got {len(urls)})'
             )
             raise ConfigurationError(_NO_DATASOURCE_MSG)
-        names = ['opensearch-cluster']
+        names = [DEFAULT_DATASOURCE_NAME]
     return names
 
 
