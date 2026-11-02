@@ -2039,13 +2039,109 @@ class TestHeaderMultiDatasource:
         self._ctx(mock_request_ctx, headers)
         mock_create.return_value = Mock()
 
-        assert get_header_cluster_names() == ['opensearch-cluster']
-        initialize_client(baseToolArgs(opensearch_cluster_name='opensearch-cluster'))
+        assert get_header_cluster_names() == ['default']
+        initialize_client(baseToolArgs(opensearch_cluster_name='default'))
 
         kwargs = mock_create.call_args[1]
         assert kwargs['opensearch_url'] == 'https://metrics.example.com'
         assert kwargs['is_serverless_mode'] is True
         assert kwargs['aws_region'] == 'us-west-2'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_missing_name_header_single_url_resolves_without_name(
+        self, mock_request_ctx, mock_create
+    ):
+        """The single placeholder datasource is selected when no name is passed."""
+        headers = self._headers()
+        del headers['opensearch-cluster-name']
+        headers['opensearch-url'] = 'https://metrics.example.com'
+        headers['aws-service-name'] = 'aoss'
+        headers['aws-region'] = 'us-west-2'
+        self._ctx(mock_request_ctx, headers)
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name=''))
+
+        assert mock_create.call_args[1]['opensearch_url'] == 'https://metrics.example.com'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_missing_name_header_single_url_rejects_old_placeholder(
+        self, mock_request_ctx, mock_create
+    ):
+        """The former placeholder name is not an alias for the default datasource."""
+        headers = self._headers()
+        del headers['opensearch-cluster-name']
+        headers['opensearch-url'] = 'https://metrics.example.com'
+        headers['aws-service-name'] = 'aoss'
+        headers['aws-region'] = 'us-west-2'
+        self._ctx(mock_request_ctx, headers)
+
+        with pytest.raises(
+            ConfigurationError,
+            match='"opensearch-cluster" is not among the configured datasources: default',
+        ):
+            initialize_client(baseToolArgs(opensearch_cluster_name='opensearch-cluster'))
+        mock_create.assert_not_called()
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_missing_name_header_single_url_matches_case_insensitively(
+        self, mock_request_ctx, mock_create
+    ):
+        """An LLM guessing `Default` resolves to the single placeholder datasource."""
+        headers = self._headers()
+        del headers['opensearch-cluster-name']
+        headers['opensearch-url'] = 'https://metrics.example.com'
+        headers['aws-service-name'] = 'aoss'
+        headers['aws-region'] = 'us-west-2'
+        self._ctx(mock_request_ctx, headers)
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='Default'))
+
+        assert mock_create.call_args[1]['opensearch_url'] == 'https://metrics.example.com'
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_case_insensitive_match_selects_unique_name(self, mock_request_ctx, mock_create):
+        """A unique case-insensitive match selects that datasource; serverless detection agrees."""
+        from opensearch.client import is_serverless_connection
+
+        self._ctx(mock_request_ctx, self._headers())
+        mock_create.return_value = Mock()
+
+        args = baseToolArgs(opensearch_cluster_name='METRICS')
+        initialize_client(args)
+
+        kwargs = mock_create.call_args[1]
+        assert kwargs['opensearch_url'] == 'https://metrics.example.com'
+        assert kwargs['is_serverless_mode'] is True
+        assert is_serverless_connection(args) is True
+
+    @patch('opensearch.client._create_opensearch_client')
+    @patch('opensearch.client.request_context_var')
+    def test_names_differing_only_by_case_match_exactly(self, mock_request_ctx, mock_create):
+        """Exact matches win; a case-insensitive guess matching several names is rejected."""
+        headers = self._headers()
+        headers['opensearch-cluster-name'] = 'Logs,logs'
+        self._ctx(mock_request_ctx, headers)
+        mock_create.return_value = Mock()
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='Logs'))
+        assert mock_create.call_args[1]['opensearch_url'] == 'https://logs.example.com'
+
+        initialize_client(baseToolArgs(opensearch_cluster_name='logs'))
+        assert mock_create.call_args[1]['opensearch_url'] == 'https://metrics.example.com'
+
+        mock_create.reset_mock()
+        with pytest.raises(
+            ConfigurationError,
+            match='"LOGS" is not among the configured datasources: Logs, logs',
+        ):
+            initialize_client(baseToolArgs(opensearch_cluster_name='LOGS'))
+        mock_create.assert_not_called()
 
     @patch('opensearch.client._create_opensearch_client')
     @patch('opensearch.client.request_context_var')

@@ -11,6 +11,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 
 ### Fixed
 - Send boolean `query_params` of `GenericOpenSearchApiTool` as lowercase `true`/`false` instead of Python's `True`/`False`, which OpenSearch rejects with a 400 ([#320](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/320))
+- The single header-defined datasource sent without an `opensearch-cluster-name` header is now named `default` instead of `opensearch-cluster`, so an LLM guessing `default` resolves; header datasource names also match case-insensitively when unambiguous ([#335](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/335))
 
 ### Removed
 
