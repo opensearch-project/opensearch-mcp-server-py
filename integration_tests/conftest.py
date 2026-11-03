@@ -56,7 +56,14 @@ def _create_os_client():
 
     if aws_key and aws_secret:
         from opensearchpy import RequestsHttpConnection
-        from requests_aws4auth import AWS4Auth
+
+        try:
+            from requests_aws4auth import AWS4Auth
+        except ImportError:
+            pytest.skip(
+                'AWS integration tests need the "aws" extra: '
+                'pip install "opensearch-mcp-server-py[aws]"'
+            )
 
         session_token = os.environ.get('IT_AWS_SESSION_TOKEN', '')
         aws_auth = AWS4Auth(aws_key, aws_secret, aws_region, 'es', session_token=session_token)

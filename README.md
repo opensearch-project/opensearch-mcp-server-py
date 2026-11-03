@@ -33,6 +33,21 @@ Opensearch-mcp-server-py can be installed from [PyPI](https://pypi.org/project/o
 pip install opensearch-mcp-server-py
 ```
 
+### Optional features
+
+The base install covers no-auth, basic-auth and bearer-token connections. Two features
+ship as extras, so their dependencies are only downloaded when you need them:
+
+| Extra | Install | Adds |
+|---|---|---|
+| `aws` | `pip install "opensearch-mcp-server-py[aws]"` | AWS authentication: IAM credentials, assumed roles, SigV4 signing, region discovery from profiles |
+| `ml` | `pip install "opensearch-mcp-server-py[ml]"` | `LogPatternAnalysisTool`, which clusters log messages |
+| `all` | `pip install "opensearch-mcp-server-py[all]"` | Both of the above |
+
+`DataDistributionTool` and `MetricChangeAnalysisTool` are always available — they need no
+extra. `LogPatternAnalysisTool` is only registered when the `ml` extra is installed, and
+AWS authentication reports which extra to install if it is missing.
+
 ### Zero-Config Setup
 
 The server can be started with no environment variables at all. Agents provide connection details dynamically on each tool call:

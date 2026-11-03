@@ -15,6 +15,7 @@ No cluster and no AWS credentials are needed. Each case is refused before any
 network call, so the caller's URL is never contacted.
 """
 
+import importlib.util
 import os
 import pytest
 from integration_tests.framework.assertions import assert_tool_error
@@ -28,6 +29,13 @@ UNREACHED_URL = 'https://caller-chosen.us-east-1.es.amazonaws.com'
 NO_CALLER_CREDS = 'No caller-supplied credentials for the requested URL'
 NO_BASE_CREDS_FOR_ROLE = 'No caller-supplied base credentials to assume the requested IAM role'
 BAD_PROFILE = 'Failed to create boto3 session with the requested profile'
+
+# The profile guard runs inside boto3 session creation, so it only exists when the
+# "aws" extra is installed. Without it the server refuses earlier, naming the extra.
+requires_aws_extra = pytest.mark.skipif(
+    importlib.util.find_spec('boto3') is None,
+    reason='needs the "aws" extra: pip install "opensearch-mcp-server-py[aws]"',
+)
 
 # The test host may have usable AWS credentials in ~/.aws or an instance role, which
 # would let the opt-in succeed where a test means to leave the server nothing to fall
@@ -109,6 +117,7 @@ class TestCredentialIsolation:
         )
         assert_tool_error(result, NO_BASE_CREDS_FOR_ROLE)
 
+    @requires_aws_extra
     async def test_named_profile_that_fails_to_build_is_fatal(self):
         """A caller-named profile must not quietly degrade to the server's identity."""
         result = await _call_list_indices(
@@ -226,6 +235,7 @@ class TestAmbientAwsFallbackOptIn:
         )
         assert_tool_error(result, NO_CALLER_CREDS)
 
+    @requires_aws_extra
     async def test_enabled_keeps_failed_profile_fatal(self):
         """A profile that cannot build must not degrade to the default identity.
 

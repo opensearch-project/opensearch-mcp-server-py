@@ -1,10 +1,10 @@
 # Copyright OpenSearch Contributors
 # SPDX-License-Identifier: Apache-2.0
 
+import importlib.util
 import logging
 from .analysis.data_distribution import execute_data_distribution
 from .analysis.data_fetching_helper import AnalysisParameters
-from .analysis.log_pattern_analysis import execute_log_pattern_analysis
 from .analysis.metric_change_analysis import execute_metric_change_analysis
 from .tool_logging import log_tool_error
 from .tool_params import baseToolArgs
@@ -14,6 +14,21 @@ from pydantic import Field
 
 
 logger = logging.getLogger(__name__)
+
+# Log pattern analysis clusters messages with numpy/scipy/scikit-learn. Those packages
+# add roughly 180 MB and about 12 seconds of import time, so they ship as the optional
+# "ml" extra and the tool is only registered when they are present. The other analysis
+# tools in this module are pure Python and always available.
+ML_EXTRA_HINT = (
+    'LogPatternAnalysisTool requires the optional "ml" dependencies. '
+    'Install them with: pip install "opensearch-mcp-server-py[ml]"'
+)
+_ML_MODULES = ('numpy', 'scipy', 'sklearn')
+
+
+def ml_dependencies_available() -> bool:
+    """Report whether the "ml" extra is installed, without importing it."""
+    return all(importlib.util.find_spec(module) is not None for module in _ML_MODULES)
 
 
 class DataDistributionToolArgs(baseToolArgs):
@@ -212,6 +227,12 @@ async def log_pattern_analysis_tool(args: LogPatternAnalysisToolArgs) -> list[di
                 'Missing required parameters: index, logFieldName, selectionTimeRangeStart, selectionTimeRangeEnd'
             )
 
+        # Imported here so the numpy/scipy/scikit-learn stack stays out of server startup.
+        try:
+            from .analysis.log_pattern_analysis import execute_log_pattern_analysis
+        except ImportError as e:
+            raise ImportError(ML_EXTRA_HINT) from e
+
         async with get_opensearch_client(args) as client:
             result = await execute_log_pattern_analysis(
                 client,
@@ -291,3 +312,8 @@ SKILLS_TOOLS_REGISTRY = {
         'bypass_write_filter': True,
     },
 }
+
+if not ml_dependencies_available():
+    # Better to not advertise the tool at all than to expose one that fails on call.
+    del SKILLS_TOOLS_REGISTRY['LogPatternAnalysisTool']
+    logger.info(f'LogPatternAnalysisTool is not registered. {ML_EXTRA_HINT}')
