@@ -158,16 +158,21 @@ async def generic_opensearch_api_tool(args: GenericOpenSearchApiArgs) -> list[di
             if isinstance(response, str):
                 # Some APIs return plain text (like hot_threads)
                 formatted_response = response
+                json_data = None
             else:
                 # Most APIs return JSON
                 formatted_response = format_json(response)
+                json_data = response
 
             # Create descriptive message
             message = f'OpenSearch API Response ({method} {args.path})'
             if args.query_params:
                 message += f' with query params: {args.query_params}'
 
-            return [{'type': 'text', 'text': f'{message}:\n{formatted_response}'}]
+            result = {'type': 'text', 'text': f'{message}:\n{formatted_response}'}
+            if json_data is not None:
+                result['json_data'] = json_data
+            return [result]
 
     except Exception as e:
         return log_tool_error(
