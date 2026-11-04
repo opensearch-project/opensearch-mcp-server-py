@@ -6,6 +6,7 @@ from .agentic_memory.actions import AGENTIC_MEMORY_TOOLS_REGISTRY
 from .generic_api_tool import GenericOpenSearchApiArgs, generic_opensearch_api_tool
 from .memory_tools import MEMORY_TOOLS_REGISTRY
 from .skills_tools import SKILLS_TOOLS_REGISTRY
+from .tool_annotations import read_only_annotations, write_annotations
 from .tool_logging import log_tool_error
 from .tool_params import (
     CatNodesArgs,
@@ -992,6 +993,7 @@ TOOL_REGISTRY = {
         'args_model': ListIndicesArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('List Indices'),
     },
     'IndexMappingTool': {
         'display_name': 'IndexMappingTool',
@@ -1000,6 +1002,7 @@ TOOL_REGISTRY = {
         'function': get_index_mapping_tool,
         'args_model': GetIndexMappingArgs,
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Index Mapping'),
     },
     'SearchIndexTool': {
         'display_name': 'SearchIndexTool',
@@ -1008,6 +1011,7 @@ TOOL_REGISTRY = {
         'function': search_index_tool,
         'args_model': SearchIndexArgs,
         'http_methods': 'GET, POST',
+        'annotations': read_only_annotations('Search Index'),
     },
     'GetShardsTool': {
         'display_name': 'GetShardsTool',
@@ -1016,6 +1020,7 @@ TOOL_REGISTRY = {
         'function': get_shards_tool,
         'args_model': GetShardsArgs,
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Shards'),
     },
     'GetClusterStateTool': {
         'display_name': 'GetClusterStateTool',
@@ -1025,6 +1030,7 @@ TOOL_REGISTRY = {
         'args_model': GetClusterStateArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Cluster State'),
     },
     'GetSegmentsTool': {
         'display_name': 'GetSegmentsTool',
@@ -1034,6 +1040,7 @@ TOOL_REGISTRY = {
         'args_model': GetSegmentsArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Segments'),
     },
     'CatNodesTool': {
         'display_name': 'CatNodesTool',
@@ -1043,6 +1050,7 @@ TOOL_REGISTRY = {
         'args_model': CatNodesArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Cat Nodes'),
     },
     'GetIndexInfoTool': {
         'display_name': 'GetIndexInfoTool',
@@ -1052,6 +1060,7 @@ TOOL_REGISTRY = {
         'args_model': GetIndexInfoArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Index Info'),
     },
     'GetIndexStatsTool': {
         'display_name': 'GetIndexStatsTool',
@@ -1061,6 +1070,7 @@ TOOL_REGISTRY = {
         'args_model': GetIndexStatsArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Index Stats'),
     },
     'GetQueryInsightsTool': {
         'display_name': 'GetQueryInsightsTool',
@@ -1070,6 +1080,7 @@ TOOL_REGISTRY = {
         'args_model': GetQueryInsightsArgs,
         'min_version': '2.12.0',  # Query insights feature requires OpenSearch 2.12+
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Query Insights'),
     },
     'GetNodesHotThreadsTool': {
         'display_name': 'GetNodesHotThreadsTool',
@@ -1079,6 +1090,7 @@ TOOL_REGISTRY = {
         'args_model': GetNodesHotThreadsArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Nodes Hot Threads'),
     },
     'GetAllocationTool': {
         'display_name': 'GetAllocationTool',
@@ -1088,6 +1100,7 @@ TOOL_REGISTRY = {
         'args_model': GetAllocationArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Shard Allocation'),
     },
     'GetLongRunningTasksTool': {
         'display_name': 'GetLongRunningTasksTool',
@@ -1097,6 +1110,7 @@ TOOL_REGISTRY = {
         'args_model': GetLongRunningTasksArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Long-Running Tasks'),
     },
     'GetNodesTool': {
         'display_name': 'GetNodesTool',
@@ -1106,6 +1120,7 @@ TOOL_REGISTRY = {
         'args_model': GetNodesArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Nodes'),
     },
     'GetQuerySetTool': {
         'display_name': 'GetQuerySetTool',
@@ -1115,6 +1130,7 @@ TOOL_REGISTRY = {
         'args_model': GetQuerySetArgs,
         'min_version': '3.1.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Query Set'),
     },
     'CreateQuerySetTool': {
         'display_name': 'CreateQuerySetTool',
@@ -1124,6 +1140,7 @@ TOOL_REGISTRY = {
         'args_model': CreateQuerySetArgs,
         'min_version': '3.1.0',
         'http_methods': 'PUT',
+        'annotations': write_annotations('Create Query Set', destructive=False, idempotent=False),
     },
     'SampleQuerySetTool': {
         'display_name': 'SampleQuerySetTool',
@@ -1133,6 +1150,7 @@ TOOL_REGISTRY = {
         'args_model': SampleQuerySetArgs,
         'min_version': '3.1.0',
         'http_methods': 'POST',
+        'annotations': write_annotations('Sample Query Set', destructive=False, idempotent=False),
     },
     'DeleteQuerySetTool': {
         'display_name': 'DeleteQuerySetTool',
@@ -1142,6 +1160,7 @@ TOOL_REGISTRY = {
         'args_model': DeleteQuerySetArgs,
         'min_version': '3.1.0',
         'http_methods': 'DELETE',
+        'annotations': write_annotations('Delete Query Set', destructive=True, idempotent=True),
     },
     'GetExperimentTool': {
         'display_name': 'GetExperimentTool',
@@ -1151,6 +1170,7 @@ TOOL_REGISTRY = {
         'args_model': GetExperimentArgs,
         'min_version': '3.1.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Experiment'),
     },
     'CreateExperimentTool': {
         'display_name': 'CreateExperimentTool',
@@ -1166,6 +1186,7 @@ TOOL_REGISTRY = {
         'args_model': CreateExperimentArgs,
         'min_version': '3.1.0',
         'http_methods': 'PUT',
+        'annotations': write_annotations('Create Experiment', destructive=False, idempotent=False),
     },
     'DeleteExperimentTool': {
         'display_name': 'DeleteExperimentTool',
@@ -1175,6 +1196,7 @@ TOOL_REGISTRY = {
         'args_model': DeleteExperimentArgs,
         'min_version': '3.1.0',
         'http_methods': 'DELETE',
+        'annotations': write_annotations('Delete Experiment', destructive=True, idempotent=True),
     },
     'SearchQuerySetsTool': {
         'display_name': 'SearchQuerySetsTool',
@@ -1188,6 +1210,7 @@ TOOL_REGISTRY = {
         'args_model': SearchQuerySetsArgs,
         'min_version': '3.5.0',
         'http_methods': 'GET, POST',
+        'annotations': read_only_annotations('Search Query Sets'),
     },
     'SearchSearchConfigurationsTool': {
         'display_name': 'SearchSearchConfigurationsTool',
@@ -1201,6 +1224,7 @@ TOOL_REGISTRY = {
         'args_model': SearchSearchConfigurationsArgs,
         'min_version': '3.5.0',
         'http_methods': 'GET, POST',
+        'annotations': read_only_annotations('Search Search Configurations'),
     },
     'SearchJudgmentsTool': {
         'display_name': 'SearchJudgmentsTool',
@@ -1214,6 +1238,7 @@ TOOL_REGISTRY = {
         'args_model': SearchJudgmentsArgs,
         'min_version': '3.5.0',
         'http_methods': 'GET, POST',
+        'annotations': read_only_annotations('Search Judgments'),
     },
     'SearchExperimentsTool': {
         'display_name': 'SearchExperimentsTool',
@@ -1227,6 +1252,7 @@ TOOL_REGISTRY = {
         'args_model': SearchExperimentsArgs,
         'min_version': '3.5.0',
         'http_methods': 'GET, POST',
+        'annotations': read_only_annotations('Search Experiments'),
     },
     'GenericOpenSearchApiTool': {
         'display_name': 'GenericOpenSearchApiTool',
@@ -1236,6 +1262,9 @@ TOOL_REGISTRY = {
         'args_model': GenericOpenSearchApiArgs,
         'min_version': '1.0.0',
         'http_methods': 'GET, POST, PUT, DELETE, HEAD, PATCH',
+        'annotations': write_annotations(
+            'Call OpenSearch API', destructive=True, idempotent=False, open_world=True
+        ),
     },
     'CreateSearchConfigurationTool': {
         'display_name': 'CreateSearchConfigurationTool',
@@ -1246,6 +1275,9 @@ TOOL_REGISTRY = {
         'args_model': CreateSearchConfigurationArgs,
         'min_version': '3.1.0',
         'http_methods': 'PUT',
+        'annotations': write_annotations(
+            'Create Search Configuration', destructive=False, idempotent=False
+        ),
     },
     'GetSearchConfigurationTool': {
         'display_name': 'GetSearchConfigurationTool',
@@ -1255,6 +1287,7 @@ TOOL_REGISTRY = {
         'args_model': GetSearchConfigurationArgs,
         'min_version': '3.1.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Search Configuration'),
     },
     'DeleteSearchConfigurationTool': {
         'display_name': 'DeleteSearchConfigurationTool',
@@ -1264,6 +1297,9 @@ TOOL_REGISTRY = {
         'args_model': DeleteSearchConfigurationArgs,
         'min_version': '3.1.0',
         'http_methods': 'DELETE',
+        'annotations': write_annotations(
+            'Delete Search Configuration', destructive=True, idempotent=True
+        ),
     },
     'GetJudgmentListTool': {
         'display_name': 'GetJudgmentListTool',
@@ -1273,6 +1309,7 @@ TOOL_REGISTRY = {
         'args_model': GetJudgmentListArgs,
         'min_version': '3.1.0',
         'http_methods': 'GET',
+        'annotations': read_only_annotations('Get Judgment List'),
     },
     'CreateJudgmentListTool': {
         'display_name': 'CreateJudgmentListTool',
@@ -1283,6 +1320,9 @@ TOOL_REGISTRY = {
         'args_model': CreateJudgmentListArgs,
         'min_version': '3.1.0',
         'http_methods': 'PUT',
+        'annotations': write_annotations(
+            'Create Judgment List', destructive=False, idempotent=False
+        ),
     },
     'CreateUBIJudgmentListTool': {
         'display_name': 'CreateUBIJudgmentListTool',
@@ -1293,6 +1333,9 @@ TOOL_REGISTRY = {
         'args_model': CreateUBIJudgmentListArgs,
         'min_version': '3.1.0',
         'http_methods': 'PUT',
+        'annotations': write_annotations(
+            'Create UBI Judgment List', destructive=False, idempotent=False
+        ),
     },
     'DeleteJudgmentListTool': {
         'display_name': 'DeleteJudgmentListTool',
@@ -1302,6 +1345,9 @@ TOOL_REGISTRY = {
         'args_model': DeleteJudgmentListArgs,
         'min_version': '3.1.0',
         'http_methods': 'DELETE',
+        'annotations': write_annotations(
+            'Delete Judgment List', destructive=True, idempotent=True
+        ),
     },
     'CreateLLMJudgmentListTool': {
         'display_name': 'CreateLLMJudgmentListTool',
@@ -1313,6 +1359,9 @@ TOOL_REGISTRY = {
         'args_model': CreateLLMJudgmentListArgs,
         'min_version': '3.1.0',
         'http_methods': 'PUT',
+        'annotations': write_annotations(
+            'Create LLM Judgment List', destructive=False, idempotent=False, open_world=True
+        ),
     },
     'PPLQueryTool': {
         'display_name': 'PPLQueryTool',
@@ -1328,6 +1377,7 @@ TOOL_REGISTRY = {
         'args_model': PplQueryArgs,
         'min_version': '2.0.0',
         'http_methods': 'POST',
+        'annotations': read_only_annotations('Run PPL Query'),
         'bypass_write_filter': True,
     },
     'ListClustersTool': {
@@ -1337,6 +1387,7 @@ TOOL_REGISTRY = {
         'function': list_clusters_tool,
         'args_model': ListClustersArgs,
         'http_methods': 'GET',
+        'annotations': read_only_annotations('List Clusters'),
         'multi_only': True,
     },
 }
