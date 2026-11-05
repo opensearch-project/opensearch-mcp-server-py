@@ -16,15 +16,15 @@ from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, Te
 from mcp_server_opensearch.client_context import ClientNameMiddleware
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
-from mcp_server_opensearch.server_instructions import get_server_instructions
 from mcp_server_opensearch.oauth import JwtTokenVerifier, OAuthConfig, load_oauth_config
+from mcp_server_opensearch.server_instructions import get_server_instructions
 from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import Mount, Route
+from starlette.routing import Mount, Route, request_response
 from starlette.types import Receive, Scope, Send
 from tools.config import apply_custom_tool_config
 from tools.tool_filter import get_tools
@@ -166,11 +166,6 @@ class MCPStarletteApp:
         """Handle health check requests."""
         return Response('OK', status_code=200)
 
-    async def handle_sse_asgi(self, scope: Scope, receive: Receive, send: Send) -> None:
-        """Adapt the SSE request handler for authentication middleware."""
-        response = await self.handle_sse(Request(scope, receive, send))
-        await response(scope, receive, send)
-
     @contextlib.asynccontextmanager
     async def lifespan(self, app: Starlette) -> AsyncIterator[None]:
         """Context manager for session manager lifecycle.
@@ -218,7 +213,7 @@ class MCPStarletteApp:
                     Route(
                         '/sse',
                         endpoint=RequireAuthMiddleware(
-                            _ASGIApp(self.handle_sse_asgi),
+                            request_response(self.handle_sse),
                             required_scopes,
                             resource_metadata_url,
                         ),
@@ -289,8 +284,8 @@ async def serve(
     stateless: bool = True,
 ) -> None:
     """Start the MCP server in streaming HTTP mode."""
-    mcp_server = await create_mcp_server(mode, profile, config_file_path, cli_tool_overrides)
     oauth_config = load_oauth_config(host, port)
+    mcp_server = await create_mcp_server(mode, profile, config_file_path, cli_tool_overrides)
     app_handler = MCPStarletteApp(mcp_server, stateless=stateless, oauth_config=oauth_config)
     app = app_handler.create_app()
 

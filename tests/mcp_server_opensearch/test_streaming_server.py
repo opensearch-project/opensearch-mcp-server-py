@@ -220,7 +220,7 @@ class TestMCPStarletteApp:
         paths = [route.path for route in app.routes]
 
         assert '/.well-known/oauth-protected-resource/mcp/' in paths
-        assert len(app.user_middleware) == 2
+        assert len(app.user_middleware) == 3
 
         with TestClient(app) as client:
             health_response = client.get('/health')

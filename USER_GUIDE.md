@@ -451,11 +451,15 @@ The protected resource metadata is available at:
 http://127.0.0.1:9900/.well-known/oauth-protected-resource/mcp/
 ```
 
-If the OAuth access token includes an audience claim for this MCP resource/client, set:
+Tokens must include an unexpired `exp`, the configured issuer, and an audience for this MCP server. The expected audience defaults to `MCP_OAUTH_RESOURCE_URL`. If your issuer uses a client ID instead, explicitly configure that MCP-specific audience:
 
 ```bash
 export MCP_OAUTH_AUDIENCE="opensearch-mcp"
 ```
+
+The default signing algorithm is `RS256`. Set `MCP_OAUTH_ALGORITHMS` to a space- or comma-separated allowlist of asymmetric algorithms (`RS256/384/512`, `PS256/384/512`, `ES256/384/512`, or `EdDSA`) supported by your issuer. Unsigned and HMAC-signed tokens are not accepted. Scopes can be provided in `scope` or `scp`, with the existing `scopes` array also supported.
+
+`MCP_OAUTH_ENABLED` accepts `true/false`, `1/0`, `yes/no`, or `on/off` (case-insensitive). An unset or empty value disables OAuth; any other value fails startup. Use HTTPS for deployed MCP and identity-provider endpoints; the HTTP URLs above are for local development only.
 
 For local OpenSearch development, you can keep basic auth credentials as a startup fallback while still using bearer tokens for MCP requests:
 
@@ -707,7 +711,8 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 | `MCP_OAUTH_RESOURCE_URL` | No | `http://<host>:<port>/mcp/` | Public MCP resource URL used in protected resource metadata |
 | `MCP_OAUTH_JWKS_URL` | No | `<issuer>/protocol/openid-connect/certs` | JWKS endpoint used to verify bearer token signatures |
 | `MCP_OAUTH_REQUIRED_SCOPES` | No | `''` | Space- or comma-separated scopes required for MCP access |
-| `MCP_OAUTH_AUDIENCE` | No | `''` | Optional audience value to require in access tokens |
+| `MCP_OAUTH_AUDIENCE` | No | `MCP_OAUTH_RESOURCE_URL` | Required token audience; override only with an audience identifying this MCP server |
+| `MCP_OAUTH_ALGORITHMS` | No | `RS256` | Space- or comma-separated allowlist of asymmetric JWT signing algorithms |
 
 ### SSL & Security Variables
 
