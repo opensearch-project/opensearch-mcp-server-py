@@ -334,7 +334,7 @@ class TestOpenSearchClient:
         mock_get_region.return_value = 'us-east-1'
         mock_opensearch.return_value = Mock()
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'opensearch-url': 'https://attacker.example.com'}
         mock_request_ctx.get.return_value = mock_request
 
@@ -365,7 +365,7 @@ class TestOpenSearchClient:
         mock_opensearch.return_value = Mock()
 
         token = base64.b64encode(b'alice:').decode()
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'authorization': f'Basic {token}'}
         mock_request_ctx.get.return_value = mock_request
 
@@ -719,7 +719,7 @@ class TestHeaderBasedBasicAuth:
         credentials = f'{username}:{password}'
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'authorization': f'Basic {encoded_credentials}'}
 
         # Mock request context var to return the request directly
@@ -765,7 +765,7 @@ class TestHeaderBasedBasicAuth:
         credentials = f'{header_username}:{header_password}'
         encoded_credentials = base64.b64encode(credentials.encode('utf-8')).decode('utf-8')
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'authorization': f'Basic {encoded_credentials}'}
 
         # Mock request context var to return the request directly
@@ -853,7 +853,7 @@ class TestHeaderBasedBearerAuth:
 
         # Create mock request with Authorization Bearer header
         bearer_token = 'test-bearer-token'
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'authorization': f'Bearer {bearer_token}'}
 
         # Mock request context var to return the request directly
@@ -978,7 +978,7 @@ class TestHeaderUrlBinding:
     def _ctx(self, mock_request_ctx, headers):
         from starlette.requests import Request
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = headers
         mock_request_ctx.get.return_value = mock_request
 
@@ -1115,7 +1115,7 @@ class TestNoAuthDropsEveryCredential:
         os.environ['OPENSEARCH_USERNAME'] = 'server-admin'
         os.environ['OPENSEARCH_PASSWORD'] = 'server-secret'
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'aws-access-key-id': 'key-without-secret'}
         mock_request_ctx.get.return_value = mock_request
         mock_opensearch.return_value = Mock()
@@ -1138,7 +1138,7 @@ class TestNoAuthDropsEveryCredential:
         os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
 
         token = base64.b64encode(b'alice:').decode()
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'authorization': f'Basic {token}'}
         mock_request_ctx.get.return_value = mock_request
         mock_opensearch.return_value = Mock()
@@ -1161,7 +1161,7 @@ class TestNoAuthDropsEveryCredential:
         os.environ['OPENSEARCH_HEADER_AUTH'] = 'true'
 
         token = base64.b64encode(b'alice:').decode()
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'authorization': f'Basic {token}'}
         mock_request_ctx.get.return_value = mock_request
         mock_opensearch.return_value = Mock()
@@ -1327,7 +1327,7 @@ class TestMtlsIdentityWithheldFromCallerUrl:
             mock_get_region.return_value = 'us-east-1'
             mock_opensearch.return_value = Mock()
 
-            mock_request = Mock(spec=Request)
+            mock_request = Mock(spec=Request, scope={})
             mock_request.headers = {'opensearch-url': 'https://header-cluster.example.com'}
             mock_request_ctx.get.return_value = mock_request
 
@@ -1685,7 +1685,7 @@ class TestAmbientAwsFallbackOptIn:
         self._session(mock_boto_session)
         mock_opensearch.return_value = Mock()
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'authorization': 'Bearer proxy-token'}
         mock_request_ctx.get.return_value = mock_request
 
@@ -1736,7 +1736,7 @@ class TestAmbientAwsFallbackOptIn:
         self._session(mock_boto_session)
         mock_opensearch.return_value = Mock()
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = {'opensearch-url': 'https://header-cluster.example.com'}
         mock_request_ctx.get.return_value = mock_request
 
@@ -1819,7 +1819,7 @@ class TestHeaderMultiDatasource:
     def _ctx(self, mock_request_ctx, headers):
         from starlette.requests import Request
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = headers
         mock_request_ctx.get.return_value = mock_request
 
@@ -2211,7 +2211,7 @@ class TestHeaderSingleDatasource:
     def _ctx(self, mock_request_ctx, headers):
         from starlette.requests import Request
 
-        mock_request = Mock(spec=Request)
+        mock_request = Mock(spec=Request, scope={})
         mock_request.headers = headers
         mock_request_ctx.get.return_value = mock_request
 

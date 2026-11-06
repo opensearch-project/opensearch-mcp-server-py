@@ -38,6 +38,7 @@ async def create_mcp_server(
     profile: str = '',
     config_file_path: str = '',
     cli_tool_overrides: dict | None = None,
+    oauth_config: OAuthConfig | None = None,
 ) -> Server:
     """Create and configure the MCP server instance."""
     # Set the global mode
@@ -89,6 +90,8 @@ async def create_mcp_server(
 
         token = request_context_var.set(ctx.request)
         try:
+            if oauth_config and oauth_config.enabled and not isinstance(ctx.request, Request):
+                raise ValueError('OAuth tool calls require an authenticated HTTP request')
             return await execute_tool(params.name, params.arguments or {}, enabled_tools)
         except MCPError:
             raise
@@ -271,6 +274,7 @@ class MCPStarletteApp:
             lifespan=self.lifespan,
         )
         app.add_middleware(ClientNameMiddleware)
+        app.state.oauth_config = self.oauth_config
         return app
 
 
@@ -285,7 +289,9 @@ async def serve(
 ) -> None:
     """Start the MCP server in streaming HTTP mode."""
     oauth_config = load_oauth_config(host, port)
-    mcp_server = await create_mcp_server(mode, profile, config_file_path, cli_tool_overrides)
+    mcp_server = await create_mcp_server(
+        mode, profile, config_file_path, cli_tool_overrides, oauth_config
+    )
     app_handler = MCPStarletteApp(mcp_server, stateless=stateless, oauth_config=oauth_config)
     app = app_handler.create_app()
 

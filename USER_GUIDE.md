@@ -417,15 +417,17 @@ All provided lists must align 1:1 (one entry per datasource) — a single value 
 
 #### OAuth-Protected MCP Server
 
-For streaming transport, the MCP server can act as an OAuth protected resource. In this mode, the MCP endpoint publishes OAuth Protected Resource Metadata, challenges unauthenticated requests with `WWW-Authenticate`, validates incoming bearer tokens, and then forwards the same bearer token to OpenSearch when header-based authentication is enabled.
-
-This is useful when OpenSearch Security is already configured for OIDC and you want the same end-user token to flow through:
+For streaming transport, the MCP server can act as an OAuth protected resource. It publishes Protected Resource Metadata, challenges unauthenticated requests with `WWW-Authenticate`, and validates incoming bearer tokens. Before each OpenSearch client is created, it exchanges the verified MCP token for a separate OpenSearch access token using [RFC 8693](https://www.rfc-editor.org/rfc/rfc8693.html).
 
 ```text
-MCP client -> OpenSearch MCP server -> OpenSearch
+MCP client -- MCP-audience token --> MCP server
+MCP server -- token exchange --> identity provider
+MCP server -- OpenSearch-audience token --> OpenSearch
 ```
 
-Enable OAuth protection:
+Your identity provider must support RFC 8693 with `client_secret_basic` authentication. Configure a confidential client allowed to exchange MCP tokens for the OpenSearch audience, preserving the end user's identity and permitted roles. OpenSearch Security must validate the resulting token's issuer and OpenSearch audience and map that user's claims to permissions. Merely enabling OAuth does not configure these identity-provider or OpenSearch policies. Provider-specific OBO protocols are not supported by this exchange implementation.
+
+Example local development configuration (supply your own client secret):
 
 ```bash
 export MCP_OAUTH_ENABLED="true"
@@ -433,10 +435,16 @@ export MCP_OAUTH_ISSUER_URL="http://localhost:8080/realms/opensearch"
 export MCP_OAUTH_RESOURCE_URL="http://127.0.0.1:9900/mcp/"
 export MCP_OAUTH_JWKS_URL="http://localhost:8080/realms/opensearch/protocol/openid-connect/certs"
 export MCP_OAUTH_REQUIRED_SCOPES="openid profile email"
+export MCP_OAUTH_TOKEN_URL="http://localhost:8080/realms/opensearch/protocol/openid-connect/token"
+export MCP_OAUTH_CLIENT_ID="opensearch-mcp"
+export MCP_OAUTH_CLIENT_SECRET="<confidential-client-secret>"
+export MCP_OAUTH_OPENSEARCH_AUDIENCE="opensearch"
+# Optional scopes for the exchanged token, subject to the provider's policy:
+# export MCP_OAUTH_OPENSEARCH_SCOPES="read"
 
 export OPENSEARCH_URL="https://localhost:9200"
-export OPENSEARCH_SSL_VERIFY="false"
-export OPENSEARCH_HEADER_AUTH="true"
+export OPENSEARCH_CA_CERT_PATH="/path/to/root-ca.pem"
+unset OPENSEARCH_HEADER_AUTH OPENSEARCH_DYNAMIC_CONNECTION
 ```
 
 Start the streaming server:
@@ -459,16 +467,13 @@ export MCP_OAUTH_AUDIENCE="opensearch-mcp"
 
 The default signing algorithm is `RS256`. Set `MCP_OAUTH_ALGORITHMS` to a space- or comma-separated allowlist of asymmetric algorithms (`RS256/384/512`, `PS256/384/512`, `ES256/384/512`, or `EdDSA`) supported by your issuer. Unsigned and HMAC-signed tokens are not accepted. Scopes can be provided in `scope` or `scp`, with the existing `scopes` array also supported.
 
-`MCP_OAUTH_ENABLED` accepts `true/false`, `1/0`, `yes/no`, or `on/off` (case-insensitive). An unset or empty value disables OAuth; any other value fails startup. Use HTTPS for deployed MCP and identity-provider endpoints; the HTTP URLs above are for local development only.
+`MCP_OAUTH_ENABLED` accepts `true/false`, `1/0`, `yes/no`, or `on/off` (case-insensitive). An unset or empty value disables OAuth; any other value fails startup. Issuer, JWKS, exchange, resource, and OpenSearch URLs require HTTPS, except HTTP on literal loopback addresses or `localhost` for local development. OAuth mode always verifies OpenSearch TLS certificates; configure its CA rather than disabling verification. Behind a TLS terminator, set `MCP_OAUTH_RESOURCE_URL` to the external HTTPS URL, not the internal bind address. Keep the issuer identifier exactly as published, including any trailing slash. The JWKS URL must be supplied explicitly; automatic OIDC discovery is not implemented.
 
-For local OpenSearch development, you can keep basic auth credentials as a startup fallback while still using bearer tokens for MCP requests:
+OAuth tool calls never forward the original MCP token and never fall back to shared Basic, IAM, mTLS, or anonymous credentials. Failed exchanges fail the tool call. Exchange credentials authenticate the MCP application to the identity provider, not a shared OpenSearch user. No user-context header is used as a substitute for authorization.
 
-```bash
-export OPENSEARCH_USERNAME="admin"
-export OPENSEARCH_PASSWORD="myStrongPassword123!"
-```
+Destinations are operator-controlled: `OPENSEARCH_URL` in single mode, or named YAML clusters in multi mode. All configured clusters must accept the configured OpenSearch audience and issuer. Caller-supplied `opensearch-url`, `Authorization` backend credentials, and `aws-*` connection headers are not used for backend authentication; per-call connection overrides are rejected. Enabling header-auth or dynamic-connection mode together with OAuth fails startup. Cluster TLS CA, timeout, and response-size settings remain supported. AWS SigV4-only endpoints are not supported in OAuth mode.
 
-When `OPENSEARCH_HEADER_AUTH=true`, request bearer tokens take priority over these fallback credentials.
+Exchanges use a 10-second HTTP timeout and do not follow redirects. Tokens are not cached between backend client creations; each exchange uses the current request's verified token. Token rejection logs include only the error category, at most once per minute per verifier, never tokens or untrusted key IDs. These sampled diagnostics are not a complete audit trail.
 
 #### IAM Role Authentication
 ```bash
@@ -708,8 +713,13 @@ If the port is omitted, this server inserts the usual HTTP(S) default so traffic
 | `OPENSEARCH_QUERY_TIMEOUT` | No | `''` | Server-side query timeout passed as `cancel_after_time_interval` to search requests (e.g., `"10s"`). Cancels long-running queries after the specified duration. |
 | `MCP_OAUTH_ENABLED` | No | `''` | Set to `"true"` to require OAuth bearer tokens on streaming MCP endpoints |
 | `MCP_OAUTH_ISSUER_URL` | Required when OAuth is enabled | `''` | OAuth/OIDC issuer URL that issues tokens for this MCP resource |
-| `MCP_OAUTH_RESOURCE_URL` | No | `http://<host>:<port>/mcp/` | Public MCP resource URL used in protected resource metadata |
-| `MCP_OAUTH_JWKS_URL` | No | `<issuer>/protocol/openid-connect/certs` | JWKS endpoint used to verify bearer token signatures |
+| `MCP_OAUTH_RESOURCE_URL` | Required when OAuth is enabled | `''` | External MCP URL used for resource metadata and the default token audience |
+| `MCP_OAUTH_JWKS_URL` | Required when OAuth is enabled | `''` | Explicit JWKS endpoint used to verify bearer token signatures |
+| `MCP_OAUTH_TOKEN_URL` | Required when OAuth is enabled | `''` | RFC 8693 token exchange endpoint |
+| `MCP_OAUTH_CLIENT_ID` | Required when OAuth is enabled | `''` | Confidential client authorized to exchange tokens |
+| `MCP_OAUTH_CLIENT_SECRET` | Required when OAuth is enabled | `''` | Client secret for `client_secret_basic` authentication |
+| `MCP_OAUTH_OPENSEARCH_AUDIENCE` | Required when OAuth is enabled | `''` | Downstream token audience; must differ from the MCP audience |
+| `MCP_OAUTH_OPENSEARCH_SCOPES` | No | `''` | Optional space-separated scopes requested during exchange |
 | `MCP_OAUTH_REQUIRED_SCOPES` | No | `''` | Space- or comma-separated scopes required for MCP access |
 | `MCP_OAUTH_AUDIENCE` | No | `MCP_OAUTH_RESOURCE_URL` | Required token audience; override only with an audience identifying this MCP server |
 | `MCP_OAUTH_ALGORITHMS` | No | `RS256` | Space- or comma-separated allowlist of asymmetric JWT signing algorithms |

@@ -16,6 +16,21 @@ from starlette.testclient import TestClient
 from unittest.mock import Mock, patch
 
 
+@pytest.fixture(autouse=True)
+def oauth_environment(monkeypatch):
+    for name, value in {
+        'MCP_OAUTH_RESOURCE_URL': 'http://localhost:9900/mcp/',
+        'MCP_OAUTH_JWKS_URL': 'http://localhost:8080/realms/opensearch/protocol/openid-connect/certs',
+        'MCP_OAUTH_TOKEN_URL': 'http://localhost:8080/realms/opensearch/protocol/openid-connect/token',
+        'MCP_OAUTH_CLIENT_ID': 'mcp',
+        'MCP_OAUTH_CLIENT_SECRET': 'test-secret',
+        'MCP_OAUTH_OPENSEARCH_AUDIENCE': 'opensearch',
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv('OPENSEARCH_HEADER_AUTH', raising=False)
+    monkeypatch.delenv('OPENSEARCH_DYNAMIC_CONNECTION', raising=False)
+
+
 class TestOAuthConfig:
     def test_load_oauth_config_disabled(self, monkeypatch):
         monkeypatch.delenv('MCP_OAUTH_ENABLED', raising=False)
@@ -26,15 +41,13 @@ class TestOAuthConfig:
         monkeypatch.setenv('MCP_OAUTH_ENABLED', 'true')
         monkeypatch.setenv('MCP_OAUTH_ISSUER_URL', 'http://localhost:8080/realms/opensearch/')
         monkeypatch.setenv('MCP_OAUTH_REQUIRED_SCOPES', 'openid,profile email')
-        monkeypatch.delenv('MCP_OAUTH_RESOURCE_URL', raising=False)
-        monkeypatch.delenv('MCP_OAUTH_JWKS_URL', raising=False)
         monkeypatch.delenv('MCP_OAUTH_AUDIENCE', raising=False)
 
         config = load_oauth_config('0.0.0.0', 9900)
 
         assert config is not None
         assert config.enabled is True
-        assert config.issuer_url == 'http://localhost:8080/realms/opensearch'
+        assert config.issuer_url == 'http://localhost:8080/realms/opensearch/'
         assert config.resource_url == 'http://localhost:9900/mcp/'
         assert (
             config.jwks_url
@@ -288,3 +301,76 @@ async def test_reject_invalid_signature(oauth_config, rsa_key):
         return_value=Mock(key=other_key.public_key()),
     ):
         assert await verifier.verify_token(token) is None
+
+
+@pytest.mark.parametrize(
+    'name',
+    [
+        'MCP_OAUTH_RESOURCE_URL',
+        'MCP_OAUTH_JWKS_URL',
+        'MCP_OAUTH_TOKEN_URL',
+        'MCP_OAUTH_CLIENT_ID',
+        'MCP_OAUTH_CLIENT_SECRET',
+        'MCP_OAUTH_OPENSEARCH_AUDIENCE',
+    ],
+)
+def test_required_exchange_configuration(monkeypatch, name):
+    monkeypatch.setenv('MCP_OAUTH_ENABLED', 'true')
+    monkeypatch.setenv('MCP_OAUTH_ISSUER_URL', 'https://issuer.example/')
+    monkeypatch.delenv(name)
+    with pytest.raises(ValueError, match=name):
+        load_oauth_config('0.0.0.0', 9900)
+
+
+@pytest.mark.parametrize('setting', ['OPENSEARCH_HEADER_AUTH', 'OPENSEARCH_DYNAMIC_CONNECTION'])
+def test_reject_conflicting_connection_modes(monkeypatch, setting):
+    monkeypatch.setenv('MCP_OAUTH_ENABLED', 'true')
+    monkeypatch.setenv(setting, 'true')
+    with pytest.raises(ValueError, match=setting):
+        load_oauth_config('0.0.0.0', 9900)
+
+
+@pytest.mark.parametrize(
+    'configured,token_audience,accepted',
+    [
+        ('https://mcp.example/mcp/', 'https://mcp.example/mcp', True),
+        ('https://mcp.example/mcp', 'https://mcp.example/mcp/', True),
+        ('client-id', 'client-id/', False),
+    ],
+)
+async def test_resource_audience_slash_compatibility(
+    oauth_config, rsa_key, configured, token_audience, accepted
+):
+    config = replace(
+        oauth_config,
+        resource_url=configured if configured.startswith('https:') else oauth_config.resource_url,
+        audience=configured,
+    )
+    verifier = JwtTokenVerifier(config)
+    token = jwt.encode(
+        {'iss': config.issuer_url, 'aud': token_audience, 'exp': int(time.time()) + 60},
+        rsa_key,
+        algorithm='RS256',
+    )
+    with patch.object(
+        verifier._jwks_client,
+        'get_signing_key_from_jwt',
+        return_value=Mock(key=rsa_key.public_key()),
+    ):
+        assert (await verifier.verify_token(token) is not None) == accepted
+
+
+async def test_rejection_log_is_bounded_and_redacted(oauth_config, caplog):
+    verifier = JwtTokenVerifier(oauth_config)
+    with (
+        patch.object(
+            verifier._jwks_client,
+            'get_signing_key_from_jwt',
+            side_effect=jwt.PyJWTError('secret-claim'),
+        ),
+        caplog.at_level('INFO'),
+    ):
+        for _ in range(3):
+            assert await verifier.verify_token('secret-token') is None
+    assert 'secret' not in caplog.text
+    assert caplog.text.count('Bearer token rejected: PyJWTError') == 1
