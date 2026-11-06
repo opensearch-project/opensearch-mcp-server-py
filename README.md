@@ -50,6 +50,18 @@ The server can be started with no environment variables at all. Agents provide c
 
 With this setup, agents pass `opensearch_url` and authentication parameters directly when calling any tool. This is useful when agents discover endpoints from a knowledge base, runbook, or SOP, or when a single agent needs to work with multiple clusters in one session. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) for details.
 
+
+## Docker
+
+```bash
+# Pre-built image
+docker run --rm -e OPENSEARCH_HOST=https://your-cluster:9200 opensearchproject/opensearch-mcp-server-py
+
+# Build locally
+docker build -t opensearch-mcp-server-py .
+docker run --rm opensearch-mcp-server-py
+```
+
 ## Available Tools
 
 By default, only **core tools** are enabled to provide essential OpenSearch functionality:
