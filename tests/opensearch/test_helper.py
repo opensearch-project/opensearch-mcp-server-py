@@ -17,9 +17,11 @@ class TestOpenSearchHelper:
     def setup_method(self):
         """Setup that runs before each test method."""
         from opensearch.helper import (
+            _normalize_query_timeout,
             get_index_mapping,
             get_shards,
             list_indices,
+            log_query_timeout_warning,
             search_index,
         )
 
@@ -28,6 +30,8 @@ class TestOpenSearchHelper:
         self.get_index_mapping = get_index_mapping
         self.search_index = search_index
         self.get_shards = get_shards
+        self.log_query_timeout_warning = log_query_timeout_warning
+        self._normalize_query_timeout = _normalize_query_timeout
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
@@ -223,6 +227,35 @@ class TestOpenSearchHelper:
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
+    @patch.dict('os.environ', {'OPENSEARCH_QUERY_TIMEOUT': '30'})
+    async def test_search_index_with_bare_integer_query_timeout(self, mock_get_client):
+        """Test that a bare integer timeout is normalized to seconds."""
+        mock_response = {
+            'hits': {
+                'total': {'value': 1},
+                'hits': [{'_index': 'test-index', '_id': '1', '_source': {'field': 'value'}}],
+            }
+        }
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(return_value=mock_response)
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        test_query = {'query': {'match_all': {}}}
+
+        result = await self.search_index(
+            SearchIndexArgs(index='test-index', query_dsl=test_query, opensearch_cluster_name='')
+        )
+
+        assert result == mock_response
+        expected_body = {'query': {'match_all': {}}, 'size': 10}
+        mock_client.search.assert_called_once_with(
+            index='test-index', body=expected_body, cancel_after_time_interval='30s'
+        )
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
     @patch.dict('os.environ', {'OPENSEARCH_QUERY_TIMEOUT': '10s'})
     async def test_search_index_with_query_timeout(self, mock_get_client):
         """Test that OPENSEARCH_QUERY_TIMEOUT is passed as cancel_after_time_interval."""
@@ -281,6 +314,74 @@ class TestOpenSearchHelper:
         assert result == mock_response
         expected_body = {'query': {'match_all': {}}, 'size': 10}
         mock_client.search.assert_called_once_with(index='test-index', body=expected_body)
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    @patch.dict('os.environ', {'OPENSEARCH_QUERY_TIMEOUT': 'abc'})
+    async def test_search_index_with_invalid_query_timeout(self, mock_get_client):
+        """Test that cancel_after_time_interval is omitted when OPENSEARCH_QUERY_TIMEOUT is invalid."""
+        mock_response = {
+            'hits': {
+                'total': {'value': 1},
+                'hits': [{'_index': 'test-index', '_id': '1', '_source': {'field': 'value'}}],
+            }
+        }
+        mock_client = AsyncMock()
+        mock_client.search = AsyncMock(return_value=mock_response)
+
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        test_query = {'query': {'match_all': {}}}
+
+        result = await self.search_index(
+            SearchIndexArgs(index='test-index', query_dsl=test_query, opensearch_cluster_name='')
+        )
+
+        assert result == mock_response
+        expected_body = {'query': {'match_all': {}}, 'size': 10}
+        mock_client.search.assert_called_once_with(index='test-index', body=expected_body)
+
+    @patch.dict('os.environ', {'OPENSEARCH_QUERY_TIMEOUT': '30'})
+    def test_log_query_timeout_warning_for_unitless_value(self, caplog):
+        """Test that a unitless OPENSEARCH_QUERY_TIMEOUT emits a startup warning."""
+        with caplog.at_level('WARNING'):
+            self.log_query_timeout_warning()
+
+        assert 'OPENSEARCH_QUERY_TIMEOUT=30 is unitless' in caplog.text
+        assert 'and will be treated as seconds' in caplog.text
+
+    @pytest.mark.parametrize('invalid_val', ['-5', '-5s', '1.5', '1.5s', 'abc'])
+    def test_log_query_timeout_warning_for_invalid_value(self, caplog, invalid_val):
+        """Test that invalid OPENSEARCH_QUERY_TIMEOUT values emit a warning."""
+        with patch.dict('os.environ', {'OPENSEARCH_QUERY_TIMEOUT': invalid_val}):
+            with caplog.at_level('WARNING'):
+                self.log_query_timeout_warning()
+
+        assert f'OPENSEARCH_QUERY_TIMEOUT={invalid_val} is invalid' in caplog.text
+
+    @pytest.mark.parametrize('valid_val', ['30s', '30S', '10m', '500ms', '100nanos', '-1'])
+    def test_log_query_timeout_no_warning_for_valid_unit(self, caplog, valid_val):
+        """Test that valid explicit time units emit no warning."""
+        with patch.dict('os.environ', {'OPENSEARCH_QUERY_TIMEOUT': valid_val}):
+            with caplog.at_level('WARNING'):
+                self.log_query_timeout_warning()
+
+        assert caplog.text == ''
+
+    def test_normalize_query_timeout(self):
+        """Test normalization for bare ints, valid units, and invalid values."""
+        assert self._normalize_query_timeout('30') == '30s'
+        assert self._normalize_query_timeout('30s') == '30s'
+        assert self._normalize_query_timeout('10m') == '10m'
+        assert self._normalize_query_timeout('500ms') == '500ms'
+        assert self._normalize_query_timeout('-1') == '-1'
+        assert self._normalize_query_timeout('-5') is None
+        assert self._normalize_query_timeout('-5s') is None
+        assert self._normalize_query_timeout('1.5') is None
+        assert self._normalize_query_timeout('1.5s') is None
+        assert self._normalize_query_timeout('abc') is None
+        assert self._normalize_query_timeout('') is None
 
     @pytest.mark.asyncio
     @patch('opensearch.client.get_opensearch_client')
