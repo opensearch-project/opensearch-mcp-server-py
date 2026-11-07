@@ -8,6 +8,7 @@ import logging
 import math
 import os
 import requests
+import threading
 import time
 from dataclasses import dataclass, field
 from mcp.server.auth.provider import AccessToken, TokenVerifier
@@ -16,6 +17,27 @@ from urllib.parse import quote_plus, urlsplit
 
 
 logger = logging.getLogger(__name__)
+
+
+class _ExchangeFailureLog:
+    """Bound diagnostics across concurrent tool calls without retaining credentials."""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._next_log = 0.0
+
+    def warning(self, status: int | None, category: str) -> None:
+        with self._lock:
+            now = time.monotonic()
+            if now < self._next_log:
+                return
+            self._next_log = now + 60
+        logger.warning(
+            'OpenSearch token exchange failed: http_status=%s category=%s '
+            '(logged at most once per minute)',
+            status if status is not None else 'unavailable',
+            category,
+        )
 
 
 def validate_oauth_url(value: str, name: str) -> str:
@@ -55,6 +77,9 @@ class TokenExchangeConfig:
     client_secret: str = field(repr=False)
     audience: str
     scope: str = ''
+    _failure_log: _ExchangeFailureLog = field(
+        default_factory=_ExchangeFailureLog, init=False, repr=False, compare=False
+    )
 
     def exchange(self, subject_token: str) -> str:
         """Exchange a verified MCP token; never fall back or expose provider errors/secrets."""
@@ -67,6 +92,8 @@ class TokenExchangeConfig:
         }
         if self.scope:
             data['scope'] = self.scope
+        status = None
+        category = 'request_error'
         try:
             with requests.post(
                 self.token_url,
@@ -75,8 +102,11 @@ class TokenExchangeConfig:
                 timeout=10,
                 allow_redirects=False,
             ) as response:
+                status = response.status_code
                 if response.status_code != 200:
+                    category = 'http_error'
                     raise ValueError
+                category = 'invalid_response'
                 payload = response.json()
             token = payload.get('access_token')
             if (
@@ -95,6 +125,7 @@ class TokenExchangeConfig:
                     raise ValueError
             return token
         except (requests.RequestException, ValueError, TypeError, AttributeError):
+            self._failure_log.warning(status, category)
             raise ValueError(
                 'OpenSearch token exchange failed; no fallback credentials were used'
             ) from None
