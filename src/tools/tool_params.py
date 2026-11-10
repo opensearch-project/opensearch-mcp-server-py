@@ -4,9 +4,60 @@
 from mcp_server_opensearch.global_state import get_mode
 from pydantic import BaseModel, Field
 from typing import Any, Dict, Literal, Optional, Type, TypeVar
+from urllib.parse import urlsplit, urlunsplit
 
 
 T = TypeVar('T', bound=BaseModel)
+
+
+def _mask_url_credentials(url: str) -> str:
+    """Mask credentials in URL userinfo if present."""
+    if not isinstance(url, str) or '@' not in url:
+        return url
+    try:
+        parts = urlsplit(url)
+        if parts.netloc and '@' in parts.netloc:
+            userinfo, host = parts.netloc.rsplit('@', 1)
+            if ':' in userinfo:
+                user, _ = userinfo.split(':', 1)
+                netloc = f'{user}:***@{host}'
+            else:
+                netloc = f'***@{host}'
+            return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+    except Exception:
+        pass
+    return url
+
+
+def _mask_sensitive_dict(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Mask credential fields in argument dictionaries for safe display in error messages."""
+    masked: Dict[str, Any] = {}
+    for k, v in data.items():
+        k_lower = k.lower()
+        if (
+            k_lower
+            in {
+                'opensearch_password',
+                'aws_secret_access_key',
+                'aws_session_token',
+                'password',
+                'secret',
+                'token',
+                'api_key',
+                'apikey',
+            }
+            or 'password' in k_lower
+            or 'secret' in k_lower
+            or (('token' in k_lower or 'auth' in k_lower) and k_lower != 'opensearch_no_auth')
+        ):
+            masked[k] = '***' if v is not None else None
+        elif isinstance(v, str) and ('url' in k_lower or 'endpoint' in k_lower):
+            masked[k] = _mask_url_credentials(v)
+        elif isinstance(v, dict):
+            masked[k] = _mask_sensitive_dict(v)
+        else:
+            masked[k] = v
+    return masked
 
 
 def validate_args_for_mode(args_dict: Dict[str, Any], args_model_class: Type[T]) -> T:
@@ -48,9 +99,9 @@ def validate_args_for_mode(args_dict: Dict[str, Any], args_model_class: Type[T])
             # For single mode, show user input without opensearch_cluster_name
             if mode == 'single':
                 user_input = {k: v for k, v in args_dict.items() if k != 'opensearch_cluster_name'}
-                error_msg += f'\n\nProvided: {user_input}'
+                error_msg += f'\n\nProvided: {_mask_sensitive_dict(user_input)}'
             else:
-                error_msg += f'\n\nProvided: {args_dict}'
+                error_msg += f'\n\nProvided: {_mask_sensitive_dict(args_dict)}'
 
             raise ValueError(error_msg) from e
 

@@ -801,3 +801,44 @@ class TestConnectionOverrideValidation:
         result = validate_args_for_mode(args_dict, ListIndicesArgs)
         assert result.opensearch_url == 'https://dynamic.example.com'
         assert result.opensearch_cluster_name == 'my-cluster'
+
+    def test_validate_args_masks_credentials_on_missing_field_single_mode(self):
+        """validate_args_for_mode masks password and secrets in missing-field error message."""
+        import pytest
+        from tools.tool_params import GetIndexMappingArgs, validate_args_for_mode
+
+        args_dict = {
+            'opensearch_url': 'https://x.example.com',
+            'opensearch_username': 'testuser',
+            'opensearch_password': 'super-secret-password',
+            'aws_secret_access_key': 'super-secret-aws-key',
+        }
+        with pytest.raises(ValueError) as exc_info:
+            validate_args_for_mode(args_dict, GetIndexMappingArgs)
+
+        err_msg = str(exc_info.value)
+        assert "Missing required field: 'index'" in err_msg
+        assert 'super-secret-password' not in err_msg
+        assert 'super-secret-aws-key' not in err_msg
+        assert "'opensearch_password': '***'" in err_msg
+        assert "'aws_secret_access_key': '***'" in err_msg
+        assert "'opensearch_username': 'testuser'" in err_msg
+
+    def test_validate_args_masks_url_userinfo_on_missing_field(self):
+        """validate_args_for_mode masks embedded URL credentials in error output."""
+        import pytest
+        from mcp_server_opensearch.global_state import set_mode
+        from tools.tool_params import GetIndexMappingArgs, validate_args_for_mode
+
+        set_mode('multi')
+        args_dict = {
+            'opensearch_cluster_name': 'test-cluster',
+            'opensearch_url': 'https://admin:my-inline-pass@localhost:9200',
+        }
+        with pytest.raises(ValueError) as exc_info:
+            validate_args_for_mode(args_dict, GetIndexMappingArgs)
+
+        err_msg = str(exc_info.value)
+        assert "Missing required field: 'index'" in err_msg
+        assert 'my-inline-pass' not in err_msg
+        assert 'https://admin:***@localhost:9200' in err_msg
