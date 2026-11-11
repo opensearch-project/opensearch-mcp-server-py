@@ -1,0 +1,26 @@
+lib = library(identifier: 'jenkins@13.11.1', retriever: modernSCM([
+    $class: 'GitSCMSource',
+    remote: 'https://github.com/opensearch-project/opensearch-build-libraries.git',
+]))
+
+standardReleasePipelineWithGenericTrigger(
+    tokenIdCredential: 'jenkins-opensearch-mcp-server-py-generic-webhook-token',
+    causeString: 'A pre-release was published on opensearch-project/opensearch-mcp-server-py repository causing this workflow to run',
+    downloadReleaseAsset: false) {
+        def sourceRegistry = 'opensearchstaging'
+        def imageName = 'opensearch-mcp-server-py'
+        def registries = ['opensearchproject', 'public.ecr.aws/opensearchproject']
+        registries.each { destRegistry ->
+            [tag, 'latest'].each { destTag ->
+                build job: 'docker-copy',
+                    propagate: true,
+                    wait: true,
+                    parameters: [
+                        string(name: 'SOURCE_IMAGE_REGISTRY', value: sourceRegistry),
+                        string(name: 'SOURCE_IMAGE', value: "${imageName}:${tag}"),
+                        string(name: 'DESTINATION_IMAGE_REGISTRY', value: destRegistry),
+                        string(name: 'DESTINATION_IMAGE', value: "${imageName}:${destTag}")
+                    ]
+            }
+        }
+    }

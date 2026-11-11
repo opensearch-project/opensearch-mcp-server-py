@@ -50,6 +50,41 @@ The server can be started with no environment variables at all. Agents provide c
 
 With this setup, agents pass `opensearch_url` and authentication parameters directly when calling any tool. This is useful when agents discover endpoints from a knowledge base, runbook, or SOP, or when a single agent needs to work with multiple clusters in one session. See [Dynamic Connection Parameters](USER_GUIDE.md#dynamic-connection-parameters) for details.
 
+### Docker
+
+Images are published to [Docker Hub](https://hub.docker.com/r/opensearchproject/opensearch-mcp-server-py) and [Amazon ECR Public](https://gallery.ecr.aws/opensearchproject/opensearch-mcp-server-py) for `linux/amd64` and `linux/arm64`. The container runs the same `opensearch-mcp-server-py` command, so all flags and environment variables work as described in the [User Guide](USER_GUIDE.md).
+
+For stdio, keep stdin open with `-i`:
+
+```bash
+docker run -i --rm -e OPENSEARCH_URL=https://your-cluster:9200 opensearchproject/opensearch-mcp-server-py
+```
+
+```json
+{
+  "mcpServers": {
+    "opensearch": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "OPENSEARCH_URL", "opensearchproject/opensearch-mcp-server-py"],
+      "env": {
+        "OPENSEARCH_URL": "https://your-cluster:9200"
+      }
+    }
+  }
+}
+```
+
+For streaming, bind to all interfaces inside the container and publish the port on the host's loopback:
+
+```bash
+docker run --rm -p 127.0.0.1:9900:9900 -e OPENSEARCH_URL=https://your-cluster:9200 \
+  opensearchproject/opensearch-mcp-server-py --transport stream --host 0.0.0.0
+```
+
+The MCP endpoint is then `http://127.0.0.1:9900/mcp`. The streaming endpoint has no authentication of its own, so don't publish it beyond localhost without putting an authenticating proxy in front of it.
+
+To build the image locally, run `docker build -t opensearch-mcp-server-py .` from the repository root.
+
 ## Available Tools
 
 By default, only **core tools** are enabled to provide essential OpenSearch functionality:
