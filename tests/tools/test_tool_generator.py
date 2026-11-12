@@ -3,6 +3,7 @@
 
 import pytest
 import yaml
+from contextlib import asynccontextmanager
 from mcp.types import TextContent
 from pydantic import BaseModel
 from unittest.mock import AsyncMock, Mock, patch
@@ -241,6 +242,60 @@ class TestToolGenerator:
             assert len(result) == 1
             assert result[0].type == 'text'
             mock_tool_function.assert_called_once()
+
+    async def _run_count_tool(self, index):
+        endpoints = [
+            {
+                'path': '/{index}/_count',
+                'method': 'get',
+                'details': {'description': 'count', 'x-operation-group': 'count'},
+            }
+        ]
+
+        @asynccontextmanager
+        async def fake_client(*_args, **_kwargs):
+            yield self.mock_client
+
+        with (
+            patch('opensearch.client.get_opensearch_client', fake_client),
+            patch('tools.tool_generator.check_tool_compatibility', AsyncMock()),
+        ):
+            tool = self.generate_tool_from_group('Count', endpoints)
+            return await tool['function'](
+                tool['args_model'](index=index, opensearch_cluster_name='')
+            )
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        'index, expected',
+        [
+            ('_flush#', '/_flush%23/_count'),
+            ('_cluster/settings#', '/_cluster%2Fsettings%23/_count'),
+        ],
+    )
+    async def test_path_parameter_is_escaped(self, index, expected):
+        """Reserved URL characters in a path parameter must not reach the URL raw."""
+        await self._run_count_tool(index)
+        url = self.mock_client.transport.perform_request.call_args.kwargs['url']
+        assert url == expected
+        assert '#' not in url and '?' not in url and url.count('/') == 2
+
+    @pytest.mark.asyncio
+    async def test_path_parameter_keeps_commas_and_wildcards(self):
+        """Multi-index values and wildcards stay readable."""
+        await self._run_count_tool('logs-*,metrics')
+        url = self.mock_client.transport.perform_request.call_args.kwargs['url']
+        assert url == '/logs-*,metrics/_count'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('index', ['.', '..'])
+    async def test_path_parameter_rejects_dot_segments(self, index):
+        """'.' and '..' are rejected instead of being sent as dot segments."""
+        self.mock_client.transport.perform_request.reset_mock()
+        result = await self._run_count_tool(index)
+        self.mock_client.transport.perform_request.assert_not_called()
+        assert 'Invalid path parameter value' in result[0]['text']
+        assert 'Invalid path parameter value' in str(result)
 
     @pytest.mark.asyncio
     async def test_generate_tools_from_openapi(self):
