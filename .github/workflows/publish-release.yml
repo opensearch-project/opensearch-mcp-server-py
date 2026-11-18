@@ -37,7 +37,6 @@ jobs:
     if: github.repository == 'opensearch-project/opensearch-mcp-server-py'
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
     steps:
       - name: Checkout Repository
@@ -49,24 +48,11 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
-        with:
-          role-to-assume: ${{ secrets.MCP_SERVER_DOCKER_ROLE }}
-          aws-region: us-east-1
-
-      - name: Retrieve Docker Hub password
-        id: retrieve-password
-        run: |
-          DOCKERHUB_PASSWORD=$(aws secretsmanager get-secret-value --secret-id jenkins-staging-dockerhub-credential --query SecretString --output text)
-          echo "::add-mask::$DOCKERHUB_PASSWORD"
-          echo "dockerhub-password=$DOCKERHUB_PASSWORD" >> "$GITHUB_OUTPUT"
-
       - name: Login to Docker Hub
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
         with:
-          username: ${{ secrets.MCP_SERVER_DOCKER_USERNAME }}
-          password: ${{ steps.retrieve-password.outputs.dockerhub-password }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push multi-platform image to staging
         env:
@@ -91,8 +77,8 @@ jobs:
       contents: write
     steps:
       - name: Create GitHub pre-release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1
         with:
-          draft: false
+          immutableCreate: true
+          generateReleaseNotes: true
           prerelease: true
-          generate_release_notes: true

@@ -52,7 +52,7 @@ With this setup, agents pass `opensearch_url` and authentication parameters dire
 
 ### Docker
 
-Images are published to [Docker Hub](https://hub.docker.com/r/opensearchproject/opensearch-mcp-server-py) and [Amazon ECR Public](https://gallery.ecr.aws/opensearchproject/opensearch-mcp-server-py) for `linux/amd64` and `linux/arm64`. The container runs the same `opensearch-mcp-server-py` command, so all flags and environment variables work as described in the [User Guide](USER_GUIDE.md).
+Images are published to [Docker Hub](https://hub.docker.com/r/opensearchproject/opensearch-mcp-server-py) for `linux/amd64` and `linux/arm64`. The container runs the same `opensearch-mcp-server-py` command, so all flags and environment variables work as described in the [User Guide](USER_GUIDE.md).
 
 For stdio, keep stdin open with `-i`:
 

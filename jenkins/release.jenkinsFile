@@ -9,7 +9,7 @@ standardReleasePipelineWithGenericTrigger(
     downloadReleaseAsset: false) {
         def sourceRegistry = 'opensearchstaging'
         def imageName = 'opensearch-mcp-server-py'
-        def registries = ['opensearchproject', 'public.ecr.aws/opensearchproject']
+        def registries = ['opensearchproject']
         registries.each { destRegistry ->
             [tag, 'latest'].each { destTag ->
                 build job: 'docker-copy',
