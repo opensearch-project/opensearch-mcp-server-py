@@ -158,6 +158,57 @@ async def test_boolean_query_params_are_sent_lowercase():
     assert params == {'format': ['json'], 'v': ['true'], 'local': ['false'], 'size': ['10']}
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize('method', ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+async def test_body_is_sent_for_methods_that_accept_one(method):
+    """A request body must reach the transport for every method except HEAD.
+
+    GET /index/_search with a body is valid; dropping it silently turns the search
+    into a match_all.
+    """
+    import json
+    from unittest.mock import AsyncMock, patch
+
+    mock_client = AsyncMock()
+    mock_client.transport.perform_request = AsyncMock(return_value={})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    body = {'query': {'match': {'title': 'x'}}}
+    args = GenericOpenSearchApiArgs(
+        opensearch_cluster_name='', path='/idx/_search', method=method, body=body
+    )
+
+    with (
+        patch('opensearch.client.get_opensearch_client', return_value=mock_client),
+        patch('tools.tool_filter.get_allow_write_setting', return_value=True),
+    ):
+        await generic_opensearch_api_tool(args)
+
+    sent = mock_client.transport.perform_request.call_args.kwargs
+    assert json.loads(sent['body']) == body
+
+
+@pytest.mark.asyncio
+async def test_body_is_not_sent_for_head():
+    """HEAD responses and requests carry no body."""
+    from unittest.mock import AsyncMock, patch
+
+    mock_client = AsyncMock()
+    mock_client.transport.perform_request = AsyncMock(return_value={})
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    args = GenericOpenSearchApiArgs(
+        opensearch_cluster_name='', path='/idx', method='HEAD', body={'a': 1}
+    )
+
+    with patch('opensearch.client.get_opensearch_client', return_value=mock_client):
+        await generic_opensearch_api_tool(args)
+
+    assert 'body' not in mock_client.transport.perform_request.call_args.kwargs
+
+
 if __name__ == '__main__':
     print('Testing GenericOpenSearchApiTool...')
     print('Note: This test requires a running OpenSearch instance and proper configuration.')

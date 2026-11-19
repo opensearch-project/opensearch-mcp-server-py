@@ -29,7 +29,7 @@ class GenericOpenSearchApiArgs(baseToolArgs):
     )
     body: Optional[Any] = Field(
         default=None,
-        description='Request body for GET/POST/PUT requests. Can be a JSON object, string, or None',
+        description='Request body for GET/POST/PUT/PATCH/DELETE requests. Can be a JSON object, string, or None',
     )
     headers: Optional[Dict[str, str]] = Field(
         default=None, description='Additional HTTP headers to include in the request'
@@ -139,8 +139,9 @@ async def generic_opensearch_api_tool(args: GenericOpenSearchApiArgs) -> list[di
             # Prepare request parameters
             request_params = {'method': method, 'url': url}
 
-            # Add body for methods that support it
-            if args.body is not None and method in ['POST', 'PUT', 'PATCH']:
+            # Add body for every method except HEAD. OpenSearch accepts a body on GET
+            # (e.g. GET /index/_search) and on DELETE (e.g. DELETE /_search/scroll).
+            if args.body is not None and method != 'HEAD':
                 if isinstance(args.body, (dict, list)):
                     request_params['body'] = json.dumps(args.body)
                 else:
