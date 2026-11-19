@@ -1,0 +1,47 @@
+name: Docker Build
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - '.dockerignore'
+      - 'src/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/docker-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ['linux/amd64', 'linux/arm64']
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build ${{ matrix.platform }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          push: false
+          load: true
+          build-args: VERSION=test
+          tags: opensearch-mcp-server-py:test
+
+      # The stdio server exits 0 on EOF once all modules import; import or startup errors exit non-zero.
+      - name: Smoke test ${{ matrix.platform }}
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: docker run --rm -i --platform "$PLATFORM" opensearch-mcp-server-py:test < /dev/null
