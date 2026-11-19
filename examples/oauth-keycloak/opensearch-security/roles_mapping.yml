@@ -1,0 +1,14 @@
+---
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+
+all_access:
+  reserved: false
+  users:
+  - "admin"
+
+readall_and_monitor:
+  reserved: false
+  backend_roles:
+  - "opensearch_reader"

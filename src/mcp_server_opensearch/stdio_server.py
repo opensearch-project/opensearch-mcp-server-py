@@ -9,6 +9,11 @@ from mcp.shared.exceptions import MCPError
 from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, TextContent, Tool
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
+from mcp_server_opensearch.oauth_login import (
+    BrowserLogin,
+    load_login_config,
+    set_browser_login,
+)
 from mcp_server_opensearch.server_instructions import get_server_instructions
 from tools.config import apply_custom_tool_config
 from tools.tool_filter import get_tools
@@ -50,6 +55,12 @@ async def serve(
         tool_registry=customized_registry, config_file_path=config_file_path
     )
     logging.info(f'Enabled tools: {list(enabled_tools.keys())}')
+
+    # OAuth browser login: installed after the startup version probe, so starting the
+    # server never opens a browser; the first tool call does.
+    login_config = load_login_config()
+    if login_config is not None:
+        set_browser_login(BrowserLogin(login_config))
 
     async def _list_tools(ctx, params) -> ListToolsResult:
         tools = []
