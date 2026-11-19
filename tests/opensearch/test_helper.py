@@ -684,6 +684,78 @@ class TestOpenSearchHelper:
         assert '1732693003000' in json.dumps(result)
         assert '173.5' in json.dumps(result)
 
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    @pytest.mark.parametrize(
+        'node_id, metric, expected',
+        [
+            ('x#', 'jvm', '/_nodes/x%23/jvm'),
+            (
+                'x/../../_cluster/settings#',
+                'jvm',
+                '/_nodes/x%2F..%2F..%2F_cluster%2Fsettings%23/jvm',
+            ),
+            ('_all', 'jvm/../x?y', '/_nodes/_all/jvm%2F..%2Fx%3Fy'),
+        ],
+    )
+    async def test_get_nodes_info_escapes_path_parameters(
+        self, mock_get_client, node_id, metric, expected
+    ):
+        """node_id and metric are encoded as single path segments."""
+        from opensearch.helper import get_nodes_info
+        from tools.tool_params import GetNodesArgs
+
+        mock_client = AsyncMock()
+        mock_client.transport.perform_request = AsyncMock(return_value={})
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        await get_nodes_info(
+            GetNodesArgs(opensearch_cluster_name='', node_id=node_id, metric=metric)
+        )
+
+        url = mock_client.transport.perform_request.call_args.kwargs['url']
+        assert url == expected
+        assert '#' not in url and '?' not in url
+
+    @pytest.mark.asyncio
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_get_nodes_info_keeps_commas_and_wildcards(self, mock_get_client):
+        """Comma lists and wildcards in node_id stay unchanged."""
+        from opensearch.helper import get_nodes_info
+        from tools.tool_params import GetNodesArgs
+
+        mock_client = AsyncMock()
+        mock_client.transport.perform_request = AsyncMock(return_value={})
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        await get_nodes_info(
+            GetNodesArgs(opensearch_cluster_name='', node_id='node-*,other', metric='jvm')
+        )
+
+        url = mock_client.transport.perform_request.call_args.kwargs['url']
+        assert url == '/_nodes/node-*,other/jvm'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize('field', ['node_id', 'metric'])
+    @pytest.mark.parametrize('value', ['.', '..'])
+    @patch('opensearch.client.get_opensearch_client')
+    async def test_get_nodes_info_rejects_dot_segments(self, mock_get_client, field, value):
+        """'.' and '..' are rejected for node_id and metric."""
+        from opensearch.helper import get_nodes_info
+        from tools.tool_params import GetNodesArgs
+
+        mock_client = AsyncMock()
+        mock_client.transport.perform_request = AsyncMock(return_value={})
+        mock_get_client.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_get_client.return_value.__aexit__ = AsyncMock(return_value=None)
+
+        with pytest.raises(ValueError, match='Invalid path parameter value'):
+            await get_nodes_info(GetNodesArgs(opensearch_cluster_name='', **{field: value}))
+
+        mock_client.transport.perform_request.assert_not_called()
+
 
 class TestValidateJsonString:
     def setup_method(self):
