@@ -130,6 +130,12 @@ def initialize_client(args: baseToolArgs) -> AsyncOpenSearch:
         AuthenticationError: If authentication fails
     """
     try:
+        request = request_context_var.get()
+        if isinstance(request, Request):
+            app = request.scope.get('app')
+            oauth_config = getattr(getattr(app, 'state', None), 'oauth_config', None)
+            if oauth_config and oauth_config.enabled:
+                return _initialize_oauth_client(args, request, oauth_config)
         mode = get_mode()
         logger.info(f'Initializing OpenSearch client in {mode} mode')
 
@@ -165,6 +171,47 @@ def initialize_client(args: baseToolArgs) -> AsyncOpenSearch:
     except Exception as e:
         logger.error(f'Unexpected error in client initialization: {e}')
         raise ConfigurationError(f'Failed to initialize OpenSearch client: {e}')
+
+
+def _initialize_oauth_client(args: baseToolArgs, request: Request, config) -> AsyncOpenSearch:
+    """Use only an exchanged user token and an operator-configured destination."""
+    from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
+    from mcp_server_opensearch.oauth import validate_oauth_url
+    from mcp_server_opensearch.server_instructions import CONNECTION_OVERRIDE_FIELDS
+
+    if args and any(getattr(args, name, None) is not None for name in CONNECTION_OVERRIDE_FIELDS):
+        raise ConfigurationError('OAuth mode does not allow per-call connection overrides')
+    user = request.scope.get('user')
+    if not isinstance(user, AuthenticatedUser) or config.exchange is None:
+        raise AuthenticationError('OAuth requires an authenticated user and token exchange')
+    if get_mode() == 'multi':
+        cluster = get_cluster(args.opensearch_cluster_name) if args else None
+        if cluster is None:
+            raise ConfigurationError('OAuth mode requires a configured cluster name')
+    else:
+        cluster = ClusterInfo(
+            opensearch_url=os.getenv('OPENSEARCH_URL', '').strip(),
+            opensearch_ca_cert_path=os.getenv('OPENSEARCH_CA_CERT_PATH') or None,
+            timeout=int(os.getenv('OPENSEARCH_TIMEOUT', str(DEFAULT_TIMEOUT))),
+            max_response_size=int(
+                os.getenv('OPENSEARCH_MAX_RESPONSE_SIZE', str(DEFAULT_MAX_RESPONSE_SIZE))
+            )
+            if os.getenv('OPENSEARCH_MAX_RESPONSE_SIZE')
+            else None,
+        )
+    validate_oauth_url(cluster.opensearch_url, 'OpenSearch URL')
+    try:
+        token = config.exchange.exchange(user.access_token.token)
+    except ValueError as e:
+        raise AuthenticationError(str(e)) from None
+    return _create_opensearch_client(
+        opensearch_url=cluster.opensearch_url,
+        bearer_auth_header=f'Bearer {token}',
+        opensearch_timeout=cluster.timeout,
+        opensearch_ca_cert_path=cluster.opensearch_ca_cert_path,
+        max_response_size=cluster.max_response_size,
+        follow_redirects=False,
+    )
 
 
 @asynccontextmanager
@@ -788,6 +835,7 @@ def _create_opensearch_client(
     forbid_ambient_fallback: bool = False,
     require_named_profile: bool = False,
     caller_supplied_url: bool = False,
+    follow_redirects: bool | None = None,
 ) -> AsyncOpenSearch:
     """Common function to create OpenSearch client with authentication.
 
@@ -823,6 +871,7 @@ def _create_opensearch_client(
             operator config. With the SSRF guard on, stops redirects being followed,
             which would otherwise reach an address the guard just checked and
             rejected. Operator URLs keep following redirects, as proxies rely on.
+        follow_redirects: Explicit redirect policy, overriding the caller-URL default.
 
     Returns:
         OpenSearch: An initialized OpenSearch client instance
@@ -889,7 +938,9 @@ def _create_opensearch_client(
         'connection_class': BufferedAsyncHttpConnection,
         'timeout': timeout,
         'max_response_size': response_size_limit,
-        'follow_redirects': not (caller_supplied_url and _ssrf_guard_enabled()),
+        'follow_redirects': follow_redirects
+        if follow_redirects is not None
+        else not (caller_supplied_url and _ssrf_guard_enabled()),
         'headers': {'user-agent': USER_AGENT},
     }
     client_kwargs.update(tls_config)
