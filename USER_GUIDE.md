@@ -355,7 +355,7 @@ The guard applies only to URLs supplied by a caller. Your own `OPENSEARCH_URL` a
 
 The server supports multiple authentication methods with the following priority order:
 1. **No Authentication** (only if `OPENSEARCH_NO_AUTH=true` environment variable is set, `opensearch_no_auth: true` is passed per call, or `opensearch_no_auth: true` in multi mode config)
-2. **Bearer Token** from the request `Authorization` header (requires header auth enabled)
+2. **Bearer or ApiKey Token** from the request `Authorization` header (requires header auth enabled)
 3. **Header-Based AWS Credentials** (requires header auth enabled)
 4. **IAM Role Authentication**
 5. **Basic Authentication**
@@ -401,6 +401,10 @@ For Basic authentication:
 For Bearer authentication:
 
 - `Authorization`: HTTP Bearer authentication header (format: `Bearer <token>`)
+
+For OpenSearch API key authentication:
+
+- `Authorization`: HTTP API key authentication header (format: `ApiKey <token>`)
 
 **Note:** When `OPENSEARCH_HEADER_AUTH=true` (single mode) or `opensearch_header_auth: true` (multi mode), headers take priority over environment variables or cluster configuration values. If a header is not provided, the system falls back to the corresponding environment variable (single mode) or cluster configuration value (multi mode).
 
