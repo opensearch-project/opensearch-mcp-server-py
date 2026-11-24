@@ -353,13 +353,12 @@ async def get_nodes_info(args: GetNodesArgs) -> json:
         # Build the URL path based on provided parameters
         url_parts = ['/_nodes']
 
-        # Add node_id if provided
-        if args.node_id:
-            url_parts.append(args.node_id)
-
-        # Add metric if provided
-        if args.metric:
-            url_parts.append(args.metric)
+        # Add node_id and metric if provided, each escaped as one path segment
+        for value in (args.node_id, args.metric):
+            if value:
+                if value in ('.', '..'):
+                    raise ValueError(f'Invalid path parameter value: {value!r}')
+                url_parts.append(quote(value, safe=',*:'))
 
         url = '/'.join(url_parts)
 

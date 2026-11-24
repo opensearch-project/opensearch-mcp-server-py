@@ -13,6 +13,18 @@ from .tools import TOOL_REGISTRY, check_tool_compatibility
 from mcp.types import TextContent
 from pydantic import BaseModel, create_model
 from typing import Any, Dict, List
+from urllib.parse import quote
+
+
+def quote_path_param(value: Any) -> str:
+    """Percent-encode a path parameter as one segment.
+
+    ',', '*' and ':' stay as they are, for index lists, wildcards and cluster:index.
+    """
+    text = str(value)
+    if text in ('.', '..'):
+        raise ValueError(f'Invalid path parameter value: {text!r}')
+    return quote(text, safe=',*:')
 
 
 # Constants
@@ -267,7 +279,7 @@ def generate_tool_from_group(base_name: str, endpoints: List[Dict]) -> Dict[str,
                 for param_name in path_parameters:
                     if param_name in params_dict:
                         formatted_path = formatted_path.replace(
-                            f'{{{param_name}}}', str(params_dict[param_name])
+                            f'{{{param_name}}}', quote_path_param(params_dict[param_name])
                         )
                         del params_dict[param_name]
                 method = selected_endpoint['method'].upper()  # HTTP method (GET, POST, etc.)
