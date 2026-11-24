@@ -1,0 +1,11 @@
+# Send only what the image build needs.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE.txt
+!NOTICE.txt
+!src/
+**/__pycache__
+**/*.py[oc]
+**/*.egg-info
