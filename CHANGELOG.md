@@ -7,6 +7,8 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 - Add a `size` parameter to `PPLQueryTool` to cap returned rows. ([#327](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/327))
 - Add MCP `ToolAnnotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) to every tool in `tools/list`, in both single and multi mode. The existing write filter is unchanged ([#331](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/331))
+- Add OAuth protected-resource support to the streaming server (`MCP_OAUTH_ENABLED=true`): it publishes Protected Resource Metadata, validates bearer tokens against the issuer's JWKS, and exchanges each user's token for an OpenSearch token (RFC 8693) on every tool call, with no fallback to shared credentials
+- Add an OAuth browser login to the stdio server (`MCP_OAUTH_ENABLED=true`): the first tool call opens the provider login in the browser (public client with PKCE, no secret), and the server stores and refreshes the user's token and sends it to OpenSearch, optionally through an RFC 8693 exchange, so MCP clients need only a command and environment variables
 
 ### Changed
 - Apply tool filters (enabled/disabled categories, tools and regexes, and `allow_write`) in multi mode the same way as in single mode. **Breaking (multi mode):** with no filter configured, multi mode now enables only `core_tools` (plus `ListClustersTool`) instead of every tool; enable other categories with `OPENSEARCH_ENABLED_CATEGORIES` or `tool_filters.enabled_categories` ([#330](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/330))

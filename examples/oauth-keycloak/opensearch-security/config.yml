@@ -1,0 +1,33 @@
+---
+_meta:
+  type: "config"
+  config_version: 2
+config:
+  dynamic:
+    http:
+      anonymous_auth_enabled: false
+    authc:
+      basic_internal_auth_domain:
+        description: "Authenticate via HTTP Basic against internal users database"
+        http_enabled: true
+        order: 0
+        http_authenticator:
+          type: basic
+          challenge: false  # false so Bearer requests fall through to openid_auth_domain
+        authentication_backend:
+          type: intern
+      openid_auth_domain:
+        description: "Authenticate via Keycloak access tokens (exchanged by the MCP server)"
+        http_enabled: true
+        order: 1
+        http_authenticator:
+          type: openid
+          challenge: false
+          config:
+            openid_connect_url: http://keycloak:8080/realms/opensearch/.well-known/openid-configuration
+            required_audience: opensearch
+            required_issuer: http://localhost:8080/realms/opensearch
+            subject_key: preferred_username
+            roles_key: roles
+        authentication_backend:
+          type: noop

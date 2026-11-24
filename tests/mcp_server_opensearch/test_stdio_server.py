@@ -253,3 +253,39 @@ async def test_tool_execution_error(
     # Test tool execution error
     with pytest.raises(Exception, match='Tool error'):
         await call_tool_handler('test_tool', {})
+
+
+@pytest.mark.asyncio
+async def test_serve_installs_browser_login_after_tool_probe(
+    mock_server, mock_stdio, mock_generate_tools, monkeypatch, tmp_path
+):
+    """With OAuth on, the login is installed after get_tools, so startup opens no browser."""
+    from mcp_server_opensearch import oauth_login
+    from mcp_server_opensearch.stdio_server import serve
+
+    for name, value in {
+        'MCP_OAUTH_ENABLED': 'true',
+        'MCP_OAUTH_AUTHORIZATION_URL': 'https://idp.example/auth',
+        'MCP_OAUTH_TOKEN_URL': 'https://idp.example/token',
+        'MCP_OAUTH_CLIENT_ID': 'mcp-client',
+        'MCP_OAUTH_CLIENT_SECRET': 'secret',
+        'MCP_OAUTH_OPENSEARCH_AUDIENCE': 'opensearch',
+        'MCP_OAUTH_TOKEN_FILE': str(tmp_path / 'login.json'),
+    }.items():
+        monkeypatch.setenv(name, value)
+    seen_during_probe = []
+
+    async def get_tools(*args, **kwargs):
+        seen_during_probe.append(oauth_login.get_browser_login())
+        return MOCK_TOOL_REGISTRY
+
+    try:
+        with patch('mcp_server_opensearch.stdio_server.get_tools', side_effect=get_tools):
+            asyncio.create_task(serve())
+            await asyncio.sleep(0.1)
+        assert seen_during_probe == [None]
+        login = oauth_login.get_browser_login()
+        assert login is not None
+        assert login.config.token_file == tmp_path / 'login.json'
+    finally:
+        oauth_login.set_browser_login(None)

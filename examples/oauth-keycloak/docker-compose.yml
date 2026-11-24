@@ -1,0 +1,30 @@
+# Local dev only. Start with: docker compose --env-file .env.example up -d
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.5
+    command: start-dev --import-realm
+    environment:
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./realm.json:/opt/keycloak/data/import/realm.json:ro
+
+  opensearch:
+    image: opensearchproject/opensearch:3.8.0
+    environment:
+      discovery.type: single-node
+      OPENSEARCH_INITIAL_ADMIN_PASSWORD: ${OPENSEARCH_INITIAL_ADMIN_PASSWORD:?set it, e.g. via --env-file .env.example}
+    ports:
+      - "127.0.0.1:9200:9200"
+    volumes:
+      - ./opensearch-security/config.yml:/usr/share/opensearch/config/opensearch-security/config.yml:ro
+      - ./opensearch-security/roles_mapping.yml:/usr/share/opensearch/config/opensearch-security/roles_mapping.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sk -u admin:$${OPENSEARCH_INITIAL_ADMIN_PASSWORD} https://localhost:9200/_cluster/health | grep -qE 'green|yellow'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
