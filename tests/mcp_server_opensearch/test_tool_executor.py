@@ -53,6 +53,42 @@ class TestBuildCallToolResult:
         assert result.content[0].text == 'first'
         assert result.content[1].text == 'second'
 
+    def test_json_data_list_is_wrapped_in_result_envelope(self):
+        """Lists are wrapped in {"result": [...]} because structured_content must be a dict."""
+        data = ['index-a', 'index-b']
+        result = _build_call_tool_result(
+            [{'type': 'text', 'text': 'Indices:\n["index-a","index-b"]', 'json_data': data}],
+            is_error=False,
+        )
+        assert result.structured_content == {'result': data}
+        assert result.content[0].text == 'Indices:\n["index-a","index-b"]'
+
+    def test_json_data_dict_is_passed_through_unchanged(self):
+        data = {'hits': {'total': 1, 'hits': []}}
+        result = _build_call_tool_result(
+            [{'type': 'text', 'text': 'Search results:\n{}', 'json_data': data}],
+            is_error=False,
+        )
+        assert result.structured_content == data
+
+    def test_no_json_data_leaves_structured_content_none(self):
+        result = _build_call_tool_result([{'type': 'text', 'text': 'plain text'}], is_error=False)
+        assert result.structured_content is None
+
+    def test_json_data_not_leaked_into_text_content(self):
+        """json_data must not appear as an attribute on the TextContent block."""
+        result = _build_call_tool_result(
+            [{'type': 'text', 'text': 'hi', 'json_data': [1, 2]}],
+            is_error=False,
+        )
+        assert not hasattr(result.content[0], 'json_data')
+
+    def test_text_content_instance_does_not_set_structured_content(self):
+        """Passing a TextContent object directly (not a dict) never sets structured_content."""
+        item = TextContent(type='text', text='direct')
+        result = _build_call_tool_result([item], is_error=False)
+        assert result.structured_content is None
+
 
 def make_enabled_tools(tool_key='TestTool', display_name=None, return_value=None):
     """Helper to create a mock enabled_tools dict."""

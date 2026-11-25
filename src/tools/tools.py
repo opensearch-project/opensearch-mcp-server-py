@@ -97,7 +97,13 @@ async def list_clusters_tool(args: ListClustersArgs) -> list[dict]:
         # Header-defined datasources (per request) take precedence over the YAML registry.
         cluster_names = get_header_cluster_names() or list(cluster_registry.keys())
         formatted_names = json.dumps(cluster_names, separators=(',', ':'))
-        return [{'type': 'text', 'text': f'Available clusters:\n{formatted_names}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Available clusters:\n{formatted_names}',
+                'json_data': {'clusters': cluster_names},
+            }
+        ]
     except Exception as e:
         return log_tool_error('ListClustersTool', e, 'listing clusters')
 
@@ -149,6 +155,7 @@ async def list_indices_tool(args: ListIndicesArgs) -> list[dict]:
                     {
                         'type': 'text',
                         'text': f'Index information for {args.index}:\n{formatted_info}',
+                        'json_data': index_info,
                     }
                 ]
             else:
@@ -158,7 +165,7 @@ async def list_indices_tool(args: ListIndicesArgs) -> list[dict]:
                 text = f'All indices information:\n{formatted_indices}'
                 if is_fallback:
                     text += fallback_note
-                return [{'type': 'text', 'text': text}]
+                return [{'type': 'text', 'text': text, 'json_data': {'indices': indices}}]
         else:
             # Return minimal information (names only)
             indices, _ = await list_indices(args)
@@ -166,7 +173,13 @@ async def list_indices_tool(args: ListIndicesArgs) -> list[dict]:
                 item.get('index') for item in indices if isinstance(item, dict) and 'index' in item
             ]
             formatted_names = format_json(index_names)
-            return [{'type': 'text', 'text': f'Indices:\n{formatted_names}'}]
+            return [
+                {
+                    'type': 'text',
+                    'text': f'Indices:\n{formatted_names}',
+                    'json_data': {'indices': index_names},
+                }
+            ]
     except Exception as e:
         return log_tool_error(
             'ListIndexTool', e, 'listing indices', index=getattr(args, 'index', None)
@@ -180,7 +193,13 @@ async def get_index_mapping_tool(args: GetIndexMappingArgs) -> list[dict]:
         mapping = await get_index_mapping(args)
         formatted_mapping = format_json(mapping)
 
-        return [{'type': 'text', 'text': f'Mapping for {args.index}:\n{formatted_mapping}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Mapping for {args.index}:\n{formatted_mapping}',
+                'json_data': mapping,
+            }
+        ]
     except Exception as e:
         return log_tool_error('IndexMappingTool', e, 'getting mapping', index=args.index)
 
@@ -205,6 +224,7 @@ async def search_index_tool(args: SearchIndexArgs) -> list[dict]:
                 {
                     'type': 'text',
                     'text': f'Search results from {args.index} (JSON format):\n{formatted_result}',
+                    'json_data': result,
                 }
             ]
     except Exception as e:
@@ -267,7 +287,7 @@ async def get_cluster_state_tool(args: GetClusterStateArgs) -> list[dict]:
         if args.index:
             message += f', filtered by index: {args.index}'
 
-        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}'}]
+        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}', 'json_data': result}]
     except Exception as e:
         return log_tool_error('GetClusterStateTool', e, 'getting cluster state')
 
@@ -390,7 +410,7 @@ async def get_index_info_tool(args: GetIndexInfoArgs) -> list[dict]:
         # Create response message
         message = f'Detailed information for index: {args.index}'
 
-        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}'}]
+        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}', 'json_data': result}]
     except Exception as e:
         return log_tool_error('GetIndexInfoTool', e, 'getting index information', index=args.index)
 
@@ -416,7 +436,7 @@ async def get_index_stats_tool(args: GetIndexStatsArgs) -> list[dict]:
         if args.metric:
             message += f' (metrics: {args.metric})'
 
-        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}'}]
+        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}', 'json_data': result}]
     except Exception as e:
         return log_tool_error('GetIndexStatsTool', e, 'getting index statistics', index=args.index)
 
@@ -440,7 +460,7 @@ async def get_query_insights_tool(args: GetQueryInsightsArgs) -> list[dict]:
         # Create simple response message
         message = 'Query insights from /_insights/top_queries endpoint'
 
-        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}'}]
+        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}', 'json_data': result}]
     except Exception as e:
         return log_tool_error('GetQueryInsightsTool', e, 'getting query insights')
 
@@ -541,7 +561,7 @@ async def get_nodes_tool(args: GetNodesArgs) -> list[dict]:
         if args.metric:
             message += f' (metrics: {args.metric})'
 
-        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}'}]
+        return [{'type': 'text', 'text': f'{message}:\n{formatted_result}', 'json_data': result}]
     except Exception as e:
         return log_tool_error('GetNodesTool', e, 'getting nodes information')
 
@@ -604,7 +624,13 @@ async def create_search_configuration_tool(args: CreateSearchConfigurationArgs) 
         await check_tool_compatibility('CreateSearchConfigurationTool', args)
         result = await create_search_configuration(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Search configuration created:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Search configuration created:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('CreateSearchConfigurationTool', e, 'creating search configuration')
 
@@ -626,6 +652,7 @@ async def get_search_configuration_tool(args: GetSearchConfigurationArgs) -> lis
             {
                 'type': 'text',
                 'text': f'Search configuration {args.search_configuration_id}:\n{formatted_result}',
+                'json_data': result,
             }
         ]
     except Exception as e:
@@ -649,6 +676,7 @@ async def delete_search_configuration_tool(args: DeleteSearchConfigurationArgs) 
             {
                 'type': 'text',
                 'text': f'Search configuration {args.search_configuration_id} deleted:\n{formatted_result}',
+                'json_data': result,
             }
         ]
     except Exception as e:
@@ -668,7 +696,13 @@ async def get_query_set_tool(args: GetQuerySetArgs) -> list[dict]:
         await check_tool_compatibility('GetQuerySetTool', args)
         result = await get_query_set(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Query set {args.query_set_id}:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Query set {args.query_set_id}:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('GetQuerySetTool', e, 'retrieving query set')
 
@@ -686,7 +720,13 @@ async def create_query_set_tool(args: CreateQuerySetArgs) -> list[dict]:
         await check_tool_compatibility('CreateQuerySetTool', args)
         result = await create_query_set(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Query set created:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Query set created:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('CreateQuerySetTool', e, 'creating query set')
 
@@ -704,7 +744,13 @@ async def sample_query_set_tool(args: SampleQuerySetArgs) -> list[dict]:
         await check_tool_compatibility('SampleQuerySetTool', args)
         result = await sample_query_set(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Query set sampled:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Query set sampled:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('SampleQuerySetTool', e, 'sampling query set')
 
@@ -723,7 +769,11 @@ async def delete_query_set_tool(args: DeleteQuerySetArgs) -> list[dict]:
         result = await delete_query_set(args)
         formatted_result = format_json(result)
         return [
-            {'type': 'text', 'text': f'Query set {args.query_set_id} deleted:\n{formatted_result}'}
+            {
+                'type': 'text',
+                'text': f'Query set {args.query_set_id} deleted:\n{formatted_result}',
+                'json_data': result,
+            }
         ]
     except Exception as e:
         return log_tool_error('DeleteQuerySetTool', e, 'deleting query set')
@@ -743,7 +793,11 @@ async def get_judgment_list_tool(args: GetJudgmentListArgs) -> list[dict]:
         result = await get_judgment_list(args)
         formatted_result = format_json(result)
         return [
-            {'type': 'text', 'text': f'Judgment list: {args.judgment_id}:\n{formatted_result}'}
+            {
+                'type': 'text',
+                'text': f'Judgment list: {args.judgment_id}:\n{formatted_result}',
+                'json_data': result,
+            }
         ]
     except Exception as e:
         return log_tool_error('GetJudgmentListTool', e, 'retrieving judgment list')
@@ -762,7 +816,9 @@ async def create_judgment_list_tool(args: CreateJudgmentListArgs) -> list[dict]:
         await check_tool_compatibility('CreateJudgmentListTool', args)
         result = await create_judgment_list(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Judgment created:\n{formatted_result}'}]
+        return [
+            {'type': 'text', 'text': f'Judgment created:\n{formatted_result}', 'json_data': result}
+        ]
     except Exception as e:
         return log_tool_error('CreateJudgmentListTool', e, 'creating judgment list')
 
@@ -780,7 +836,13 @@ async def create_ubi_judgment_list_tool(args: CreateUBIJudgmentListArgs) -> list
         await check_tool_compatibility('CreateUBIJudgmentListTool', args)
         result = await create_ubi_judgment_list(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'UBI judgment created:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'UBI judgment created:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('CreateUBIJudgmentListTool', e, 'creating UBI judgment')
 
@@ -802,6 +864,7 @@ async def delete_judgment_list_tool(args: DeleteJudgmentListArgs) -> list[dict]:
             {
                 'type': 'text',
                 'text': f'Judgment list {args.judgment_id} deleted:\n{formatted_result}',
+                'json_data': result,
             }
         ]
     except Exception as e:
@@ -825,7 +888,13 @@ async def create_llm_judgment_list_tool(args: CreateLLMJudgmentListArgs) -> list
         await check_tool_compatibility('CreateLLMJudgmentListTool', args)
         result = await create_llm_judgment_list(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'LLM judgment list created:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'LLM judgment list created:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('CreateLLMJudgmentListTool', e, 'creating LLM judgment list')
 
@@ -843,7 +912,13 @@ async def get_experiment_tool(args: GetExperimentArgs) -> list[dict]:
         await check_tool_compatibility('GetExperimentTool', args)
         result = await get_experiment(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Experiment {args.experiment_id}:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Experiment {args.experiment_id}:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('GetExperimentTool', e, 'retrieving experiment')
 
@@ -862,7 +937,13 @@ async def create_experiment_tool(args: CreateExperimentArgs) -> list[dict]:
         await check_tool_compatibility('CreateExperimentTool', args)
         result = await create_experiment(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Experiment created:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Experiment created:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('CreateExperimentTool', e, 'creating experiment')
 
@@ -884,6 +965,7 @@ async def delete_experiment_tool(args: DeleteExperimentArgs) -> list[dict]:
             {
                 'type': 'text',
                 'text': f'Experiment {args.experiment_id} deleted:\n{formatted_result}',
+                'json_data': result,
             }
         ]
     except Exception as e:
@@ -903,7 +985,13 @@ async def search_query_sets_tool(args: SearchQuerySetsArgs) -> list[dict]:
         await check_tool_compatibility('SearchQuerySetsTool', args)
         result = await search_query_sets(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Query set search results:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Query set search results:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('SearchQuerySetsTool', e, 'searching query sets')
 
@@ -922,7 +1010,11 @@ async def search_search_configurations_tool(args: SearchSearchConfigurationsArgs
         result = await search_search_configurations(args)
         formatted_result = format_json(result)
         return [
-            {'type': 'text', 'text': f'Search configuration search results:\n{formatted_result}'}
+            {
+                'type': 'text',
+                'text': f'Search configuration search results:\n{formatted_result}',
+                'json_data': result,
+            }
         ]
     except Exception as e:
         return log_tool_error(
@@ -943,7 +1035,13 @@ async def search_judgments_tool(args: SearchJudgmentsArgs) -> list[dict]:
         await check_tool_compatibility('SearchJudgmentsTool', args)
         result = await search_judgments(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Judgment search results:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Judgment search results:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('SearchJudgmentsTool', e, 'searching judgments')
 
@@ -961,7 +1059,13 @@ async def search_experiments_tool(args: SearchExperimentsArgs) -> list[dict]:
         await check_tool_compatibility('SearchExperimentsTool', args)
         result = await search_experiments(args)
         formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'Experiment search results:\n{formatted_result}'}]
+        return [
+            {
+                'type': 'text',
+                'text': f'Experiment search results:\n{formatted_result}',
+                'json_data': result,
+            }
+        ]
     except Exception as e:
         return log_tool_error('SearchExperimentsTool', e, 'searching experiments')
 
@@ -972,10 +1076,20 @@ async def ppl_query_tool(args: PplQueryArgs) -> list[dict]:
         await check_tool_compatibility('PPLQueryTool', args)
         result = await ppl_query(args)
         if isinstance(result, str):
-            formatted_result = result
+            # Plain-text formats (csv, raw): the transport returns a raw string,
+            # not a parsed object, so there is no structured_content to set.
+            return [{'type': 'text', 'text': f'PPL query results:\n{result}'}]
         else:
+            # Default jdbc format: transport returns a parsed dict — expose it
+            # as structured_content for clients that can consume it directly.
             formatted_result = format_json(result)
-        return [{'type': 'text', 'text': f'PPL query results:\n{formatted_result}'}]
+            return [
+                {
+                    'type': 'text',
+                    'text': f'PPL query results:\n{formatted_result}',
+                    'json_data': result,
+                }
+            ]
     except Exception as e:
         return log_tool_error('PPLQueryTool', e, 'executing PPL query')
 
