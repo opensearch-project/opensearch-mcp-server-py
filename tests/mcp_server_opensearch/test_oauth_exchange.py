@@ -23,7 +23,13 @@ from mcp_server_opensearch.oauth import (
     TokenExchangeConfig,
     validate_oauth_url,
 )
-from opensearch.client import AuthenticationError, ConfigurationError, get_opensearch_client
+from opensearch.client import (
+    DEFAULT_TIMEOUT,
+    AuthenticationError,
+    ConfigurationError,
+    get_opensearch_client,
+    initialize_client,
+)
 from starlette.applications import Starlette
 from starlette.requests import Request
 from tools.tool_params import baseToolArgs
@@ -181,6 +187,39 @@ async def test_exchange_preserves_user_and_uses_only_configured_destination(
         assert form['audience'] == ['opensearch']
         assert form['scope'] == ['read']
         assert form['subject_token_type'] == ['urn:ietf:params:oauth:token-type:access_token']
+
+
+@pytest.mark.parametrize(
+    'timeout,expected',
+    [(None, DEFAULT_TIMEOUT), ('', DEFAULT_TIMEOUT), ('  ', DEFAULT_TIMEOUT), ('45', 45)],
+)
+async def test_oauth_single_mode_timeout(exchange_server, monkeypatch, timeout, expected):
+    url, config, key, _ = exchange_server
+    monkeypatch.setenv('OPENSEARCH_URL', url)
+    if timeout is None:
+        monkeypatch.delenv('OPENSEARCH_TIMEOUT', raising=False)
+    else:
+        monkeypatch.setenv('OPENSEARCH_TIMEOUT', timeout)
+    reset = request_context_var.set(await authenticated_request(config, key, 'alice'))
+    try:
+        with patch('opensearch.client._create_opensearch_client') as create_client:
+            initialize_client(baseToolArgs(opensearch_cluster_name=''))
+            assert create_client.call_args.kwargs['opensearch_timeout'] == expected
+    finally:
+        request_context_var.reset(reset)
+
+
+async def test_oauth_single_mode_invalid_timeout_fails(exchange_server, monkeypatch):
+    url, config, key, state = exchange_server
+    monkeypatch.setenv('OPENSEARCH_URL', url)
+    monkeypatch.setenv('OPENSEARCH_TIMEOUT', 'invalid')
+    reset = request_context_var.set(await authenticated_request(config, key, 'alice'))
+    try:
+        with pytest.raises(ConfigurationError, match='invalid literal'):
+            initialize_client(baseToolArgs(opensearch_cluster_name=''))
+    finally:
+        request_context_var.reset(reset)
+    assert not state['requests']
 
 
 @pytest.mark.parametrize(

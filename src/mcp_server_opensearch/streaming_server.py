@@ -4,6 +4,7 @@
 import asyncio
 import contextlib
 import logging
+import os
 import uvicorn
 from mcp.server import Server
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
@@ -16,7 +17,12 @@ from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, Te
 from mcp_server_opensearch.client_context import ClientNameMiddleware
 from mcp_server_opensearch.clusters_information import load_clusters_from_yaml
 from mcp_server_opensearch.global_state import set_config_file_path, set_mode, set_profile
-from mcp_server_opensearch.oauth import JwtTokenVerifier, OAuthConfig, load_oauth_config
+from mcp_server_opensearch.oauth import (
+    JwtTokenVerifier,
+    OAuthConfig,
+    load_oauth_config,
+    validate_oauth_url,
+)
 from mcp_server_opensearch.server_instructions import get_server_instructions
 from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
@@ -289,6 +295,8 @@ async def serve(
 ) -> None:
     """Start the MCP server in streaming HTTP mode."""
     oauth_config = load_oauth_config(host, port)
+    if oauth_config and mode == 'single':
+        validate_oauth_url(os.getenv('OPENSEARCH_URL', '').strip(), 'OPENSEARCH_URL')
     mcp_server = await create_mcp_server(
         mode, profile, config_file_path, cli_tool_overrides, oauth_config
     )

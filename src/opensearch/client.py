@@ -192,7 +192,7 @@ def _initialize_oauth_client(args: baseToolArgs, request: Request, config) -> As
         cluster = ClusterInfo(
             opensearch_url=os.getenv('OPENSEARCH_URL', '').strip(),
             opensearch_ca_cert_path=os.getenv('OPENSEARCH_CA_CERT_PATH') or None,
-            timeout=int(os.getenv('OPENSEARCH_TIMEOUT', str(DEFAULT_TIMEOUT))),
+            timeout=int(os.getenv('OPENSEARCH_TIMEOUT', '').strip() or DEFAULT_TIMEOUT),
             max_response_size=int(
                 os.getenv('OPENSEARCH_MAX_RESPONSE_SIZE', str(DEFAULT_MAX_RESPONSE_SIZE))
             )

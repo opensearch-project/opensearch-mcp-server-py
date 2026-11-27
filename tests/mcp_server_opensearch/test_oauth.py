@@ -10,10 +10,10 @@ from cryptography.hazmat.primitives.asymmetric import ec, rsa
 from dataclasses import replace
 from mcp.server import Server
 from mcp_server_opensearch.oauth import JwtTokenVerifier, OAuthConfig, load_oauth_config
-from mcp_server_opensearch.streaming_server import MCPStarletteApp
+from mcp_server_opensearch.streaming_server import MCPStarletteApp, serve
 from starlette.responses import PlainTextResponse
 from starlette.testclient import TestClient
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 
 @pytest.fixture(autouse=True)
@@ -185,12 +185,78 @@ async def test_signed_tokens(oauth_config, rsa_key, algorithm, scope_claim):
         algorithm=algorithm,
     )
     with patch.object(
-        verifier._jwks_client, 'get_signing_key_from_jwt', return_value=Mock(key=key.public_key())
+        verifier._jwks_client,
+        'get_signing_key_from_jwt',
+        return_value=jwt.PyJWK.from_json(
+            jwt.get_algorithm_by_name(algorithm).to_jwk(key.public_key())
+        ),
     ):
         result = await verifier.verify_token(token)
     assert result is not None
     assert result.client_id == 'user'
     assert result.scopes == ['read', 'write']
+
+
+@pytest.mark.parametrize('path,method,status', [('/mcp', 'POST', 401), ('/health', 'GET', 200)])
+def test_mismatched_key_type_rejects_token_without_server_error(
+    oauth_config, rsa_key, path, method, status
+):
+    config = replace(oauth_config, algorithms=('RS256', 'ES256'))
+    token = jwt.encode(
+        {'iss': config.issuer_url, 'aud': config.resource_url, 'exp': int(time.time()) + 60},
+        ec.generate_private_key(ec.SECP256R1()),
+        algorithm='ES256',
+        headers={'kid': 'rsa-key'},
+    )
+    signing_key = jwt.PyJWK.from_json(jwt.algorithms.RSAAlgorithm.to_jwk(rsa_key.public_key()))
+    with patch('mcp_server_opensearch.oauth.jwt.PyJWKClient') as jwks:
+        jwks.return_value.get_signing_key_from_jwt.return_value = signing_key
+        client = TestClient(MCPStarletteApp(Server('test'), oauth_config=config).create_app())
+        response = client.request(method, path, headers={'Authorization': f'Bearer {token}'})
+    assert response.status_code == status
+
+
+@pytest.mark.parametrize('url', [None, '', '  ', 'http://example.com', 'https://example.com/?x=1'])
+async def test_oauth_single_mode_rejects_invalid_url_at_startup(monkeypatch, url):
+    monkeypatch.setenv('MCP_OAUTH_ENABLED', 'true')
+    monkeypatch.setenv('MCP_OAUTH_ISSUER_URL', 'https://issuer.example')
+    if url is None:
+        monkeypatch.delenv('OPENSEARCH_URL', raising=False)
+    else:
+        monkeypatch.setenv('OPENSEARCH_URL', url)
+    with patch('mcp_server_opensearch.streaming_server.create_mcp_server') as create_server:
+        with pytest.raises(ValueError, match='OPENSEARCH_URL'):
+            await serve(mode='single')
+        create_server.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    'enabled,mode,url',
+    [
+        (True, 'single', 'https://opensearch.example'),
+        (True, 'single', 'http://localhost:9200'),
+        (True, 'multi', None),
+        (False, 'single', None),
+    ],
+)
+async def test_startup_url_requirement_is_limited_to_oauth_single_mode(
+    monkeypatch, enabled, mode, url
+):
+    monkeypatch.setenv('MCP_OAUTH_ENABLED', 'true' if enabled else 'false')
+    monkeypatch.setenv('MCP_OAUTH_ISSUER_URL', 'https://issuer.example')
+    if url is None:
+        monkeypatch.delenv('OPENSEARCH_URL', raising=False)
+    else:
+        monkeypatch.setenv('OPENSEARCH_URL', url)
+    with (
+        patch('mcp_server_opensearch.streaming_server.create_mcp_server', new_callable=AsyncMock),
+        patch('mcp_server_opensearch.streaming_server.MCPStarletteApp'),
+        patch('uvicorn.Config'),
+        patch('uvicorn.Server') as server,
+    ):
+        server.return_value.serve = AsyncMock()
+        await serve(mode=mode)
+        server.return_value.serve.assert_awaited_once()
 
 
 @pytest.mark.parametrize(

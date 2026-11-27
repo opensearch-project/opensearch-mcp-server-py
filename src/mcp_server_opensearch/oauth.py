@@ -240,21 +240,25 @@ class JwtTokenVerifier(TokenVerifier):
             signing_key = await asyncio.to_thread(
                 self._jwks_client.get_signing_key_from_jwt, token
             )
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=list(self.config.algorithms),
-                audience=(
-                    [
-                        self.config.resource_url.rstrip('/'),
-                        self.config.resource_url.rstrip('/') + '/',
-                    ]
-                    if self.config.audience == self.config.resource_url
-                    else self.config.audience
-                ),
-                issuer=self.config.issuer_url,
-                options={'require': ['exp', 'iss', 'aud']},
-            )
+            # PyJWK defaults RSA keys without an alg field to RS256, even for valid PS/RS tokens.
+            try:
+                payload = jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=list(self.config.algorithms),
+                    audience=(
+                        [
+                            self.config.resource_url.rstrip('/'),
+                            self.config.resource_url.rstrip('/') + '/',
+                        ]
+                        if self.config.audience == self.config.resource_url
+                        else self.config.audience
+                    ),
+                    issuer=self.config.issuer_url,
+                    options={'require': ['exp', 'iss', 'aud']},
+                )
+            except TypeError as e:
+                raise jwt.InvalidKeyError('Incompatible signing key') from e
         except jwt.PyJWTError as e:
             # Log only a bounded error category, not attacker-controlled claims or key IDs.
             now = time.monotonic()
