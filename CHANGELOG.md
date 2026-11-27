@@ -5,6 +5,7 @@ Inspired from [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ## [Unreleased]
 
 ### Added
+- Add optional OAuth authentication for the streaming MCP server, with JWT validation and token exchange to use each user's identity for OpenSearch requests ([#227](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/227))
 - Add a `size` parameter to `PPLQueryTool` to cap returned rows. ([#327](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/327))
 - Add MCP `ToolAnnotations` (`title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) to every tool in `tools/list`, in both single and multi mode. The existing write filter is unchanged ([#331](https://github.com/opensearch-project/opensearch-mcp-server-py/pull/331))
 
